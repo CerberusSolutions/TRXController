@@ -97,12 +97,12 @@ export default function FrequencyHero() {
 
       <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
         {licences.length > 0 ? (
-          <div className="grid grid-cols-[auto_1fr] gap-x-3">
-            <span className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
-              {licences.slice(0, 3).map((l) => (
+              {licences.slice(0, 3).map((l, i) => (
                 <li key={l.id} className="flex min-w-0 gap-2" title={`${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`}>
-                  <span className="truncate text-ink">{l.licensee}</span>
+                  <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{l.licensee}</span>
                   <span className="shrink-0 text-ink-3">
                     {l.distanceKm !== null ? `${l.distanceKm < 10 ? l.distanceKm.toFixed(1) : Math.round(l.distanceKm)} km` : '—'}
                     {l.mode ? ` · ${l.mode}` : ''}
