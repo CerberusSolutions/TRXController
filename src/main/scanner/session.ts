@@ -25,6 +25,8 @@ import type { Transport, TransportFactory } from './transport';
 export interface SessionOptions {
   /** Delay between the end of one poll cycle and the start of the next. */
   pollIntervalMs?: number;
+  /** The same delay while the scanner is not answering, so a stall queues fewer requests. */
+  stalledPollIntervalMs?: number;
   /** Poll the active channel every N cycles while squelch is closed. */
   activeEveryNCycles?: number;
   /** Consecutive timeouts before the link is reported unresponsive. */
@@ -44,6 +46,7 @@ export class ScannerSession {
   private noiseText = '';
   private snapshot: ScannerSnapshot = emptySnapshot();
   private readonly pollIntervalMs: number;
+  private readonly stalledPollIntervalMs: number;
   private readonly activeEveryNCycles: number;
   private readonly unresponsiveAfter: number;
 
@@ -52,6 +55,7 @@ export class ScannerSession {
     private readonly opts: SessionOptions = {},
   ) {
     this.pollIntervalMs = opts.pollIntervalMs ?? 150;
+    this.stalledPollIntervalMs = opts.stalledPollIntervalMs ?? 1000;
     this.activeEveryNCycles = opts.activeEveryNCycles ?? 4;
     this.unresponsiveAfter = opts.unresponsiveAfter ?? 5;
   }
@@ -122,7 +126,10 @@ export class ScannerSession {
     const tick = async (): Promise<void> => {
       if (!this.link) return;
       if (!this.polling) await this.pollOnce(false);
-      if (this.link) this.pollTimer = setTimeout(() => void tick(), this.pollIntervalMs);
+      if (this.link) {
+        const stalled = this.link.stats.consecutiveTimeouts >= 2;
+        this.pollTimer = setTimeout(() => void tick(), stalled ? this.stalledPollIntervalMs : this.pollIntervalMs);
+      }
     };
     this.pollTimer = setTimeout(() => void tick(), 0);
   }

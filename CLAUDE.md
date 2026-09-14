@@ -49,8 +49,14 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - Arrow keys: UP=8, DOWN=10, LEFT=16, RIGHT=2. RIGHT also selects the highlighted menu item.
 - The `a` recording header is big-endian except its `stm` start time, which is
   little-endian (local time, yday and isdst left at zero). Confirmed on a live reception.
-- Responses come back within a few tens of ms. Right after a mode change the scanner may
-  not answer at all, so a polling loop must treat a timeout as "retry", never as a fault.
+- Responses come back within a few tens of ms. Right after a mode change, and for several
+  seconds while it loads scanlists, the scanner stops servicing the port but **buffers every
+  request** and answers them all in order once it wakes (Whistler's own app stalls the same
+  way). So a timeout is "retry", never a fault, and after one the link waits for the line to
+  go quiet (`ScannerLink.drain`) before sending more, otherwise the scanner stays several
+  replies behind for good and every answer lands as "unsolicited". The session also polls
+  once a second instead of every 150 ms while timeouts are consecutive, to keep that backlog
+  small.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 
 ## Layout

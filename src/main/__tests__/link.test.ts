@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeFrame, getLcd, getStatus, getVersion, sendKey, Key } from '@trxcontroller/rcip';
+import { encodeFrame, getActiveChannel, getLcd, getStatus, getVersion, sendKey, Key, type Frame } from '@trxcontroller/rcip';
 import { ScannerLink } from '../scanner/link';
 import { FakeTransport } from './fakeTransport';
 
@@ -70,6 +70,50 @@ describe('ScannerLink', () => {
     expect(link.stats.responses).toBe(1);
   });
 
+  it('drains the backlog a stalled scanner answers later instead of staying behind', async () => {
+    // A scanner that stops servicing the port (loading scanlists) buffers every
+    // request and answers them all, in order, at its own pace once it wakes.
+    const t = new FakeTransport();
+    const base = t.handler;
+    const backlog: Frame[] = [];
+    let stalled = true;
+    let pump: ReturnType<typeof setInterval> | null = null;
+    const wake = (): void => {
+      stalled = false;
+      pump = setInterval(() => {
+        const cmd = backlog.shift();
+        if (cmd) t.inject(base(cmd)!);
+      }, 10);
+    };
+    t.handler = (cmd) => {
+      backlog.push(cmd);
+      if (!stalled && backlog.length === 1 && pump === null) t.inject(base(backlog.shift()!)!);
+      return null;
+    };
+    const seen: [string, boolean][] = [];
+    const link = new ScannerLink(t, { timeoutMs: 20, timeoutGapMs: 30, onUnexpectedFrame: (f, late) => seen.push([f.codeChar, late]) });
+    for (let i = 0; i < 3; i++) {
+      expect(await link.request(getLcd(), 'L')).toBeNull();
+      expect(await link.request(getStatus(), 'A')).toBeNull();
+    }
+    expect(link.stats.consecutiveTimeouts).toBe(6);
+    wake();
+    // This request joins the queue behind six older ones, which the scanner works
+    // through at 10 ms each: longer than the timeout, longer than one quiet gap.
+    expect(await link.request(getActiveChannel(), 'a')).toBeNull();
+    // The link waited for the whole backlog before returning, all flagged late...
+    expect(seen).toEqual([['L', true], ['A', true], ['L', true], ['A', true], ['L', true], ['A', true], ['a', true]]);
+    expect(link.stats.late).toBe(7);
+    expect(link.stats.consecutiveTimeouts).toBe(0);
+    // ...so the next request pairs with its own fresh reply.
+    if (pump) clearInterval(pump);
+    pump = null;
+    const fresh = await link.request(getLcd(), 'L');
+    expect(fresh?.codeChar).toBe('L');
+    expect(link.stats.responses).toBe(1);
+    expect(link.stats.lastRttMs).toBeLessThan(20);
+  });
+
   it('routes non-frame bytes to onNoise', async () => {
     const t = new FakeTransport();
     const noise: string[] = [];
@@ -110,3 +154,4 @@ describe('ScannerLink', () => {
     expect(t.closed).toBe(true);
   });
 });
+

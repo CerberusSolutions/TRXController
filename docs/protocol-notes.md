@@ -142,6 +142,12 @@ The Scanlists menu prefixes each entry with a check-box glyph byte: **0x8B = tic
 Scanner Display panel; the cursor byte 0x93 still lands in column 16 of the highlighted
 row). `LCD_GLYPHS` renders them as ☑ and ☐.
 
+### Stalls and backlog (observed)
+Loading scanlists (and some mode changes) suspends serial servicing for seconds. The scanner
+does not drop the requests it receives meanwhile: it queues them and answers every one, in
+order, when it resumes. A host that keeps sending one request per timeout therefore never
+catches up. `ScannerLink` waits for the line to go quiet after a timeout before sending again.
+
 ## `t` Clock Set
 
 Nine 16-bit values: sec, min, hour, mday, month(0-11), year(since 1900), wday, yday,

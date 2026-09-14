@@ -12,8 +12,15 @@ export interface LinkOptions {
   timeoutMs?: number;
   /** Pause after a no-response command so the scanner can act on it. */
   sendGapMs?: number;
-  /** Pause after a timeout so a late reply can land before the next request. */
+  /**
+   * After a timeout, hold the next request until the line has been quiet this
+   * long. A scanner that stalled (loading scanlists, changing mode) answers
+   * every buffered request in order once it wakes; sending more meanwhile only
+   * keeps it behind.
+   */
   timeoutGapMs?: number;
+  /** Upper bound on that wait, so a scanner streaming CC dump cannot stall us. */
+  drainMaxMs?: number;
   onNoise?: (bytes: Uint8Array) => void;
   /**
    * A well-formed frame that no request is waiting for. Usually the late
@@ -34,7 +41,9 @@ interface Pending {
 export class ScannerLink {
   private readonly decoder: FrameDecoder;
   private pending: Pending | null = null;
-  private lastTimedOutCode: string | null = null;
+  /** Requests that timed out and may still be answered, oldest first. */
+  private outstanding: string[] = [];
+  private lastFrameAt = 0;
   private queue: Promise<unknown> = Promise.resolve();
   private closed = false;
   readonly stats: LinkStats = {
@@ -49,6 +58,7 @@ export class ScannerLink {
   private readonly timeoutMs: number;
   private readonly sendGapMs: number;
   private readonly timeoutGapMs: number;
+  private readonly drainMaxMs: number;
 
   constructor(
     private readonly transport: Transport,
@@ -57,6 +67,7 @@ export class ScannerLink {
     this.timeoutMs = opts.timeoutMs ?? 750;
     this.sendGapMs = opts.sendGapMs ?? 30;
     this.timeoutGapMs = opts.timeoutGapMs ?? 150;
+    this.drainMaxMs = opts.drainMaxMs ?? 3000;
     this.decoder = new FrameDecoder({
       onEvent: (e) => {
         if (e.type === 'frame') this.onFrame(e.frame);
@@ -83,7 +94,8 @@ export class ScannerLink {
         const timer = setTimeout(() => {
           if (this.pending?.resolve === resolve) {
             this.pending = null;
-            this.lastTimedOutCode = expectCode;
+            this.outstanding.push(expectCode);
+            if (this.outstanding.length > 32) this.outstanding.shift();
             this.stats.timeouts++;
             this.stats.consecutiveTimeouts++;
             resolve(null);
@@ -96,9 +108,7 @@ export class ScannerLink {
           resolve(null);
         });
       });
-      // Give a late reply a moment to arrive before the next command goes
-      // out, otherwise a slow scanner stays one reply behind indefinitely.
-      if (result === null && !this.closed) await sleep(this.timeoutGapMs);
+      if (result === null && !this.closed) await this.drain();
       return result;
     };
     const p = this.queue.then(run, run);
@@ -132,24 +142,39 @@ export class ScannerLink {
     await this.transport.close();
   }
 
+  /**
+   * Wait until no frame has arrived for timeoutGapMs (bounded by drainMaxMs).
+   * Late replies to timed-out requests land here instead of colliding with
+   * the next request.
+   */
+  private async drain(): Promise<void> {
+    const started = Date.now();
+    for (;;) {
+      await sleep(this.timeoutGapMs);
+      if (this.closed) return;
+      if (Date.now() - this.lastFrameAt >= this.timeoutGapMs || Date.now() - started >= this.drainMaxMs) return;
+    }
+  }
+
   private onFrame(frame: Frame): void {
+    this.lastFrameAt = Date.now();
+    // Any well-formed frame means the scanner is talking, however far behind.
+    this.stats.consecutiveTimeouts = 0;
     const p = this.pending;
     if (p && frame.codeChar === p.expectCode) {
       clearTimeout(p.timer);
       this.pending = null;
-      this.lastTimedOutCode = null;
       this.stats.responses++;
-      this.stats.consecutiveTimeouts = 0;
       this.stats.lastRttMs = Date.now() - p.startedAt;
       p.resolve(frame);
       return;
     }
-    const late = frame.codeChar === this.lastTimedOutCode;
+    // The answer to a request that timed out earlier: still current data.
+    const idx = this.outstanding.indexOf(frame.codeChar);
+    const late = idx >= 0;
     if (late) {
-      this.lastTimedOutCode = null;
+      this.outstanding.splice(0, idx + 1);
       this.stats.late++;
-      // The scanner is answering, just slowly; do not count towards unresponsive.
-      this.stats.consecutiveTimeouts = 0;
     }
     this.opts.onUnexpectedFrame?.(frame, late);
   }
