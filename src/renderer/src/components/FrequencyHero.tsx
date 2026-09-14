@@ -1,5 +1,5 @@
 import { formatId, parseScanObjectLine } from '@trxcontroller/rcip';
-import { identify, splitFrequency } from '../lib/format';
+import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
@@ -23,8 +23,7 @@ export default function FrequencyHero() {
   const h = active?.header ?? null;
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
-  const scanning = status?.mode === 0x0a;
-  const objectLine = scanning && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
+  const objectLine = isChannelScreen(lcd, status) && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
   // Header present but squelch closed: the scanner is holding on the channel
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
@@ -41,7 +40,7 @@ export default function FrequencyHero() {
           </span>
           <span className="ml-3 text-lg text-ink-3">MHz</span>
         </div>
-        <div className="flex flex-col items-end gap-1.5 pt-1">
+        <div className="flex min-h-[5.5rem] flex-col items-end gap-1.5 pt-1">
           <span
             className={`rounded-md px-2.5 py-1 text-xs font-bold tracking-widest ${
               rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
@@ -57,9 +56,9 @@ export default function FrequencyHero() {
             {objectLine?.type && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{objectLine.type}</span>}
             {status && !objectLine && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-3">{status.modeName}</span>}
           </div>
-          {objectLine?.flags && (
-            <div className="flex gap-1 font-mono text-[10px] tracking-wider" title={`Object attributes: ${objectLine.flags.raw}`}>
-              {(
+          <div className="flex h-5 gap-1 font-mono text-[10px] tracking-wider" title={objectLine?.flags ? `Object attributes: ${objectLine.flags.raw}` : undefined}>
+            {objectLine?.flags &&
+              (
                 [
                   ['PRI', objectLine.flags.priority],
                   ['SKIP', objectLine.flags.skip],
@@ -71,8 +70,7 @@ export default function FrequencyHero() {
                   {label}
                 </span>
               ))}
-            </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -80,12 +78,12 @@ export default function FrequencyHero() {
         <SignalMeter bars={icons?.rssiBars ?? 0} rssi={status?.rssi ?? null} active={online} />
       </div>
 
-      <div className="mt-5 min-h-[3.75rem]">
+      <div className="mt-5 h-[4.25rem]">
         {id.source === 'none' ? (
           <p className="text-xl text-ink-3">{online ? status.modeName : link.status === 'disconnected' ? 'Not connected' : 'Waiting for scanner'}</p>
         ) : (
           <>
-            <p className="truncate text-3xl font-semibold tracking-tight text-ink">{id.name}</p>
+            <p className={`truncate text-3xl font-semibold tracking-tight ${id.source === 'scanning' ? 'text-ink-3' : 'text-ink'}`}>{id.name}</p>
             <p className="mt-0.5 truncate text-base text-ink-2">
               {id.system || id.detail}
               {id.system && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
@@ -94,7 +92,7 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-x-8 gap-y-2 border-t border-edge pt-3">
+      <div className="mt-4 flex h-12 gap-x-8 overflow-hidden border-t border-edge pt-3">
         {h ? (
           <>
             <Param label="Type" value={h.recordingTypeName} />

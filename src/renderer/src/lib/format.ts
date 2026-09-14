@@ -1,4 +1,4 @@
-import type { ActiveChannel, Lcd, Status } from '@trxcontroller/rcip';
+import { parseScanObjectLine, type ActiveChannel, type Lcd, type Status } from '@trxcontroller/rcip';
 
 /** "119.775000" -> { mhz: "119", khz: "775000" } */
 export function splitFrequency(hz: number): { mhz: string; frac: string } {
@@ -20,14 +20,25 @@ export interface ChannelIdentity {
   name: string;
   system: string;
   detail: string;
-  source: 'active' | 'lcd' | 'none';
+  source: 'active' | 'lcd' | 'scanning' | 'none';
+}
+
+/**
+ * In Scan mode the LCD has two layouts: the channel layout while stopped on
+ * an object (line 2 carries the type and psDr flags) and, while sweeping,
+ * a plain list of the enabled scanlists. Only the former names a channel.
+ */
+export function isChannelScreen(lcd: Lcd | null, status: Status | null): boolean {
+  if (!lcd || status?.mode !== 0x0a) return false;
+  return parseScanObjectLine(lcd.lines[2] ?? '')?.flags != null;
 }
 
 const FREQ_TEXT = /^\d{1,4}\.\d{3,6}$/;
 
 export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: Status | null): ChannelIdentity {
   const h = active?.header;
-  const scanlist = status?.mode === 0x0a ? (lcd?.lines[1]?.trim() ?? '') : '';
+  const channelScreen = isChannelScreen(lcd, status);
+  const scanlist = channelScreen ? (lcd?.lines[1]?.trim() ?? '') : '';
   if (h) {
     // For conventional objects the info tag is just the frequency again, and
     // there is no system tag, so the scanlist from the LCD is the better label.
@@ -36,10 +47,15 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
     const detail = [h.systemTag && h.siteName ? h.siteName : '', info].filter(Boolean).join(' · ');
     return { name: h.objectTag || '—', system, detail, source: 'active' };
   }
-  if (lcd && status?.mode === 0x0a) {
+  if (lcd && channelScreen) {
     const name = lcd.lines[3]?.trim() ?? '';
-    const detail = lcd.lines[2]?.trim() ?? '';
+    const detail = parseScanObjectLine(lcd.lines[2] ?? '')?.type ?? '';
     if (name || scanlist) return { name: name || '—', system: scanlist, detail, source: 'lcd' };
+  }
+  if (lcd && status?.mode === 0x0a) {
+    // Sweeping: the display lists the enabled scanlists.
+    const lists = lcd.lines.map((l) => l.trim()).filter(Boolean);
+    return { name: 'Scanning', system: lists.join(' · '), detail: '', source: 'scanning' };
   }
   return { name: '', system: '', detail: '', source: 'none' };
 }
