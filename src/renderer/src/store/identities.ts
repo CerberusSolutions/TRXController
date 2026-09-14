@@ -22,7 +22,7 @@ export const useIdentities = create<IdentityState>((set) => ({
   error: null,
   wtrImporting: false,
   wtrResult: null,
-  settings: { lat: null, lon: null, radiusKm: 60 },
+  settings: { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null },
 
   refresh: async () => {
     if (!window.trx) return;

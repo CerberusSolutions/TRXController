@@ -1,0 +1,33 @@
+# Windows installer. `npm run dist` builds with electron-vite then packages this.
+appId: uk.co.cerberus.trxcontroller
+productName: TRXController
+copyright: Copyright © 2026 Cerberus Systems
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  # serialport ships prebuilt bindings for every platform; only win32-x64 is needed.
+  - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,darwin-*,linux-*,win32-arm64}/**"
+# serialport ships prebuilt N-API binaries; nothing needs compiling against Electron.
+npmRebuild: false
+asar: true
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: ${productName}-Setup-${version}.${ext}
+  # Unsigned beta: SmartScreen will warn on first run.
+  signAndEditExecutable: true
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: TRXController
+  deleteAppDataOnUninstall: false
+  artifactName: ${productName}-Setup-${version}.${ext}

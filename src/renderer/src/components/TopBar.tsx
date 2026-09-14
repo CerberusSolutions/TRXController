@@ -1,5 +1,6 @@
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
+import { useUi } from '../store/ui';
 import DataMenu from './DataMenu';
 import ThemeToggle from './ThemeToggle';
 
@@ -17,6 +18,8 @@ export default function TopBar() {
   const style = STATUS_STYLE[link.status];
   const connected = link.status === 'connected' || link.status === 'unresponsive' || link.status === 'connecting';
   const v = snapshot.version;
+  const app = useUi((s) => s.app);
+  const openHelp = useUi((s) => s.openHelp);
 
   return (
     <header
@@ -27,6 +30,10 @@ export default function TopBar() {
       <div className="flex items-baseline gap-2">
         <span className="text-lg font-semibold tracking-tight">TRX</span>
         <span className="text-lg font-light tracking-tight text-ink-2">Controller</span>
+        <span className="rounded border border-amber/60 px-1 py-px text-[9px] font-bold tracking-widest text-amber" title={`Beta software. No warranty or guarantee of any kind.`}>
+          BETA
+        </span>
+        {app && <span className="font-mono text-[11px] text-ink-3">v{app.version}</span>}
       </div>
 
       <div className="no-drag ml-auto flex items-center gap-2">
@@ -83,6 +90,14 @@ export default function TopBar() {
         {link.error && <span className="ml-2 text-xs text-red">{link.error}</span>}
       </div>
       <ThemeToggle />
+      <button
+        className="no-drag flex h-7 w-7 items-center justify-center rounded-md border border-edge text-sm font-semibold text-ink-2 hover:bg-panel-2 hover:text-ink"
+        onClick={openHelp}
+        title="Help: connecting, data files, keyboard"
+        aria-label="Help"
+      >
+        ?
+      </button>
     </header>
   );
 }

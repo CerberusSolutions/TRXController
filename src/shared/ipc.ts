@@ -136,6 +136,27 @@ export interface Settings {
   lon: number | null;
   /** Only licences within this distance are matched; null = no limit. */
   radiusKm: number | null;
+  /** Serial port of the last successful connection, reopened at launch. */
+  port: string | null;
+  /** False after the user disconnects, so the app stops reconnecting on its own. */
+  autoConnect: boolean;
+  /** Last window placement, restored at launch when it is still on a screen. */
+  window: WindowState | null;
+}
+
+export interface WindowState {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  maximized: boolean;
+}
+
+/** Build identity, from package.json via Electron. */
+export interface AppInfo {
+  name: string;
+  version: string;
+  electron: string;
 }
 
 export interface ImportResult {
@@ -163,6 +184,7 @@ export const IPC = {
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   setTheme: 'theme:set',
+  appInfo: 'app:info',
 } as const;
 
 export type ThemeMode = 'light' | 'dark' | 'system';

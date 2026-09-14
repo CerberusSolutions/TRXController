@@ -78,7 +78,7 @@ export default function DataMenu() {
         Data
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
+        <div className="absolute left-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
           <Section title="Ofcom Wireless Telegraphy Register">
             <p className="mt-1 text-ink-2">
               {stats.wtrLicences > 0 ? (
@@ -134,6 +134,12 @@ export default function DataMenu() {
               </p>
             )}
           </Section>
+
+          <Section title="RadioReference">
+            <p className="mt-1 text-ink-3">Coming soon.</p>
+          </Section>
+
+          <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
 
           {error && <p className="text-xs text-red">{error}</p>}
         </div>

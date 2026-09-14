@@ -49,14 +49,22 @@ export const useScanner = create<ScannerState>((set, get) => ({
   lastKey: null,
 
   setSnapshot: (snapshot) => {
-    set({ snapshot });
+    const { ports, selectedPort } = get();
+    const port = snapshot.link.port;
+    // Main may connect on its own (remembered port): keep the selector in step.
+    if (port && snapshot.link.status !== 'disconnected' && port !== selectedPort) {
+      set({ snapshot, selectedPort: port });
+      if (!ports.some((p) => p.path === port)) void get().refreshPorts();
+    } else {
+      set({ snapshot });
+    }
     useBand.getState().ingest(snapshot);
   },
 
   refreshPorts: async () => {
-    const ports = await api().listPorts();
-    const current = get().selectedPort;
-    // Prefer the Whistler USB port, else keep the current choice, else first.
+    const [ports, settings] = await Promise.all([api().listPorts(), api().settingsGet().catch(() => null)]);
+    const current = get().selectedPort ?? settings?.port ?? null;
+    // Keep the current (or remembered) choice if present, else the Whistler USB port, else first.
     const whistler = ports.find((p) => (p.vendorId ?? '').toUpperCase() === '2A59');
     const selectedPort =
       current && ports.some((p) => p.path === current) ? current : (whistler ?? ports[0])?.path ?? null;

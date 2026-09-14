@@ -97,6 +97,11 @@ body {
 .key .sub { @apply text-[10px] text-ink-3 leading-none mt-0.5 tracking-wide uppercase; }
 
 .lcd-line { white-space: pre; }
+/* Six lines at up to 22px, shrinking (padding included) so the whole screen fits the tab
+   without scrolling: available height minus the 1.75rem header row, over 6 x 1.35 line
+   heights plus 2 x 0.55em padding. */
+.lcd-fit { container-type: size; }
+.lcd-screen { font-size: clamp(10px, calc((100cqh - 1.75rem) / 9.2), 22px); padding: 0.55em 0.75em; }
 .lcd-cursor { background: rgba(215, 244, 227, 0.14); }
 
 /* Frameless window: the top bar is the drag handle; controls opt out. */
