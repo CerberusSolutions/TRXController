@@ -15,7 +15,7 @@ function Param({ label, value }: { label: string; value: string | null | undefin
 
 export default function FrequencyHero() {
   const { status, lcd, active, link } = useScanner((s) => s.snapshot);
-  const online = link.status === 'connected' || link.status === 'unresponsive';
+  const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
   const { mhz, frac } = splitFrequency(hz);
@@ -60,7 +60,7 @@ export default function FrequencyHero() {
 
       <div className="mt-5 min-h-[3.75rem]">
         {id.source === 'none' ? (
-          <p className="text-xl text-ink-3">{online ? (status?.modeName ?? '') : 'Not connected'}</p>
+          <p className="text-xl text-ink-3">{online ? status.modeName : link.status === 'disconnected' ? 'Not connected' : 'Waiting for scanner'}</p>
         ) : (
           <>
             <p className="truncate text-3xl font-semibold tracking-tight text-ink">{id.name}</p>
