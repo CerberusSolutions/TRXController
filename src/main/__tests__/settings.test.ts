@@ -20,6 +20,24 @@ describe('sanitize', () => {
   });
 });
 
+describe('sanitize window placement', () => {
+  it('rounds a valid placement and keeps the maximised flag', () => {
+    expect(sanitize({ ...DEFAULT_SETTINGS, window: { x: 10.4, y: 20, width: 1320, height: 780, maximized: true } }).window).toEqual({
+      x: 10,
+      y: 20,
+      width: 1320,
+      height: 780,
+      maximized: true,
+    });
+  });
+
+  it('drops a placement smaller than the minimum window or missing a field', () => {
+    expect(sanitize({ ...DEFAULT_SETTINGS, window: { x: 0, y: 0, width: 400, height: 780, maximized: false } }).window).toBeNull();
+    expect(sanitize({ ...DEFAULT_SETTINGS, window: { x: 0, y: 0, width: 1320 } as never }).window).toBeNull();
+    expect(sanitize({ ...DEFAULT_SETTINGS, window: 'big' as never }).window).toBeNull();
+  });
+});
+
 describe('SettingsStore', () => {
   const dirs: string[] = [];
   afterEach(() => {

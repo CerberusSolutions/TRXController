@@ -144,6 +144,9 @@ captured on 14 Sep 2026.
   the remembered port every 5 s while nothing is connected, but only when the OS lists it, so an
   absent scanner never raises an error. A manual Disconnect sets `autoConnect` false until the
   next manual Connect. The renderer's port selector follows whatever main connected to.
+- `settings.json` also keeps `window` (normal bounds + maximised flag, saved 400 ms after a
+  resize / move). It is restored only if at least an 80 px grip of it is still on a connected
+  screen; otherwise the 1320 x 780 default is used.
 
 ## Help screen and identity
 

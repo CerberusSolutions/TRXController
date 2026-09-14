@@ -1,10 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, type Rectangle } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
 import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
-import { SettingsStore } from './settings';
+import { MIN_WINDOW, SettingsStore } from './settings';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
 import { ScannerSession } from './scanner/session';
@@ -192,13 +192,38 @@ function openLog(): void {
   console.log(`[log] ${path} (${db.count()} receptions)`);
 }
 
+// Wide enough for the log table without truncating the system column.
+const DEFAULT_WINDOW = { width: 1320, height: 780 };
+
+/** The saved placement, if enough of it still lands on a connected screen to grab. */
+function savedBounds(): Rectangle | null {
+  const w = settings?.get().window;
+  if (!w) return null;
+  const area = screen.getDisplayMatching(w).workArea;
+  const grip = 80;
+  const onScreen =
+    w.x + w.width > area.x + grip && w.x < area.x + area.width - grip && w.y >= area.y - 8 && w.y < area.y + area.height - grip;
+  return onScreen ? { x: w.x, y: w.y, width: w.width, height: w.height } : null;
+}
+
+let saveBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+
+function rememberBounds(w: BrowserWindow): void {
+  if (saveBoundsTimer) clearTimeout(saveBoundsTimer);
+  saveBoundsTimer = setTimeout(() => {
+    saveBoundsTimer = null;
+    if (w.isDestroyed() || w.isMinimized()) return;
+    // Normal bounds so a maximised window restores to its pre-maximised shape.
+    settings?.set({ window: { ...w.getNormalBounds(), maximized: w.isMaximized() } });
+  }, 400);
+}
+
 function createWindow(): void {
+  const saved = savedBounds();
   win = new BrowserWindow({
-    // Wide enough for the log table without truncating the system column.
-    width: 1320,
-    height: 780,
-    minWidth: 900,
-    minHeight: 600,
+    ...(saved ?? DEFAULT_WINDOW),
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? CHROME.dark.background : CHROME.light.background,
@@ -216,7 +241,15 @@ function createWindow(): void {
     },
   });
 
+  if (settings?.get().window?.maximized) win.maximize();
   win.on('ready-to-show', () => win?.show());
+  const remember = (): void => {
+    if (win) rememberBounds(win);
+  };
+  win.on('resize', remember);
+  win.on('move', remember);
+  win.on('maximize', remember);
+  win.on('unmaximize', remember);
   win.on('closed', () => {
     win = null;
   });
