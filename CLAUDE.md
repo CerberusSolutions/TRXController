@@ -37,6 +37,16 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   delimited by known response lengths (see `packages/rcip/src/frame.ts`), not by
   scanning for ETX.
 
+## Hardware facts (TRX-1e, CPU firmware 7.4, probed 14 Sep 2026)
+
+- `L` returns 96 text bytes + 3 icon bytes (99 data, 103 total). The spec's "lcd96" is a typo.
+- Byte 0x93 in column 16 marks the highlighted menu line (`Lcd.cursorLine`), despite the
+  spec saying cursors are not sent.
+- Arrow keys: UP=8, DOWN=10, LEFT=16, RIGHT=2. RIGHT also selects the highlighted menu item.
+- Responses come back within a few tens of ms. Right after a mode change the scanner may
+  not answer at all, so a polling loop must treat a timeout as "retry", never as a fault.
+- See `docs/probe-results-2026-09-14.md` for the raw frames.
+
 ## Layout
 
 - `packages/rcip/` protocol library (encoder/decoder, parsers, key table, lookup tables, tests)

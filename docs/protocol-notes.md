@@ -1,7 +1,9 @@
 # Whistler RCIP protocol notes
 
-Condensed from `Whistler_Remote_Control_Protocol_v1_7.pdf` (v1.7, 1 Aug 2017).
-Anything marked **unverified** has not yet been confirmed against a real scanner.
+Condensed from `Whistler_Remote_Control_Protocol_v1_7.pdf` (v1.7, 1 Aug 2017), corrected
+against a TRX-1e (boot 1.3, CPU 7.4, DSP 3.2/1.6) on 14 Sep 2026; see
+`probe-results-2026-09-14.md`. Anything marked **unverified** has not yet been confirmed
+against a real scanner.
 
 ## Link
 
@@ -23,7 +25,7 @@ delimited by their known lengths:
 | `A`  | cmd       | 0          | 4  |
 | `A`  | resp      | 16         | 20 |
 | `L`  | cmd       | 0          | 4  |
-| `L`  | resp      | 97 + 3 (see note) | 104 |
+| `L`  | resp      | 96 + 3 (see note) | 103 |
 | `a`  | cmd       | 0          | 4  |
 | `a`  | resp      | 2 + len    | 6 + len (len is 0 or 320) |
 | `K`  | cmd       | 1          | 5, no response |
@@ -35,8 +37,13 @@ delimited by their known lengths:
 | `C`  | cmd       | 1          | 5, no response |
 
 Note on `L`: the spec says `<lcd0>` .. `<lcd96>` (97 bytes) then three icon bytes, but
-also "6 lines at 16 characters" (96). The 97th byte is presumably a C string NUL.
-**Unverified**; the probe reports the actual length.
+also "6 lines at 16 characters" (96). The TRX-1e sends **96** text bytes then the three
+icon bytes (99 data bytes, 103 in total). The spec's `lcd96` is a typo.
+
+Responses arrive well inside 150 ms of the command (the probe's quiet window), so the
+app can poll `A` and `L` several times a second. Immediately after a mode change (e.g.
+entering Scan) the scanner can miss a response entirely; the polling loop must treat a
+timeout as "try again", not as a link failure.
 
 ## `A` Get Status (16 data bytes, in order)
 
@@ -52,7 +59,10 @@ mode, sq, battL, battH, rssiL, rssiH, zmL, zmH, ledR, ledG, ledB, freq0..freq3, 
 ## `L` Get LCD
 
 6 lines x 16 chars, then icons1/icons2/icons3 bitmaps (see `packages/rcip/src/lcd.ts`).
-Check boxes and cursor arrows are not included in the text.
+Check boxes are not included in the text. Contrary to the spec, the **menu cursor is**:
+byte `0x93` appears in column 16 of the highlighted menu line (`Lcd.cursorLine`). Other
+bytes at 0x80 and above are scanner-specific glyphs; the library renders unknown ones
+as `▯` rather than letting terminals swallow them as C1 control characters.
 
 ## `a` Get Active Channel
 
@@ -87,8 +97,11 @@ Needs CPU firmware 1.2 or later. Codes from the spec table:
 
 The four arrow labels are not extractable as text from the PDF: they are Webdings
 glyphs 0x33..0x36, which are ◄ ► ▲ ▼ respectively. Reading them back against the
-table rows gives up=8, down=10, left=16, right=2. **Unverified on hardware** until
-`npm run probe -- COM7 --identify` has been run.
+table rows gives up=8, down=10, left=16, right=2. **Confirmed** with
+`npm run probe -- COM7 --identify` at the main menu: 8 moved the cursor from the first
+item (Scan) to the last (Playback), i.e. UP with wrap-around; 10 moved it back (DOWN);
+2 entered the highlighted item (RIGHT doubles as select); 16 had no visible effect at
+the top level (LEFT/back). LEFT is therefore known by elimination only.
 
 ## `t` Clock Set
 
@@ -99,7 +112,8 @@ isDST. The spec does not state byte order. The library defaults to little-endian
 ## `V` Version
 
 Command carries one 0x00 data byte. Response: 0x00, 8 ASCII model chars
-(e.g. `"WS1080  "`), then boot, CPU, DSP1, DSP2 versions as `major<<4 | minor`.
+(e.g. `"WS1080  "`; the TRX-1E reports `"TRX-1e  "`), then boot, CPU, DSP1, DSP2
+versions as `major<<4 | minor`. Observed: boot 1.3, CPU 7.4, DSP1 3.2, DSP2 1.6.
 
 ## `P` Power status
 

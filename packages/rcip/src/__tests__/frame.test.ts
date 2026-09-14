@@ -118,13 +118,34 @@ describe('FrameDecoder', () => {
     expect(e2[0]!.type === 'frame' && e2[0]!.frame.data.length).toBe(322);
   });
 
-  it('accepts an L response with either 97+3 or 96+3 data bytes', () => {
-    const l100 = encodeFrame('L', new Uint8Array(100).fill(0x20));
+  it('decodes the 96+3 byte L response the TRX-1e sends', () => {
     const l99 = encodeFrame('L', new Uint8Array(99).fill(0x20));
-    expect(new FrameDecoder().push(l100)[0]!.type).toBe('frame');
     const events = new FrameDecoder().push(l99);
     expect(events[0]!.type).toBe('frame');
     expect(events[0]!.type === 'frame' && events[0]!.frame.data.length).toBe(99);
+  });
+
+  it('decodes a real L frame captured from a TRX-1e', () => {
+    const raw = fromHex(
+      '02 4C 20 20 2D 4D 61 69 6E 20 4D 65 6E 75 2D 20 20 20 53 63 61 6E 20 20 20 20 20 20 20 20 20 20 20 93 ' +
+        '53 63 61 6E 6C 69 73 74 73 20 20 20 20 20 20 20 42 72 6F 77 73 65 20 4C 69 62 72 61 72 79 20 20 ' +
+        '42 72 6F 77 73 65 20 4F 62 6A 65 63 74 73 20 20 50 72 6F 67 72 61 6D 20 4D 65 6E 75 20 20 20 20 00 00 00 03 DF',
+    );
+    expect(raw.length).toBe(103);
+    const events = new FrameDecoder().push(raw);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.type === 'frame' && events[0]!.frame.data.length).toBe(99);
+  });
+
+  it('decodes real V, A, P and a frames captured from a TRX-1e', () => {
+    const raw = fromHex(
+      '02 56 00 54 52 58 2D 31 65 20 20 13 74 32 16 03 29 ' +
+        '02 41 00 00 70 92 02 00 7E 00 00 00 00 38 49 68 07 00 03 B6 ' +
+        '02 50 01 03 54 ' +
+        '02 61 00 00 03 64',
+    );
+    const events = splitFrames(raw);
+    expect(events.map((e) => (e.type === 'frame' ? e.frame.codeChar : e.type))).toEqual(['V', 'A', 'P', 'a']);
   });
 
   it('resynchronises after a corrupt frame', () => {

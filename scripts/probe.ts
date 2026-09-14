@@ -232,7 +232,7 @@ function printStatus(s: Status): void {
 
 function printLcd(l: Lcd): void {
   console.log(renderLcd(l).split('\n').map((x) => '  ' + x).join('\n'));
-  console.log(`  text bytes: ${l.textLength} (trailer: ${l.trailer.length ? toHex(l.trailer) : 'none'})`);
+  console.log(`  text bytes: ${l.textLength} (trailer: ${l.trailer.length ? toHex(l.trailer) : 'none'}), cursor line: ${l.cursorLine}`);
   console.log(`  icons: ${toHex(l.icons.raw)} -> ${describeIcons(l.icons)}`);
 }
 
@@ -288,13 +288,14 @@ async function query(link: Link, label: string, cmd: Uint8Array, args: Args): Pr
 }
 
 async function readLcd(link: Link, args: Args): Promise<Lcd | undefined> {
-  const { events } = await link.transact(getLcd(), args.quietMs, args.timeoutMs);
+  const { raw, events, ms } = await link.transact(getLcd(), args.quietMs, args.timeoutMs);
   for (const e of events) {
     if (e.type === 'frame' && e.frame.codeChar === 'L') {
       const p = parseResponse(e.frame);
       if ('lcd' in p) return p.lcd;
     }
   }
+  console.log(`  (LCD read got ${raw.length} bytes in ${ms} ms${raw.length ? ': ' + toHex(raw.subarray(0, 32)) : ', scanner busy?'})`);
   return undefined;
 }
 
@@ -363,7 +364,7 @@ async function identify(link: Link, args: Args): Promise<void> {
   console.log('\n== Identification summary');
   console.log('  code  currently  observed');
   for (const r of results) console.log(`  ${String(r.code).padStart(4)}  ${keyLabel(r.code).padEnd(9)}  ${r.observed}`);
-  console.log('\n  Provisional mapping in packages/rcip/src/keys.ts: UP=8 DOWN=10 LEFT=16 RIGHT=2');
+  console.log('\n  Mapping in packages/rcip/src/keys.ts: UP=8 DOWN=10 LEFT=16 RIGHT=2 (confirmed on a TRX-1e)');
 }
 
 async function watch(link: Link, args: Args): Promise<void> {

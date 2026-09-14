@@ -90,9 +90,9 @@ export function decodeFrame(buf: Uint8Array): Frame {
  */
 export const RESPONSE_DATA_LENGTH: Readonly<Record<string, readonly number[] | null>> = {
   A: [16],
-  // Spec: lcd0..lcd96 (97 chars) + 3 icon bytes. 96 + 3 kept as a fallback in
-  // case the 97th byte turns out not to exist on real hardware.
-  L: [100, 99],
+  // Spec says lcd0..lcd96 (97 chars) + 3 icon bytes, but a TRX-1e (CPU 7.4)
+  // sends 96 + 3 = 99. The spec's "96" is a typo for 95.
+  L: [99],
   V: [13],
   P: [1],
   a: null,

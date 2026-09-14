@@ -3,6 +3,18 @@ import { SIGNAL_TYPES, type SignalType } from './tables';
 export const LCD_COLUMNS = 16;
 export const LCD_ROWS = 6;
 
+/**
+ * Byte the TRX-1e puts in the last column of the highlighted menu line. The
+ * spec says cursors are not included in the LCD data, but this one is
+ * (observed on CPU firmware 7.4).
+ */
+export const LCD_CURSOR_BYTE = 0x93;
+
+/** Printable stand-ins for scanner-specific glyph bytes (0x80 and above). */
+export const LCD_GLYPHS: Readonly<Record<number, string>> = {
+  [LCD_CURSOR_BYTE]: '◄',
+};
+
 export interface LcdIcons {
   /** icons1 bits 0-2, 0..5 */
   rssiBars: number;
@@ -34,8 +46,12 @@ export interface Lcd {
   text: string;
   /** Number of text bytes the scanner sent before the icon bytes (96 or 97). */
   textLength: number;
-  /** Any trailing text bytes beyond 96 (expected: one NUL). */
+  /** Any trailing text bytes beyond 96 (the TRX-1e sends none). */
   trailer: Uint8Array;
+  /** The 96 raw display bytes, for glyphs the text rendering cannot show. */
+  raw: Uint8Array;
+  /** Row (0-5) carrying the menu cursor byte, or -1 if none. */
+  cursorLine: number;
   icons: LcdIcons;
 }
 
@@ -63,12 +79,15 @@ export function parseLcdIcons(i1: number, i2: number, i3: number): LcdIcons {
   };
 }
 
-/** Map a display byte to a printable character. Control bytes become spaces. */
+/**
+ * Map a display byte to a printable character. Control bytes become spaces;
+ * scanner-specific glyphs (0x80+) become a known stand-in or a visible
+ * placeholder so they are never silently dropped by the terminal.
+ */
 export function lcdChar(b: number): string {
-  if (b === 0) return ' ';
   if (b < 0x20 || b === 0x7f) return ' ';
-  // 0x80+ are scanner-specific glyphs; keep them as Latin-1 so nothing is lost.
-  return String.fromCharCode(b);
+  if (b < 0x80) return String.fromCharCode(b);
+  return LCD_GLYPHS[b] ?? '▯';
 }
 
 export function parseLcd(data: Uint8Array): Lcd {
@@ -83,11 +102,15 @@ export function parseLcd(data: Uint8Array): Lcd {
   const text = chars.join('');
   const lines: string[] = [];
   for (let r = 0; r < LCD_ROWS; r++) lines.push(text.slice(r * LCD_COLUMNS, (r + 1) * LCD_COLUMNS));
+  const raw = textBytes.slice(0, LCD_COLUMNS * LCD_ROWS);
+  const cursorIndex = raw.indexOf(LCD_CURSOR_BYTE);
   return {
     lines,
     text,
     textLength,
     trailer: textBytes.slice(LCD_COLUMNS * LCD_ROWS),
+    raw,
+    cursorLine: cursorIndex < 0 ? -1 : Math.floor(cursorIndex / LCD_COLUMNS),
     icons: parseLcdIcons(data[textLength]!, data[textLength + 1]!, data[textLength + 2]!),
   };
 }

@@ -3,7 +3,10 @@
  *
  * The four arrow keys are shown in the PDF as Webdings glyphs 0x33..0x36
  * (◄ ► ▲ ▼). Reading the table rows gives UP=8, DOWN=10, LEFT=16, RIGHT=2.
- * They are marked provisional until the hardware probe has confirmed them.
+ * Confirmed on a TRX-1e (CPU 7.4) on 14 Sep 2026: at the main menu, 8 moved
+ * the cursor from the first item to the last (wrap-around, i.e. UP), 10 moved
+ * it back (DOWN), 2 entered the highlighted item (RIGHT acts as select), and
+ * 16 did nothing at the top level, which is what LEFT/back does there.
  */
 export const Key = {
   MENU: 17,
@@ -11,10 +14,10 @@ export const Key = {
   SKIP: 1,
   WX: 3,
   ATT: 15,
-  UP: 8, // provisional
-  DOWN: 10, // provisional
-  LEFT: 16, // provisional
-  RIGHT: 2, // provisional
+  UP: 8,
+  DOWN: 10,
+  LEFT: 16, // confirmed only by elimination (no visible effect at the main menu)
+  RIGHT: 2, // also selects the highlighted menu item
   PRI: 5,
   FN: 12,
   DECIMAL: 19,
@@ -37,8 +40,11 @@ export const Key = {
 export type KeyName = keyof typeof Key;
 export type KeyCode = (typeof Key)[KeyName];
 
-/** Keys whose code has not yet been confirmed on real hardware. */
-export const PROVISIONAL_KEYS: readonly KeyName[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+/**
+ * Keys whose code has not been directly observed on real hardware. LEFT is
+ * known by elimination; check it in a sub-menu when convenient.
+ */
+export const PROVISIONAL_KEYS: readonly KeyName[] = ['LEFT'];
 
 /** Display labels matching the scanner's key legends. */
 export const KEY_LABELS: Readonly<Record<KeyName, string>> = {

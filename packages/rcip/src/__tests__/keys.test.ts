@@ -16,9 +16,12 @@ describe('key table', () => {
     expect([Key.KNOB_CW, Key.KNOB_CCW, Key.KNOB_PUSH, Key.POWER]).toEqual([40, 41, 43, 44]);
   });
 
-  it('assigns the four unlabelled codes to the arrows (provisional)', () => {
-    expect([Key.UP, Key.DOWN, Key.LEFT, Key.RIGHT].sort((a, b) => a - b)).toEqual([2, 8, 10, 16]);
-    expect(PROVISIONAL_KEYS).toEqual(['UP', 'DOWN', 'LEFT', 'RIGHT']);
+  it('assigns the four unlabelled codes to the arrows as observed on the TRX-1e', () => {
+    expect(Key.UP).toBe(8);
+    expect(Key.DOWN).toBe(10);
+    expect(Key.LEFT).toBe(16);
+    expect(Key.RIGHT).toBe(2);
+    expect(PROVISIONAL_KEYS).toEqual(['LEFT']);
   });
 
   it('has unique codes and a label for every key', () => {

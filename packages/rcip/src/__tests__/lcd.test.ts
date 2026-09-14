@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { describeIcons, parseLcd, parseLcdIcons, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, renderLcd } from '../lcd';
+import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
   const text = lines.map((l) => l.padEnd(16, ' ')).join('');
@@ -11,7 +12,7 @@ function lcdData(lines: string[], icons: [number, number, number], nul = true): 
 const LINES = ['Scan           ', 'Scanlist 01    ', 'Fire Dispatch  ', '154.32500 MHz  ', '', 'NFM        CT 2'];
 
 describe('parseLcd', () => {
-  it('splits 97+3 bytes into six 16-char lines and icons', () => {
+  it('tolerates 97+3 bytes as the spec describes', () => {
     const lcd = parseLcd(lcdData(LINES, [0x05, 0x00, 0x05]));
     expect(lcd.textLength).toBe(97);
     expect(lcd.lines).toHaveLength(6);
@@ -22,11 +23,41 @@ describe('parseLcd', () => {
     expect(lcd.icons.signalTypeName).toBe('NFM');
   });
 
-  it('also accepts 96+3 bytes', () => {
+  it('parses the 96+3 bytes the TRX-1e actually sends', () => {
     const lcd = parseLcd(lcdData(LINES, [0, 0, 0], false));
     expect(lcd.textLength).toBe(96);
     expect(lcd.trailer.length).toBe(0);
     expect(lcd.lines[0]).toBe('Scan            ');
+    expect(lcd.cursorLine).toBe(-1);
+    expect(lcd.raw.length).toBe(96);
+  });
+
+  it('decodes a real main-menu capture with the cursor byte on the highlighted line', () => {
+    const data = fromHex(
+      '20 20 2D 4D 61 69 6E 20 4D 65 6E 75 2D 20 20 20 53 63 61 6E 20 20 20 20 20 20 20 20 20 20 20 93 ' +
+        '53 63 61 6E 6C 69 73 74 73 20 20 20 20 20 20 20 42 72 6F 77 73 65 20 4C 69 62 72 61 72 79 20 20 ' +
+        '42 72 6F 77 73 65 20 4F 62 6A 65 63 74 73 20 20 50 72 6F 67 72 61 6D 20 4D 65 6E 75 20 20 20 20 00 00 00',
+    );
+    const lcd = parseLcd(data);
+    expect(lcd.textLength).toBe(96);
+    expect(lcd.lines).toEqual([
+      '  -Main Menu-   ',
+      'Scan           ◄',
+      'Scanlists       ',
+      'Browse Library  ',
+      'Browse Objects  ',
+      'Program Menu    ',
+    ]);
+    expect(lcd.cursorLine).toBe(1);
+    expect(lcd.raw[31]).toBe(LCD_CURSOR_BYTE);
+    expect(lcd.icons.raw).toEqual([0, 0, 0]);
+  });
+
+  it('never renders scanner glyphs as invisible control characters', () => {
+    expect(lcdChar(0x93)).toBe('◄');
+    expect(lcdChar(0x85)).toBe('▯');
+    expect(lcdChar(0x00)).toBe(' ');
+    expect(lcdChar(0x41)).toBe('A');
   });
 
   it('replaces control bytes with spaces', () => {
