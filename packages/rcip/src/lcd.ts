@@ -115,6 +115,45 @@ export function parseLcd(data: Uint8Array): Lcd {
   };
 }
 
+/**
+ * Object attribute flags shown at the right of LCD line 2 in Scan mode,
+ * e.g. "CONV        psDr". Uppercase means enabled (confirmed on a TRX-1e:
+ * p priority, s skip, D delay, r record).
+ */
+export interface ObjectFlags {
+  priority: boolean;
+  skip: boolean;
+  delay: boolean;
+  record: boolean;
+  /** The four raw flag characters. */
+  raw: string;
+}
+
+export interface ScanObjectLine {
+  /** Object type as displayed, e.g. "CONV", "TGRP". */
+  type: string;
+  flags: ObjectFlags | null;
+}
+
+const FLAG_RE = /([pP])([sS])([dD])([rR])\s*$/;
+
+/** Parse the scan-mode object line ("CONV        psDr"). Returns null if it does not look like one. */
+export function parseScanObjectLine(line: string): ScanObjectLine | null {
+  const m = FLAG_RE.exec(line);
+  const type = line.slice(0, m ? m.index : line.length).trim();
+  if (!type && !m) return null;
+  const flags: ObjectFlags | null = m
+    ? {
+        priority: m[1] === 'P',
+        skip: m[2] === 'S',
+        delay: m[3] === 'D',
+        record: m[4] === 'R',
+        raw: m[0].trim(),
+      }
+    : null;
+  return { type, flags };
+}
+
 /** Render the LCD as a boxed multi-line string for terminals. */
 export function renderLcd(lcd: Lcd): string {
   const bar = '+' + '-'.repeat(LCD_COLUMNS) + '+';

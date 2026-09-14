@@ -11,7 +11,7 @@ digital scanners, replacing Whistler's own remote control software.
 ## Stack
 
 Electron + Vite + React + TypeScript, Tailwind, `serialport` in the main process,
-Zustand in the renderer, `better-sqlite3` for logging. Windows only.
+Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows only.
 
 ## Getting started
 
@@ -21,7 +21,8 @@ npm test                      # protocol library unit tests
 npm run probe -- --list       # list serial ports
 npm run probe -- COM7         # query the scanner on COM7
 npm run probe -- COM7 --identify   # walk the unlabelled key codes
-npm run dev                   # run the Electron app
+npm run dev                   # run the Electron app with hot reload
+npm run build && npm start    # run the built app
 ```
 
 See `CLAUDE.md` for the design constraints.

@@ -120,7 +120,13 @@ the top level (LEFT/back). LEFT is therefore known by elimination only.
 ```
 
 Icons during that reception were `4D 40 03`: RSSI 5/5, S, ext power, PLAY, signal AM.
-The meaning of the `psDr` flags is not documented; probably per-object attributes.
+The `psDr` flags at the right of line 2 are the object's attributes, uppercase when
+enabled: **p**riority, **s**kip, **D**elay, **r**ecord (confirmed by the author on the
+TRX-1e). `parseScanObjectLine` in `packages/rcip/src/lcd.ts` reads them.
+
+The Scanlists menu prefixes each entry with a check-box glyph byte (0x80 and above);
+the checked/unchecked values are not yet identified. Use the `hex` toggle in the app's
+Scanner Display panel to read them.
 
 ## `t` Clock Set
 
