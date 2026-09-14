@@ -1,0 +1,42 @@
+{
+  "name": "trxcontroller",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Remote control and logging app for the Whistler TRX-1/TRX-1E/TRX-2 scanner",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "start": "electron-vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p packages/rcip/tsconfig.json --noEmit",
+    "probe": "tsx scripts/probe.ts"
+  },
+  "dependencies": {
+    "@trxcontroller/rcip": "*",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "serialport": "^13.0.0",
+    "zustand": "^5.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^44.0.0",
+    "electron-vite": "^5.0.0",
+    "tailwindcss": "^4.1.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0",
+    "vite": "^7.0.0",
+    "vitest": "^5.0.0"
+  }
+}
