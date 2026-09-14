@@ -6,12 +6,15 @@ import StatusBar from './components/StatusBar';
 import TopBar from './components/TopBar';
 import { attachLogEvents } from './store/log';
 import { attachScannerEvents } from './store/scanner';
+import { initTheme } from './store/theme';
 
 export default function App() {
   useEffect(() => {
+    const offTheme = initTheme();
     const offScanner = attachScannerEvents();
     const offLog = attachLogEvents();
     return () => {
+      offTheme();
       offScanner();
       offLog();
     };
