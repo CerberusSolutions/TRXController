@@ -93,6 +93,16 @@ captured on 14 Sep 2026.
   by last activity, open rows first. Clearing the log resets the merge memory.
 - DMR radio IDs resolve to callsign/name via the `dmr_users` table, imported from the
   radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it.
+- Ofcom Wireless Telegraphy Register: `Data > Import WTR CSV` streams the export and keeps
+  25-1300 MHz, Live, channel width <= 200 kHz (drops fixed links, radar, AIS, satellite),
+  collapsing the T (base transmits) and R (base receives) rows and duplicates of the same
+  frequency + licensee + location, digital emission (F1W/G7W, signal-nature digit 1/2/7/9)
+  beating analogue (F3E/G3E). ~58k rows from a ~206k-row export. Lookup is ±3.125 kHz
+  (a quarter of the 12.5 kHz raster), nearest first from the location in
+  `userData/settings.json` (lat/lon/radius, set in the Data menu). Snapshots carry the
+  nearest five as `licences`; the hero shows three; receptions store the nearest as
+  `licensee`; the Band tab looks it up on hover. Not in the WTR: PMR446, Simple UK/Site
+  business radio, amateur, MoD/Home Office (so the P25 system stays unnamed).
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

@@ -1,8 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type ImportResult, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
+import { IPC, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
+import { readWtrCsv } from './identities/wtr';
+import { SettingsStore } from './settings';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
 import { ScannerSession } from './scanner/session';
@@ -33,13 +35,24 @@ function broadcast(channel: string, payload: unknown): void {
 
 let db: LogDb | null = null;
 let logger: ReceptionLogger | null = null;
+let settings: SettingsStore | null = null;
+let licenceCache: { hz: number; matches: WtrMatch[] } | null = null;
 
-/** Attach the DMR user record for the current radio ID, if the database knows it. */
+function licencesFor(hz: number): WtrMatch[] {
+  if (!db) return [];
+  if (licenceCache && licenceCache.hz === hz) return licenceCache.matches;
+  const s = settings?.get();
+  const matches = db.lookupWtr(hz, { lat: s?.lat, lon: s?.lon, radiusKm: s?.radiusKm, limit: 5 });
+  licenceCache = { hz, matches };
+  return matches;
+}
+
+/** Attach the DMR user for the current radio ID and the nearest Ofcom licences for the frequency. */
 function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const rid = s.active?.header?.radioId1;
-  if (!db || rid === undefined || rid === 0xffffffff) return { ...s, radioUser: null };
-  if (s.radioUser && s.radioUser.id === rid) return s;
-  return { ...s, radioUser: db.lookupDmrUser(rid) ?? null };
+  const radioUser = db && rid !== undefined && rid !== 0xffffffff ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
+  const licences = s.status ? licencesFor(s.status.frequencyHz) : [];
+  return { ...s, radioUser, licences };
 }
 
 const session = new ScannerSession(serialTransportFactory, {
@@ -72,6 +85,34 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
   ipcMain.handle(IPC.identityLookup, (_e, id: unknown) => (typeof id === 'number' && db ? (db.lookupDmrUser(id) ?? null) : null));
+  ipcMain.handle(IPC.wtrImport, async (): Promise<ImportResult | null> => {
+    if (!db) throw new Error('Database not open');
+    const res = await dialog.showOpenDialog({
+      title: 'Import Ofcom Wireless Telegraphy Register (CSV)',
+      filters: [
+        { name: 'WTR export', extensions: ['csv'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    });
+    const file = res.filePaths[0];
+    if (res.canceled || !file) return null;
+    const parsed = await readWtrCsv(file);
+    if (parsed.rows.length === 0) throw new Error('No usable licences found in that file');
+    const name = file.split(/[\\/]/).pop() ?? file;
+    const imported = db.replaceWtr(parsed.rows, name);
+    licenceCache = null;
+    console.log(`[wtr] imported ${imported} licences from ${file} (${parsed.read} rows read, ${parsed.skipped} skipped)`);
+    return { imported, skipped: parsed.skipped, file: name };
+  });
+  ipcMain.handle(IPC.wtrLookup, (_e, hz: unknown) => (typeof hz === 'number' ? licencesFor(hz) : []));
+  ipcMain.handle(IPC.settingsGet, () => settings?.get() ?? null);
+  ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) => {
+    if (!settings || typeof patch !== 'object' || patch === null) throw new Error('Bad settings');
+    const next = settings.set(patch as Partial<Settings>);
+    licenceCache = null;
+    return next;
+  });
   ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {
     if (mode !== 'light' && mode !== 'dark' && mode !== 'system') throw new Error('Bad theme mode');
     // Also flips prefers-color-scheme in the renderer, which resolves "system".
@@ -100,6 +141,7 @@ function registerIpc(): void {
 }
 
 function openLog(): void {
+  settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
   const path = join(app.getPath('userData'), 'trx-log.sqlite');
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));

@@ -14,7 +14,8 @@ function Param({ label, value, title }: { label: string; value: string | null | 
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, radioUser } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, radioUser, licences } = useScanner((s) => s.snapshot);
+
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
@@ -94,7 +95,30 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-4 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
+      <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
+        {licences.length > 0 ? (
+          <div className="grid grid-cols-[auto_1fr] gap-x-3">
+            <span className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
+            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
+              {licences.slice(0, 3).map((l) => (
+                <li key={l.id} className="flex min-w-0 gap-2" title={`${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`}>
+                  <span className="truncate text-ink">{l.licensee}</span>
+                  <span className="shrink-0 text-ink-3">
+                    {l.distanceKm !== null ? `${l.distanceKm < 10 ? l.distanceKm.toFixed(1) : Math.round(l.distanceKm)} km` : '—'}
+                    {l.mode ? ` · ${l.mode}` : ''}
+                    {l.direction === 'R' ? ' · mob' : l.direction === 'T' ? ' · base' : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
+            {online ? 'No Ofcom licence on this frequency' : ''}
+          </p>
+        )}
+      </div>
+      <div className="mt-2 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
         {h ? (
           <>
             <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />

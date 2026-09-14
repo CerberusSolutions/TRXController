@@ -25,4 +25,12 @@ npm run dev                   # run the Electron app with hot reload
 npm run build && npm start    # run the built app
 ```
 
+## Optional data
+
+- **DMR user database**: download the user export from radioid.net, then Data > Import.
+- **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom, set your location
+  in Data, then Data > Import WTR CSV. Heard frequencies then show the nearest licensees.
+
+Put downloads in `data/` (git-ignored).
+
 See `CLAUDE.md` for the design constraints.

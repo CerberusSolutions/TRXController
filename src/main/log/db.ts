@@ -3,9 +3,13 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow, WtrLicence, WtrMatch } from '../../shared/ipc';
+import { distanceKm } from '../identities/wtr';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
+
+/** How far a heard frequency may be from a licensed one to count as the same channel. */
+export const WTR_TOLERANCE_HZ = 3_125;
 
 /** Newest activity first: open rows, then by last-heard, then by start. */
 const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.started_at DESC, r.id DESC';
@@ -52,6 +56,21 @@ export class LogDb {
         country  TEXT NOT NULL DEFAULT ''
       );
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS wtr_licences (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        frequency_hz INTEGER NOT NULL,
+        direction    TEXT NOT NULL DEFAULT '-',
+        licensee     TEXT NOT NULL,
+        product      TEXT NOT NULL DEFAULT '',
+        emission     TEXT NOT NULL DEFAULT '',
+        mode         TEXT NOT NULL DEFAULT '',
+        width_hz     INTEGER NOT NULL DEFAULT 0,
+        lat          REAL,
+        lon          REAL,
+        ngr          TEXT NOT NULL DEFAULT '',
+        licence_no   TEXT NOT NULL DEFAULT ''
+      );
+      CREATE INDEX IF NOT EXISTS wtr_freq ON wtr_licences(frequency_hz);
     `);
     this.migrate();
     // A reception left open by a crash has no end time; close it at its start.
@@ -63,18 +82,19 @@ export class LogDb {
     const cols = (this.db.prepare('PRAGMA table_info(receptions)').all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('calls')) this.db.exec('ALTER TABLE receptions ADD COLUMN calls INTEGER NOT NULL DEFAULT 1');
     if (!cols.includes('tone')) this.db.exec("ALTER TABLE receptions ADD COLUMN tone TEXT NOT NULL DEFAULT ''");
+    if (!cols.includes('licensee')) this.db.exec("ALTER TABLE receptions ADD COLUMN licensee TEXT NOT NULL DEFAULT ''");
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, tone, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, licensee, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.rssiPeak, r.calls ?? 1,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -85,7 +105,7 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', rssiPeak: 'rssi_peak', calls: 'calls',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -142,7 +162,62 @@ export class LogDb {
   identityStats(): IdentityStats {
     const n = Number((this.db.prepare('SELECT COUNT(*) AS n FROM dmr_users').get() as { n: number }).n);
     const at = this.getMeta('dmr_users.imported_at');
-    return { dmrUsers: n, importedAt: at ? Number(at) : null, source: this.getMeta('dmr_users.source') };
+    const w = Number((this.db.prepare('SELECT COUNT(*) AS n FROM wtr_licences').get() as { n: number }).n);
+    const wat = this.getMeta('wtr.imported_at');
+    return {
+      dmrUsers: n,
+      importedAt: at ? Number(at) : null,
+      source: this.getMeta('dmr_users.source'),
+      wtrLicences: w,
+      wtrImportedAt: wat ? Number(wat) : null,
+      wtrSource: this.getMeta('wtr.source'),
+    };
+  }
+
+  // --- Ofcom WTR -----------------------------------------------------------
+
+  replaceWtr(rows: Iterable<Omit<WtrLicence, 'id'>>, source: string, now = Date.now()): number {
+    const ins = this.db.prepare(
+      'INSERT INTO wtr_licences (frequency_hz, direction, licensee, product, emission, mode, width_hz, lat, lon, ngr, licence_no) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('DELETE FROM wtr_licences');
+      for (const r of rows) {
+        ins.run(r.frequencyHz, r.direction, r.licensee, r.product, r.emission, r.mode, r.widthHz, r.lat, r.lon, r.ngr, r.licenceNo);
+        n++;
+      }
+      this.setMeta('wtr.imported_at', String(now));
+      this.setMeta('wtr.source', source);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  /**
+   * Licences on `hz` within ±WTR_TOLERANCE_HZ (a quarter of the 12.5 kHz
+   * raster, so a frequency matches its own channel only), nearest first when
+   * a location is given, limited to `radiusKm` if set. Licences without a
+   * location sort last.
+   */
+  lookupWtr(hz: number, opts: { lat?: number | null; lon?: number | null; radiusKm?: number | null; limit?: number } = {}): WtrMatch[] {
+    const rows = this.db
+      .prepare('SELECT * FROM wtr_licences WHERE frequency_hz BETWEEN ? AND ?')
+      .all(hz - WTR_TOLERANCE_HZ, hz + WTR_TOLERANCE_HZ) as unknown as RawWtr[];
+    const out: WtrMatch[] = [];
+    for (const r of rows) {
+      const lic = toWtr(r);
+      const distance =
+        opts.lat != null && opts.lon != null && lic.lat !== null && lic.lon !== null ? distanceKm(opts.lat, opts.lon, lic.lat, lic.lon) : null;
+      if (opts.radiusKm != null && distance !== null && distance > opts.radiusKm) continue;
+      out.push({ ...lic, distanceKm: distance });
+    }
+    out.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9) || a.licensee.localeCompare(b.licensee));
+    return out.slice(0, opts.limit ?? 5);
   }
 
   private setMeta(key: string, value: string): void {
@@ -167,6 +242,38 @@ export class LogDb {
   }
 }
 
+interface RawWtr {
+  id: number;
+  frequency_hz: number;
+  direction: string;
+  licensee: string;
+  product: string;
+  emission: string;
+  mode: string;
+  width_hz: number;
+  lat: number | null;
+  lon: number | null;
+  ngr: string;
+  licence_no: string;
+}
+
+function toWtr(r: RawWtr): WtrLicence {
+  return {
+    id: Number(r.id),
+    frequencyHz: Number(r.frequency_hz),
+    direction: r.direction,
+    licensee: r.licensee,
+    product: r.product,
+    emission: r.emission,
+    mode: r.mode,
+    widthHz: Number(r.width_hz),
+    lat: r.lat === null ? null : Number(r.lat),
+    lon: r.lon === null ? null : Number(r.lon),
+    ngr: r.ngr,
+    licenceNo: r.licence_no,
+  };
+}
+
 interface Raw {
   id: number;
   started_at: number;
@@ -183,6 +290,7 @@ interface Raw {
   site: string;
   squelch: string;
   tone: string;
+  licensee: string;
   rssi_peak: number;
   calls: number;
   hits: number;
@@ -207,6 +315,7 @@ function toRow(r: Raw): ReceptionRow {
     site: r.site,
     squelch: r.squelch,
     tone: r.tone ?? '',
+    licensee: r.licensee ?? '',
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),
