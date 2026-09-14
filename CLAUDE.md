@@ -53,3 +53,21 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `npm run typecheck`
 - `npm run probe -- --list` / `npm run probe -- COM7` / `npm run probe -- COM7 --identify`
 - `npm run dev` starts Electron with hot reload
+
+## UI design notes (for session 2 onwards)
+
+- Frequency display must be large and legible; signal strength and mode likewise.
+  These are the things Whistler's own app gets wrong.
+- The scanner does not report "which channel" directly. `A` gives the frequency
+  (and mode, RSSI); `a` gives object/system/talkgroup alpha tags but only while a
+  transmission is in progress. Between transmissions only the LCD text and the
+  frequency are available, so keep a local frequency-to-channel lookup (seeded
+  from what `a` and the LCD report over time, and/or an imported channel list) to
+  label the idle display.
+- Visual reference: the Uniden SDS200 web UI and Icom RS-BA1 (screenshots to be
+  supplied in session 2).
+- Additional reference: ARC536PRO (Uniden SDS). Not the best, but clear: an LCD-like
+  panel with the channel/department/system names in large text and the frequency
+  larger still, a metadata block beside it (TGID, NAC, site, UID, RSSI, mode),
+  a compact keypad column on the right, and a scrolling log table underneath
+  (time, frequency, TGID, channel, system, department, hits, RSSI, mode).
