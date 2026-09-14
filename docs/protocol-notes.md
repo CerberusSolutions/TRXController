@@ -70,10 +70,15 @@ as `▯` rather than letting terminals swallow them as C1 control characters.
 (the audio recording header). Needs firmware from June 2017 or later.
 
 Recording header: all integers **big-endian** except the `stm` start-time struct, which
-the spec says is **little-endian** (the two statements conflict, so the parser
-auto-detects and reports which it used). Strings are `char[17]`, NUL-terminated.
-Radio/talkgroup IDs are 0xFFFFFFFF when unavailable. Layout in
-`packages/rcip/src/activeChannel.ts`.
+is **little-endian** (confirmed on the TRX-1e; the parser still reports which order it
+used). The scanner fills the time as local time and leaves `tm_yday` and `tm_isdst` at
+zero. Strings are `char[17]`, NUL-terminated. Radio/talkgroup IDs are 0xFFFFFFFF when
+unavailable. Layout in `packages/rcip/src/activeChannel.ts`.
+
+Observed for a conventional (non-trunked) object: object tag set, system and site tags
+empty, info tag holds the frequency as displayed with a leading space (`" 119.775000"`),
+object ID 0, all four IDs 0xFFFFFFFF, control frequency 0, squelch "No Tone", TSYS type
+0 (meaningless when recording type is 0). The frequency field is Hz, big-endian.
 
 ## `K` Send Key
 
@@ -102,6 +107,20 @@ table rows gives up=8, down=10, left=16, right=2. **Confirmed** with
 item (Scan) to the last (Playback), i.e. UP with wrap-around; 10 moved it back (DOWN);
 2 entered the highlighted item (RIGHT doubles as select); 16 had no visible effect at
 the top level (LEFT/back). LEFT is therefore known by elimination only.
+
+### Scan-mode LCD layout (observed)
+
+```
+|                |   line 0: blank while receiving (alerts/status go here)
+|Civil Airband   |   line 1: scanlist name
+|CONV        psDr|   line 2: object type, then attribute flags at the right
+|TC NW Deps      |   line 3: object name
+|AM    119.775000|   line 4: mode and frequency
+|                |   line 5
+```
+
+Icons during that reception were `4D 40 03`: RSSI 5/5, S, ext power, PLAY, signal AM.
+The meaning of the `psDr` flags is not documented; probably per-object attributes.
 
 ## `t` Clock Set
 

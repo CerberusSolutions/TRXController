@@ -56,13 +56,30 @@ column 16 of the highlighted line ("Scan"); after pressing UP it moved to "Playb
 
 ## Active channel
 
+At the main menu:
+
 ```
 TX 02 61 03 64
 RX 02 61 00 00 03 64      -> length 0, nothing being received
 ```
 
-The 320-byte header has not yet been seen from real hardware; the parser is tested
-against a synthetic header only.
+Later, while receiving a conventional airband object in Scan mode (status: mode 0x0A,
+squelch open and unmuted, RSSI 350, LED 128/255/255, 119.775000 MHz AM; LCD shown in
+`protocol-notes.md`):
+
+```
+TX 02 61 03 64
+RX 02 61 01 40 2E 73 6E 64 00 00 01 40 FF FF FF FF 00 00 00 01 00 00 1F 40 00 00 00 01
+   00 23 00 2D 00 0E 00 0E 00 08 00 7E 00 01 00 00 00 00 00 54 43 20 4E 57 20 44 65 70
+   73 20 20 20 20 20 20 00 ... 20 31 31 39 2E 37 37 35 30 30 30 00 ... FF x16 ... 00 ...
+   07 23 9F 18 00 ... 03 5E
+```
+
+326 bytes, length field 0x0140 = 320. Decoded: conventional, start 2026-09-14 14:45:35
+(stm **little-endian**, wday 1 = Monday, yday and isdst 0), object "TC NW Deps",
+system "", info " 119.775000", object ID 0, all IDs 0xFFFFFFFF, voice 119775000 Hz
+(big-endian `07 23 9F 18`), control 0, squelch none, TSYS type 0, reserved all zero.
+The full frame is a fixture in `packages/rcip/src/__tests__/activeChannel.test.ts`.
 
 ## Key identification (at the main menu)
 
@@ -83,6 +100,6 @@ including the window), so actual turnaround is a few tens of milliseconds.
 
 ## Still unverified
 
-- `stm` byte order inside the recording header (needs an `a` response during a transmission).
-- `t` (clock set) byte order.
-- The `a` header on real traffic in general.
+- `t` (clock set) byte order. Little-endian is the obvious guess now that `stm` is
+  confirmed little-endian, but `--clock` has not been run.
+- The `a` header for a trunked object (talkgroup and radio IDs, site, TSYS type).

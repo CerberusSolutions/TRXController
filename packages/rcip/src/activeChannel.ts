@@ -112,9 +112,10 @@ function stmIso(t: Omit<RecordingTime, 'byteOrder' | 'iso'>): string | null {
 }
 
 /**
- * Parse the recording start time. The spec says the header is big-endian but
- * that this struct is little-endian; real firmware decides. Try the preferred
- * order first and fall back to the other if the fields are out of range.
+ * Parse the recording start time. The header is big-endian but this struct
+ * is little-endian, as the spec's struct comment says and a TRX-1e confirmed.
+ * The scanner leaves tm_yday and tm_isdst at zero. The opposite byte order is
+ * tried only if the little-endian reading is out of range.
  */
 export function parseRecordingTime(buf: Uint8Array, off = 25, prefer: 'le' | 'be' = 'le'): RecordingTime {
   const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);

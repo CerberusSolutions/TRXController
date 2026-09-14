@@ -43,6 +43,8 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - Byte 0x93 in column 16 marks the highlighted menu line (`Lcd.cursorLine`), despite the
   spec saying cursors are not sent.
 - Arrow keys: UP=8, DOWN=10, LEFT=16, RIGHT=2. RIGHT also selects the highlighted menu item.
+- The `a` recording header is big-endian except its `stm` start time, which is
+  little-endian (local time, yday and isdst left at zero). Confirmed on a live reception.
 - Responses come back within a few tens of ms. Right after a mode change the scanner may
   not answer at all, so a polling loop must treat a timeout as "retry", never as a fault.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.

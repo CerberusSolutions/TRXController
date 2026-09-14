@@ -7,7 +7,7 @@ import {
   parseRecordingHeader,
   parseRecordingTime,
 } from '../activeChannel';
-import { encodeFrame } from '../frame';
+import { encodeFrame, fromHex, splitFrames } from '../frame';
 
 function putStr(buf: Uint8Array, off: number, s: string): void {
   for (let i = 0; i < s.length; i++) buf[off + i] = s.charCodeAt(i);
@@ -133,6 +133,60 @@ describe('parseActiveChannel', () => {
 
   it('rejects a non-empty payload shorter than a header', () => {
     expect(() => parseActiveChannel(new Uint8Array([0x00, 0x04, 1, 2, 3, 4]))).toThrow(/expected 320/);
+  });
+});
+
+describe('real TRX-1e capture', () => {
+  // Full `a` response captured on 14 Sep 2026 while receiving a conventional
+  // airband object. Header integers are big-endian, stm is little-endian.
+  const RAW = fromHex(
+    '02 61 01 40 2E 73 6E 64 00 00 01 40 FF FF FF FF 00 00 00 01 00 00 1F 40 00 00 00 01 00 23 00 2D ' +
+        '00 0E 00 0E 00 08 00 7E 00 01 00 00 00 00 00 54 43 20 4E 57 20 44 65 70 73 20 20 20 20 20 20 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 20 31 31 39 2E 37 37 35 30 30 30 00 00 00 00 ' +
+        '00 00 00 00 00 00 FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF FF 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 07 23 9F 18 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 ' +
+        '00 00 00 00 03 5E ',
+  );
+
+  it('is a valid 326-byte frame', () => {
+    expect(RAW.length).toBe(326);
+    const events = splitFrames(RAW);
+    expect(events).toHaveLength(1);
+    expect(events[0]!.type === 'frame' && events[0]!.frame.data.length).toBe(322);
+  });
+
+  it('decodes the header as the scanner displayed it', () => {
+    const events = splitFrames(RAW);
+    const frame = events[0]!.type === 'frame' ? events[0]!.frame : undefined;
+    const ac = parseActiveChannel(frame!.data);
+    expect(ac.length).toBe(320);
+    const h = ac.header!;
+    expect(h.magic).toBe(0x2e736e64);
+    expect(h.dataOffset).toBe(320);
+    expect(h.sampleRate).toBe(8000);
+    expect(h.recordingTypeName).toBe('Conventional');
+    expect(h.startTime.byteOrder).toBe('le');
+    expect(h.startTime.iso).toBe('2026-09-14T14:45:35');
+    expect(h.startTime.wday).toBe(1); // Monday
+    expect(h.startTime.yday).toBe(0); // scanner leaves these two at zero
+    expect(h.startTime.isdst).toBe(0);
+    expect(h.objectTag).toBe('TC NW Deps');
+    expect(h.systemTag).toBe('');
+    expect(h.infoTag).toBe(' 119.775000');
+    expect(h.objectId).toBe(0);
+    expect([h.talkgroupId1, h.talkgroupId2, h.radioId1, h.radioId2]).toEqual([NO_ID, NO_ID, NO_ID, NO_ID]);
+    expect(h.siteName).toBe('');
+    expect(h.miscText).toBe('');
+    expect(h.voiceFrequencyHz).toBe(119775000);
+    expect(h.controlFrequencyHz).toBe(0);
+    expect(h.squelchText).toBe('No Tone');
+    expect(h.tsysType).toBe(0);
+    expect(h.reserved.every((x) => x === 0)).toBe(true);
   });
 });
 
