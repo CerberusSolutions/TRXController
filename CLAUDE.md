@@ -157,6 +157,9 @@ captured on 14 Sep 2026.
   that file. The Keypad ignores keyboard shortcuts while it is open.
 - `app:info` IPC returns name/version from package.json for the top bar (`BETA v0.2.0`).
   `productName` is set so dev and packaged builds share `%APPDATA%\TRXController`.
+- Testing aids stay out of the normal UI: `useUi.diagnostics` (Ctrl+Shift+D, persisted in
+  localStorage, `DIAG` tag in the status bar) gates the hex / copy dump on the Scanner display
+  tab. Put any future debugging control behind the same flag.
 
 ## Window chrome
 

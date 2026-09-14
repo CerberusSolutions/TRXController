@@ -17,7 +17,15 @@ export default function App() {
     const offLog = attachLogEvents();
     void useUi.getState().loadAppInfo();
     if (isFirstRun()) useUi.getState().openHelp();
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        useUi.getState().toggleDiagnostics();
+      }
+    };
+    window.addEventListener('keydown', onKey);
     return () => {
+      window.removeEventListener('keydown', onKey);
       offTheme();
       offScanner();
       offLog();

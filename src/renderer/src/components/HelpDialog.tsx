@@ -156,6 +156,7 @@ export default function HelpDialog() {
 
           <p className="border-t border-edge pt-3 text-[11px] text-ink-3">
             Log and imported data live in %APPDATA%\TRXController. Open this screen again any time with the ? button in the top bar.
+            Ctrl+Shift+D shows diagnostics (the raw display bytes on the Scanner display tab).
           </p>
         </div>
       </div>
