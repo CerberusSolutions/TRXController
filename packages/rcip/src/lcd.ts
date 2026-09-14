@@ -162,7 +162,9 @@ export function parseScanObjectLine(line: string): ScanObjectLine | null {
  *   2: object type + psDr flags        "CONV        psDr"
  *   3: object name, or "TGID:   251"   (DMR alternates the two)
  *   4: mode + frequency                "AM    119.775000", "DMR  456.025000"
- *   5: extra: "RadioID:    104" or "Slot:2  Color: 7" (DMR), blank otherwise
+ *   5: extra: "RadioID:    104" or "Slot:2  Color: 7" (DMR),
+ *            "CTCSS 77.0  S" / "DCS 023" / "NAC 293" when the tone lookup has found
+ *            the transmitter's tone (the trailing letter is a status flag), blank otherwise
  */
 export interface ScanScreen {
   scanlist: string;
@@ -176,12 +178,17 @@ export interface ScanScreen {
   radioId: number | null;
   slot: number | null;
   colorCode: number | null;
+  /** Tone/code detected on the transmission, e.g. "CTCSS 77.0", "DCS 023", "NAC 293". */
+  detectedTone: string | null;
+  /** Trailing status letter after the detected tone (observed "S"), or null. */
+  toneFlag: string | null;
 }
 
 const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
 const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
 const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
 const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
+const TONE_RE = /^(CTCSS|DCS|NAC)\s+(\S+)(?:\s+([A-Za-z]))?\s*$/i;
 
 /** Parse the Scan-mode channel screen; null if the LCD is showing something else. */
 export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
@@ -193,6 +200,7 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
   const tg = TGID_RE.exec(l3);
   const rid = RADIO_ID_RE.exec(l5);
   const slot = SLOT_RE.exec(l5);
+  const tone = TONE_RE.exec(l5);
   const mf = MODE_FREQ_RE.exec(l4);
   return {
     scanlist: (lcd.lines[1] ?? '').trim(),
@@ -205,6 +213,8 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
     radioId: rid ? Number(rid[1]) : null,
     slot: slot ? Number(slot[1]) : null,
     colorCode: slot ? Number(slot[2]) : null,
+    detectedTone: tone ? `${tone[1]!.toUpperCase()} ${tone[2]}` : null,
+    toneFlag: tone?.[3]?.toUpperCase() ?? null,
   };
 }
 

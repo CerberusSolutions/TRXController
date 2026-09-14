@@ -40,7 +40,7 @@ export interface TrackerOptions {
 export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequencyHz' | 'calls'>;
 
 const FIELDS: (keyof Description)[] = [
-  'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'rssiPeak',
+  'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'rssiPeak',
 ];
 
 export class ReceptionTracker {
@@ -191,6 +191,7 @@ export function describe(s: ScannerSnapshot): Description {
     radioId: idOr(h?.radioId1) ?? screen?.radioId ?? null,
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
+    tone: screen?.detectedTone ?? '',
     rssiPeak: status.rssi,
   };
 }

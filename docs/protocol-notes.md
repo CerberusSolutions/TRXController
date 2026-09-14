@@ -129,6 +129,10 @@ For DMR objects the display alternates between two screens: line 3 `TGID:       
 with line 5 `RadioID:     104`, and line 3 the object name with line 5
 `Slot:2  Color: 7`. Line 4 reads `DMR   456.025000`. `parseScanScreen` handles both.
 
+When the tone lookup finds the transmitter's tone, line 4 shows `Auto  433.225000` and
+line 5 `CTCSS 77.0  S` (the trailing letter is a status flag; `S` observed). The `a`
+header's squelch field is the object's *programmed* setting and does not change.
+
 The `psDr` flags at the right of line 2 are the object's attributes, uppercase when
 enabled: **p**riority, **s**kip, **D**elay, **r**ecord (confirmed by the author on the
 TRX-1e). `parseScanObjectLine` in `packages/rcip/src/lcd.ts` reads them.

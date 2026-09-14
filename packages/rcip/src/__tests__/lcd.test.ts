@@ -114,6 +114,13 @@ describe('parseScanScreen', () => {
     expect(s).toMatchObject({ name: 'Resound Ayles', tgid: null, radioId: null, slot: 2, colorCode: 7 });
   });
 
+  it('reads a detected CTCSS tone from line 5', () => {
+    const s = parseScanScreen({ lines: ['', 'Bucks A+D Rep', 'CONV        psDr', 'RBW18', 'Auto  433.225000', 'CTCSS 77.0  S'] });
+    expect(s).toMatchObject({ name: 'RBW18', mode: 'Auto', frequencyText: '433.225000', detectedTone: 'CTCSS 77.0', toneFlag: 'S', tgid: null, slot: null });
+    expect(parseScanScreen({ lines: ['', 'L', 'CONV        psDr', 'X', 'NFM   453.700000', 'DCS 023'] })).toMatchObject({ detectedTone: 'DCS 023', toneFlag: null });
+    expect(parseScanScreen({ lines: ['', 'L', 'CONV        psDr', 'X', 'NFM   453.700000', ''] })?.detectedTone).toBeNull();
+  });
+
   it('returns null for the sweeping screen and menus', () => {
     expect(parseScanScreen({ lines: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', '', ''] })).toBeNull();
     expect(parseScanScreen({ lines: ['  -Main Menu-   ', 'Scan           ◄', 'Scanlists', '', '', ''] })).toBeNull();

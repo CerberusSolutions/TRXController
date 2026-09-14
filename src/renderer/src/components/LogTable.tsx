@@ -71,7 +71,7 @@ export default function LogTable() {
         <span>Name</span>
         <span>System / list</span>
         <span>Type</span>
-        <span>TGID/RID</span>
+        <span>TGID/RID · Tone</span>
         <span className="text-right">RSSI</span>
         <span className="text-right">Hits</span>
       </div>
@@ -111,12 +111,15 @@ export default function LogTable() {
                 title={
                   r.tgid !== null || r.radioId !== null
                     ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ', ' + r.radioName : ''})` : ''}`
-                    : undefined
+                    : r.tone
+                      ? `Detected ${r.tone}${r.squelch ? ` (programmed ${r.squelch})` : ''}`
+                      : undefined
                 }
               >
                 {r.tgid !== null ? r.tgid : ''}
                 {r.tgid !== null && r.radioId !== null ? '/' : ''}
                 {r.radioId !== null ? (r.radioCallsign ? <span className="text-ink-2">{r.radioCallsign}</span> : r.radioId) : ''}
+                {r.tgid === null && r.radioId === null && r.tone ? <span className="text-ink-2">{r.tone.replace('CTCSS ', 'CT ').replace('DCS ', 'DCS ')}</span> : ''}
               </span>
               <span className="text-right">{r.rssiPeak}</span>
               <span className="text-right text-ink-3">{r.hits}</span>

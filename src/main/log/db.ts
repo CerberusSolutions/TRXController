@@ -37,6 +37,7 @@ export class LogDb {
         radio_id     INTEGER,
         site         TEXT NOT NULL DEFAULT '',
         squelch      TEXT NOT NULL DEFAULT '',
+        tone         TEXT NOT NULL DEFAULT '',
         rssi_peak    INTEGER NOT NULL DEFAULT 0,
         calls        INTEGER NOT NULL DEFAULT 1
       );
@@ -61,18 +62,19 @@ export class LogDb {
   private migrate(): void {
     const cols = (this.db.prepare('PRAGMA table_info(receptions)').all() as { name: string }[]).map((c) => c.name);
     if (!cols.includes('calls')) this.db.exec('ALTER TABLE receptions ADD COLUMN calls INTEGER NOT NULL DEFAULT 1');
+    if (!cols.includes('tone')) this.db.exec("ALTER TABLE receptions ADD COLUMN tone TEXT NOT NULL DEFAULT ''");
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.rssiPeak, r.calls ?? 1,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -83,7 +85,7 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', rssiPeak: 'rssi_peak', calls: 'calls',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -180,6 +182,7 @@ interface Raw {
   radio_id: number | null;
   site: string;
   squelch: string;
+  tone: string;
   rssi_peak: number;
   calls: number;
   hits: number;
@@ -203,6 +206,7 @@ function toRow(r: Raw): ReceptionRow {
     radioId: r.radio_id === null ? null : Number(r.radio_id),
     site: r.site,
     squelch: r.squelch,
+    tone: r.tone ?? '',
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),

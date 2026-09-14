@@ -64,7 +64,10 @@ export interface ReceptionRow {
   tgid: number | null;
   radioId: number | null;
   site: string;
+  /** Programmed squelch from the header, e.g. "No Tone", "CTCSS 100.0". */
   squelch: string;
+  /** Tone detected on the transmission by the scanner's tone lookup, if shown. */
+  tone: string;
   rssiPeak: number;
   /** Squelch openings merged into this row (a conversation with gaps). */
   calls: number;

@@ -1,4 +1,4 @@
-import { formatId, parseScanObjectLine } from '@trxcontroller/rcip';
+import { formatId, parseScanObjectLine, parseScanScreen } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
@@ -24,6 +24,8 @@ export default function FrequencyHero() {
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
   const objectLine = isChannelScreen(lcd, status) && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
+  const screen = isChannelScreen(lcd, status) && lcd ? parseScanScreen(lcd) : null;
+  const detected = screen?.detectedTone ?? null;
   // Header present but squelch closed: the scanner is holding on the channel
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
@@ -109,7 +111,8 @@ export default function FrequencyHero() {
               />
             )}
             {h.siteName && <Param label="Site" value={h.siteName} />}
-            <Param label="Squelch" value={h.squelchText} />
+            <Param label="Squelch" value={h.squelchText} title="Programmed on the object" />
+            {detected && <Param label="Detected" value={detected} title="Tone found by the scanner's tone lookup" />}
             {h.miscText && <Param label="Info" value={h.miscText} />}
             <Param label="Started" value={h.startTime.iso?.slice(11) ?? null} title={h.startTime.iso?.replace('T', ' ')} />
             {h.controlFrequencyHz > 0 && h.controlFrequencyHz !== h.voiceFrequencyHz && (
@@ -119,6 +122,7 @@ export default function FrequencyHero() {
         ) : (
           <>
             <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} />
+            {detected && <Param label="Detected" value={detected} />}
             <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} />
             <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} />
           </>

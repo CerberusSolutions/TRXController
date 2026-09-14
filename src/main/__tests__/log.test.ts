@@ -52,6 +52,11 @@ describe('describe()', () => {
     expect(d).toMatchObject({ name: '', scanlist: 'Shopwatch', objectType: 'CONV', tgid: 251, radioId: 104 });
   });
 
+  it('records a detected tone from the display', () => {
+    const d = describeSnapshot(snap({ lcd: ['', 'Bucks A+D Rep', 'CONV        psDr', 'RBW18', 'Auto  433.225000', 'CTCSS 77.0  S'] }));
+    expect(d).toMatchObject({ name: 'RBW18', tone: 'CTCSS 77.0' });
+  });
+
   it('does not treat the sweeping screen as a channel', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'] }));
     expect(d.name).toBe('');
@@ -152,7 +157,7 @@ describe('ReceptionTracker', () => {
 describe('LogDb', () => {
   it('inserts, updates, lists newest first and counts hits per frequency', () => {
     const db = new LogDb(':memory:');
-    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', rssiPeak: 1, calls: 1 };
+    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', rssiPeak: 1, calls: 1 };
     const r1 = db.insert({ ...base, startedAt: 1000, frequencyHz: 100 });
     const r2 = db.insert({ ...base, startedAt: 2000, frequencyHz: 200, name: 'B' });
     const r3 = db.insert({ ...base, startedAt: 3000, frequencyHz: 100, name: 'A2' });
@@ -175,7 +180,7 @@ describe('LogDb', () => {
 
   it('closes receptions left open by a previous run', () => {
     const db = new LogDb(':memory:');
-    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', rssiPeak: 0, calls: 1 });
+    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', rssiPeak: 0, calls: 1 });
     expect(r.endedAt).toBeNull();
     // simulate restart by constructing on the same in-memory handle is not possible; exercise the statement directly
     const db2 = new LogDb(':memory:');
