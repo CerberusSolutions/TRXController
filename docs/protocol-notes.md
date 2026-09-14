@@ -125,6 +125,10 @@ the top level (LEFT/back). LEFT is therefore known by elimination only.
 ```
 
 Icons during that reception were `4D 40 03`: RSSI 5/5, S, ext power, PLAY, signal AM.
+For DMR objects the display alternates between two screens: line 3 `TGID:        251`
+with line 5 `RadioID:     104`, and line 3 the object name with line 5
+`Slot:2  Color: 7`. Line 4 reads `DMR   456.025000`. `parseScanScreen` handles both.
+
 The `psDr` flags at the right of line 2 are the object's attributes, uppercase when
 enabled: **p**riority, **s**kip, **D**elay, **r**ecord (confirmed by the author on the
 TRX-1e). `parseScanObjectLine` in `packages/rcip/src/lcd.ts` reads them.

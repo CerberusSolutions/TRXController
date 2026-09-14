@@ -15,7 +15,7 @@
  * - Channel details often arrive a poll or two after the squelch opens, so an
  *   open reception keeps absorbing better information until it closes.
  */
-import { NO_ID, parseScanObjectLine } from '@trxcontroller/rcip';
+import { NO_ID, parseScanScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 
@@ -178,20 +178,17 @@ export function describe(s: ScannerSnapshot): Description {
   const status = s.status!;
   const h = s.active?.header ?? null;
   const lcd = s.lcd;
-  const channelScreen = status.mode === 0x0a && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
-  const onChannel = channelScreen?.flags != null;
-  const scanlist = onChannel ? (lcd?.lines[1]?.trim() ?? '') : '';
-  const lcdName = onChannel ? (lcd?.lines[3]?.trim() ?? '') : '';
+  const screen = status.mode === 0x0a && lcd ? parseScanScreen(lcd) : null;
   const idOr = (v: number | undefined): number | null => (v === undefined || v === NO_ID ? null : v);
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
-    name: h?.objectTag || lcdName,
+    name: h?.objectTag || screen?.name || '',
     system: h?.systemTag ?? '',
-    scanlist,
-    objectType: (onChannel ? channelScreen?.type : '') || (h ? h.recordingTypeName : ''),
-    tgid: idOr(h?.talkgroupId1),
-    radioId: idOr(h?.radioId1),
+    scanlist: screen?.scanlist ?? '',
+    objectType: screen?.type || (h ? h.recordingTypeName : ''),
+    tgid: idOr(h?.talkgroupId1) ?? screen?.tgid ?? null,
+    radioId: idOr(h?.radioId1) ?? screen?.radioId ?? null,
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
     rssiPeak: status.rssi,

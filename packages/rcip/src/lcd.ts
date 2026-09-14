@@ -154,6 +154,60 @@ export function parseScanObjectLine(line: string): ScanObjectLine | null {
   return { type, flags };
 }
 
+/**
+ * The Scan-mode channel screen, as observed on a TRX-1e:
+ *
+ *   0: (blank or alert)
+ *   1: scanlist name
+ *   2: object type + psDr flags        "CONV        psDr"
+ *   3: object name, or "TGID:   251"   (DMR alternates the two)
+ *   4: mode + frequency                "AM    119.775000", "DMR  456.025000"
+ *   5: extra: "RadioID:    104" or "Slot:2  Color: 7" (DMR), blank otherwise
+ */
+export interface ScanScreen {
+  scanlist: string;
+  type: string;
+  flags: ObjectFlags;
+  /** Object name, or null when the scanner is showing the TGID line instead. */
+  name: string | null;
+  mode: string;
+  frequencyText: string;
+  tgid: number | null;
+  radioId: number | null;
+  slot: number | null;
+  colorCode: number | null;
+}
+
+const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
+const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
+const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
+const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
+
+/** Parse the Scan-mode channel screen; null if the LCD is showing something else. */
+export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
+  const obj = parseScanObjectLine(lcd.lines[2] ?? '');
+  if (!obj?.flags) return null;
+  const l3 = (lcd.lines[3] ?? '').trim();
+  const l4 = (lcd.lines[4] ?? '').trim();
+  const l5 = (lcd.lines[5] ?? '').trim();
+  const tg = TGID_RE.exec(l3);
+  const rid = RADIO_ID_RE.exec(l5);
+  const slot = SLOT_RE.exec(l5);
+  const mf = MODE_FREQ_RE.exec(l4);
+  return {
+    scanlist: (lcd.lines[1] ?? '').trim(),
+    type: obj.type,
+    flags: obj.flags,
+    name: tg ? null : l3 || null,
+    mode: mf?.[1] ?? '',
+    frequencyText: mf?.[2] ?? '',
+    tgid: tg ? Number(tg[1]) : null,
+    radioId: rid ? Number(rid[1]) : null,
+    slot: slot ? Number(slot[1]) : null,
+    colorCode: slot ? Number(slot[2]) : null,
+  };
+}
+
 /** Render the LCD as a boxed multi-line string for terminals. */
 export function renderLcd(lcd: Lcd): string {
   const bar = '+' + '-'.repeat(LCD_COLUMNS) + '+';

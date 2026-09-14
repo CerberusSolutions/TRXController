@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, renderLcd } from '../lcd';
 import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
@@ -94,6 +94,29 @@ describe('parseScanObjectLine', () => {
   it('copes with a type but no flags, and with junk', () => {
     expect(parseScanObjectLine('CONV            ')).toEqual({ type: 'CONV', flags: null });
     expect(parseScanObjectLine('                ')).toBeNull();
+  });
+});
+
+describe('parseScanScreen', () => {
+  it('reads the analogue channel screen', () => {
+    const s = parseScanScreen({ lines: ['', 'Civil Airband', 'CONV        psDr', 'TC NW Deps', 'AM    119.775000', ''] });
+    expect(s).toMatchObject({ scanlist: 'Civil Airband', type: 'CONV', name: 'TC NW Deps', mode: 'AM', frequencyText: '119.775000', tgid: null, radioId: null, slot: null });
+    expect(s?.flags.delay).toBe(true);
+  });
+
+  it('reads the DMR screen that shows TGID and RadioID', () => {
+    const s = parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] });
+    expect(s).toMatchObject({ name: null, tgid: 251, radioId: 104, mode: 'DMR', frequencyText: '456.025000', slot: null, colorCode: null });
+  });
+
+  it('reads the DMR screen that shows the name and slot/colour code', () => {
+    const s = parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'Resound Ayles', 'DMR   456.025000', 'Slot:2  Color: 7'] });
+    expect(s).toMatchObject({ name: 'Resound Ayles', tgid: null, radioId: null, slot: 2, colorCode: 7 });
+  });
+
+  it('returns null for the sweeping screen and menus', () => {
+    expect(parseScanScreen({ lines: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', '', ''] })).toBeNull();
+    expect(parseScanScreen({ lines: ['  -Main Menu-   ', 'Scan           ◄', 'Scanlists', '', '', ''] })).toBeNull();
   });
 });
 

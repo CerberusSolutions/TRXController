@@ -47,6 +47,11 @@ describe('describe()', () => {
     const d = describeSnapshot(snap({ header: true }));
     expect(d).toMatchObject({ name: 'Fire Dispatch', system: 'County P25', tgid: 1234, radioId: 7654321, site: 'Site 3', squelch: 'NAC 293' });
   });
+  it('takes TGID and RadioID from the DMR display when there is no header', () => {
+    const d = describeSnapshot(snap({ lcd: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] }));
+    expect(d).toMatchObject({ name: '', scanlist: 'Shopwatch', objectType: 'CONV', tgid: 251, radioId: 104 });
+  });
+
   it('does not treat the sweeping screen as a channel', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'] }));
     expect(d.name).toBe('');
