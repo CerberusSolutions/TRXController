@@ -135,6 +135,12 @@ export default function DataMenu() {
             )}
           </Section>
 
+          <Section title="RadioReference">
+            <p className="mt-1 text-ink-3">Coming soon.</p>
+          </Section>
+
+          <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
+
           {error && <p className="text-xs text-red">{error}</p>}
         </div>
       )}

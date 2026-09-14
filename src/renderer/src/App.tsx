@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import FrequencyHero from './components/FrequencyHero';
+import HelpDialog from './components/HelpDialog';
 import Keypad from './components/Keypad';
 import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
@@ -7,12 +8,15 @@ import TopBar from './components/TopBar';
 import { attachLogEvents } from './store/log';
 import { attachScannerEvents } from './store/scanner';
 import { initTheme } from './store/theme';
+import { isFirstRun, useUi } from './store/ui';
 
 export default function App() {
   useEffect(() => {
     const offTheme = initTheme();
     const offScanner = attachScannerEvents();
     const offLog = attachLogEvents();
+    void useUi.getState().loadAppInfo();
+    if (isFirstRun()) useUi.getState().openHelp();
     return () => {
       offTheme();
       offScanner();
@@ -39,6 +43,7 @@ export default function App() {
         <Keypad />
       </main>
       <StatusBar />
+      <HelpDialog />
     </div>
   );
 }

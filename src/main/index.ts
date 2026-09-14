@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { SettingsStore } from './settings';
@@ -65,13 +65,57 @@ const session = new ScannerSession(serialTransportFactory, {
   log: (msg) => console.log(`[scanner] ${msg}`),
 });
 
+const AUTO_CONNECT_INTERVAL_MS = 5000;
+let autoConnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Reopen the remembered port whenever nothing is connected: at launch, after the
+ * scanner is unplugged and plugged back in, or after a failed attempt. Quiet by
+ * design: the port is only tried when the OS lists it, so an absent scanner never
+ * shows an error, and a scanner that is present but silent shows the same message
+ * a manual Connect would.
+ */
+function scheduleAutoConnect(delayMs = AUTO_CONNECT_INTERVAL_MS): void {
+  if (autoConnectTimer) clearTimeout(autoConnectTimer);
+  autoConnectTimer = setTimeout(() => {
+    autoConnectTimer = null;
+    void autoConnectAttempt();
+  }, delayMs);
+}
+
+async function autoConnectAttempt(): Promise<void> {
+  const s = settings?.get();
+  const link = session.getSnapshot().link.status;
+  if (s?.port && s.autoConnect && (link === 'disconnected' || link === 'error')) {
+    try {
+      const present = (await listPorts()).some((p) => p.path === s.port);
+      if (present) {
+        await session.connect(s.port);
+        console.log(`[scanner] auto-connected to ${s.port}`);
+      }
+    } catch (err) {
+      console.log(`[scanner] auto-connect to ${s.port} failed: ${(err as Error).message}`);
+    }
+  }
+  scheduleAutoConnect();
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.listPorts, () => listPorts());
   ipcMain.handle(IPC.connect, async (_e, path: unknown) => {
     if (typeof path !== 'string' || !path) throw new Error('Port path required');
     await session.connect(path);
+    settings?.set({ port: path, autoConnect: true });
   });
-  ipcMain.handle(IPC.disconnect, () => session.disconnect());
+  ipcMain.handle(IPC.disconnect, () => {
+    // A deliberate disconnect must stick until the user connects again.
+    settings?.set({ autoConnect: false });
+    return session.disconnect();
+  });
+  ipcMain.handle(
+    IPC.appInfo,
+    (): AppInfo => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron ?? '' }),
+  );
   ipcMain.handle(IPC.sendKey, async (_e, code: unknown) => {
     if (typeof code !== 'number' || !isKeyCode(code)) throw new Error(`Unknown key code ${String(code)}`);
     await session.pressKey(code);
@@ -192,6 +236,7 @@ app.whenReady().then(() => {
   openLog();
   registerIpc();
   createWindow();
+  scheduleAutoConnect(500);
   nativeTheme.on('updated', applyChrome);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -203,6 +248,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  if (autoConnectTimer) clearTimeout(autoConnectTimer);
+  autoConnectTimer = null;
   void session.disconnect(false);
   logger?.flush();
   db?.close();

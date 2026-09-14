@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Key } from '@trxcontroller/rcip';
 import { KEYPAD_ROWS, keyDefForKeyboard, type KeyDef } from '../lib/keypad';
 import { useScanner } from '../store/scanner';
+import { useUi } from '../store/ui';
 
 const POWER_CONFIRM_MS = 2500;
 
@@ -28,6 +29,7 @@ export default function Keypad() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      if (useUi.getState().helpOpen) return;
       const def = keyDefForKeyboard(e);
       if (!def || e.repeat) return;
       e.preventDefault();

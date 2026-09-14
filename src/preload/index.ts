@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import {
   IPC,
+  type AppInfo,
   type DmrUser,
   type IdentityStats,
   type ImportResult,
@@ -50,6 +51,7 @@ const api = {
   wtrLookup: (hz: number): Promise<WtrMatch[]> => ipcRenderer.invoke(IPC.wtrLookup, hz),
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
+  appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),
 };
 
 export type TrxApi = typeof api;

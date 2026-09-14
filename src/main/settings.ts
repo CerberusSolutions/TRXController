@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { Settings } from '../shared/ipc';
 
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60 };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true };
 
 export class SettingsStore {
   private value: Settings;
@@ -39,5 +39,7 @@ export function sanitize(s: Settings): Settings {
     lat: num(s.lat, -90, 90),
     lon: num(s.lon, -180, 180),
     radiusKm: num(s.radiusKm, 1, 5000),
+    port: typeof s.port === 'string' && s.port.trim() !== '' ? s.port.trim() : null,
+    autoConnect: s.autoConnect !== false,
   };
 }

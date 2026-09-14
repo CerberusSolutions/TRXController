@@ -71,6 +71,13 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `npm run probe -- --list` / `npm run probe -- COM7` / `npm run probe -- COM7 --identify`
 - `npm run dev` starts Electron with hot reload
 - `npm run build` then `npm start` runs the built app
+- `npm run dist` builds the Windows installer into `release/` (electron-builder, NSIS,
+  per-user, config in `electron-builder.yml`, icon in `build/`). `npm run dist:dir` stops at
+  `release/win-unpacked`, which also works on Linux; the NSIS step needs Wine there, so build
+  the installer itself on Windows. `npmRebuild` is off:
+  serialport's prebuilt N-API binding is used as is, and only its win32-x64 prebuild is packaged.
+  Only `serialport` is a runtime dependency; everything else is bundled by Vite, so keep new
+  packages in `devDependencies` unless main needs to `require` them at run time.
 
 ## UI preview without a scanner
 
@@ -130,6 +137,22 @@ captured on 14 Sep 2026.
   and tells main over IPC; main sets `nativeTheme.themeSource`, which also flips
   `prefers-color-scheme` in the renderer (how "system" resolves) and recolours the
   window background and title-bar overlay.
+
+## Connection memory
+
+- `settings.json` also keeps `port` (last successful connection) and `autoConnect`. Main retries
+  the remembered port every 5 s while nothing is connected, but only when the OS lists it, so an
+  absent scanner never raises an error. A manual Disconnect sets `autoConnect` false until the
+  next manual Connect. The renderer's port selector follows whatever main connected to.
+
+## Help screen and identity
+
+- `HelpDialog` (the `?` button; opens by itself on first run, remembered in localStorage) carries
+  the beta / no-warranty notice, connection steps, the two data-file download URLs with what to
+  do with them, and the keyboard summary. The publisher name and URLs are constants at the top of
+  that file. The Keypad ignores keyboard shortcuts while it is open.
+- `app:info` IPC returns name/version from package.json for the top bar (`BETA v0.2.0`).
+  `productName` is set so dev and packaged builds share `%APPDATA%\TRXController`.
 
 ## Window chrome
 
