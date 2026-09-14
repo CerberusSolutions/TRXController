@@ -1,8 +1,9 @@
+import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { modeName } from '@trxcontroller/rcip';
 import { useBand, type Bin } from '../store/band';
 
-const PAD = { top: 20, right: 12, bottom: 26, left: 40 };
+const PAD = { top: 12, right: 12, bottom: 26, left: 40 };
 /** A bin this many steps from any neighbour, with few samples, is a stray visit and does not set the axis. */
 const OUTLIER_GAP_STEPS = 20;
 const MIN_STEP_HZ = 5_000;
@@ -95,8 +96,11 @@ export default function BandChart() {
 
   if (!model) {
     return (
-      <div ref={ref} className="flex h-full items-center justify-center text-sm text-ink-3">
-        Nothing charted yet. Start a Search or Sweeper on the scanner, or let it scan.
+      <div className="flex h-full flex-col">
+        <Header caption="Peak RSSI · amber = squelch opened · fades with age" />
+        <div ref={ref} className="flex flex-1 items-center justify-center text-sm text-ink-3">
+          Nothing charted yet. Start a Search or Sweeper on the scanner, or let it scan.
+        </div>
       </div>
     );
   }
@@ -138,7 +142,30 @@ export default function BandChart() {
   };
 
   return (
-    <div ref={ref} className="relative h-full w-full">
+    <div className="flex h-full flex-col">
+      <Header caption="Peak RSSI · amber = squelch opened · fades with age">
+        <span>{mode !== null ? modeName(mode) : ''}</span>
+        <span>{list.length} bins</span>
+        <span>
+          {(list[0]!.hz / 1e6).toFixed(3)}–{(list[list.length - 1]!.hz / 1e6).toFixed(3)} MHz
+        </span>
+        <span className="flex overflow-hidden rounded border border-edge">
+          {(['frequency', 'channels'] as const).map((l) => (
+            <button
+              key={l}
+              className={`px-1.5 py-0.5 ${layout === l ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+              title={l === 'frequency' ? 'Linear frequency axis (Search)' : 'One equal-width bar per visited frequency (Scan)'}
+              onClick={() => setLayout(l)}
+            >
+              {l}
+            </button>
+          ))}
+        </span>
+        <button className="rounded border border-edge px-1.5 py-0.5 text-ink-3 hover:text-ink-2" onClick={reset}>
+          reset
+        </button>
+      </Header>
+      <div ref={ref} className="relative min-h-0 w-full flex-1">
       <svg width={size.w} height={size.h} className="block" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
         {/* y grid: recessive */}
         {[0.25, 0.5, 0.75, 1].map((f) => (
@@ -183,9 +210,6 @@ export default function BandChart() {
             </text>
           </g>
         ))}
-        <text x={PAD.left} y={10} textAnchor="start" fontSize={9} fill="var(--color-ink-3)" fontFamily="var(--font-mono)" letterSpacing={1}>
-          PEAK RSSI · amber = squelch opened · fades with age
-        </text>
       </svg>
 
       {hover && (
@@ -204,28 +228,17 @@ export default function BandChart() {
         </div>
       )}
 
-      <div className="pointer-events-none absolute right-2 top-1 flex items-center gap-3 font-mono text-[11px] text-ink-3">
-        <span>{mode !== null ? modeName(mode) : ''}</span>
-        <span>{list.length} bins</span>
-        <span>
-          {(list[0]!.hz / 1e6).toFixed(3)}–{(list[list.length - 1]!.hz / 1e6).toFixed(3)} MHz
-        </span>
-        <span className="pointer-events-auto flex overflow-hidden rounded border border-edge">
-          {(['frequency', 'channels'] as const).map((l) => (
-            <button
-              key={l}
-              className={`px-1.5 py-0.5 ${layout === l ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
-              title={l === 'frequency' ? 'Linear frequency axis (Search)' : 'One equal-width bar per visited frequency (Scan)'}
-              onClick={() => setLayout(l)}
-            >
-              {l}
-            </button>
-          ))}
-        </span>
-        <button className="pointer-events-auto rounded border border-edge px-1.5 py-0.5 text-ink-3 hover:text-ink-2" onClick={reset}>
-          reset
-        </button>
       </div>
+    </div>
+  );
+}
+
+/** Caption on the left, controls on the right, above the plot so nothing overlays it. */
+function Header({ caption, children }: { caption: string; children?: React.ReactNode }) {
+  return (
+    <div className="mb-1 flex h-6 shrink-0 items-center gap-3 font-mono text-[11px] text-ink-3">
+      <span className="uppercase tracking-wider">{caption}</span>
+      <div className="ml-auto flex items-center gap-3">{children}</div>
     </div>
   );
 }
