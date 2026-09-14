@@ -21,7 +21,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
   return `${m}m ${Math.round(s - m * 60)}s`;
 }
 
-const COLS = 'grid-cols-[4.5rem_4rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_5rem_3rem_2.5rem]';
+const COLS = 'grid-cols-[4.5rem_4rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_7rem_3rem_2.5rem]';
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -71,7 +71,7 @@ export default function LogTable() {
         <span>Name</span>
         <span>System / list</span>
         <span>Type</span>
-        <span>TGID/RID · Tone</span>
+        <span className="whitespace-nowrap">TGID/RID · Tone</span>
         <span className="text-right">RSSI</span>
         <span className="text-right">Hits</span>
       </div>
