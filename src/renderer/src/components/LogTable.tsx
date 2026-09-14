@@ -136,9 +136,9 @@ export default function LogTable() {
                   {(r.frequencyHz / 1e6).toFixed(6)}
                 </span>
                 <span className="text-cyan">{r.signalType || r.mode}</span>
-                <span className="truncate font-sans text-[13px] text-ink">
-                  {r.name || <span className="text-ink-3">—</span>}
-                </span>
+                <span className="truncate font-sans text-[13px] text-ink" title={r.licensee ? `Licensed: ${r.licensee}` : undefined}>
+                {r.name || (r.licensee ? <span className="text-ink-2">{r.licensee}</span> : <span className="text-ink-3">—</span>)}
+              </span>
                 <span className="truncate font-sans text-ink-2">
                   {r.system || r.scanlist}
                 </span>

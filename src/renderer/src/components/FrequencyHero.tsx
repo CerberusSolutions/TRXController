@@ -3,18 +3,25 @@ import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
-function Param({ label, value, title }: { label: string; value: string | null | undefined; title?: string }) {
+/** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
+const BADGE = 'inline-flex min-w-[4.25rem] justify-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-widest';
+
+/** `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted does not shift the neighbours. */
+function Param({ label, value, title, minCh }: { label: string; value: string | null | undefined; title?: string; minCh?: number }) {
   if (!value) return null;
   return (
     <div className="flex shrink-0 flex-col whitespace-nowrap" title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
-      <span className="font-mono text-sm text-ink-2">{value}</span>
+      <span className="font-mono text-sm text-ink-2" style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
+        {value}
+      </span>
     </div>
   );
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, radioUser } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, radioUser, licences } = useScanner((s) => s.snapshot);
+
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
@@ -43,20 +50,20 @@ export default function FrequencyHero() {
           <span className="ml-3 text-lg text-ink-3">MHz</span>
         </div>
         <div className="flex min-h-[5.5rem] flex-col items-end gap-1.5 pt-1">
-          <span
-            className={`rounded-md px-2.5 py-1 text-xs font-bold tracking-widest ${
-              rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
-            }`}
-          >
-            {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
-          </span>
-          <div className="flex gap-1.5 font-mono text-xs">
-            {modeText && <span className="rounded border border-edge px-1.5 py-0.5 text-cyan">{modeText}</span>}
+          <div className="flex gap-1.5">
+            <span
+              className={`${BADGE} ${
+                rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
+              }`}
+            >
+              {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
+            </span>
+            {modeText && <span className={`${BADGE} border border-edge text-cyan`}>{modeText}</span>}
             {icons?.signalType && icons.signalTypeName !== modeText ? (
-              <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{icons.signalTypeName}</span>
+              <span className={`${BADGE} border border-edge text-ink-2`}>{icons.signalTypeName}</span>
             ) : null}
-            {objectLine?.type && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{objectLine.type}</span>}
-            {status && !objectLine && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-3">{status.modeName}</span>}
+            {objectLine?.type && <span className={`${BADGE} border border-edge text-ink-2`}>{objectLine.type}</span>}
+            {status && !objectLine && <span className={`${BADGE} border border-edge text-ink-3`}>{status.modeName}</span>}
           </div>
           <div className="flex h-5 gap-1 font-mono text-[10px] tracking-wider" title={objectLine?.flags ? `Object attributes: ${objectLine.flags.raw}` : undefined}>
             {objectLine?.flags &&
@@ -94,7 +101,30 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-4 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
+      <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
+        {licences.length > 0 ? (
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
+            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
+              {licences.slice(0, 3).map((l, i) => (
+                <li key={l.id} className="flex min-w-0 gap-2" title={`${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`}>
+                  <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{l.licensee}</span>
+                  <span className="shrink-0 text-ink-3">
+                    {l.distanceKm !== null ? `${l.distanceKm < 10 ? l.distanceKm.toFixed(1) : Math.round(l.distanceKm)} km` : '—'}
+                    {l.mode ? ` · ${l.mode}` : ''}
+                    {l.direction === 'R' ? ' · mob' : l.direction === 'T' ? ' · base' : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
+            {online ? 'No Ofcom licence on this frequency' : ''}
+          </p>
+        )}
+      </div>
+      <div className="mt-2 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
         {h ? (
           <>
             <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />
@@ -121,10 +151,10 @@ export default function FrequencyHero() {
           </>
         ) : (
           <>
-            <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} />
+            <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} minCh={6} />
+            <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} minCh={7} />
+            <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} minCh={3} />
             {detected && <Param label="Detected" value={detected} />}
-            <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} />
-            <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} />
           </>
         )}
       </div>

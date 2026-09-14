@@ -39,6 +39,8 @@ export interface ScannerSnapshot {
   active: ActiveChannel | null;
   /** DMR user matching active.header.radioId1, when the database knows it. */
   radioUser: DmrUser | null;
+  /** Nearest Ofcom licences for status.frequencyHz (empty when none imported/matched). */
+  licences: WtrMatch[];
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
@@ -68,6 +70,8 @@ export interface ReceptionRow {
   squelch: string;
   /** Tone detected on the transmission by the scanner's tone lookup, if shown. */
   tone: string;
+  /** Nearest Ofcom licensee for the frequency at the time, if the WTR is imported. */
+  licensee: string;
   rssiPeak: number;
   /** Squelch openings merged into this row (a conversation with gaps). */
   calls: number;
@@ -95,6 +99,43 @@ export interface IdentityStats {
   importedAt: number | null;
   /** File name of the last import, or null */
   source: string | null;
+  /** Ofcom WTR licence rows, and when/from what they were imported. */
+  wtrLicences: number;
+  wtrImportedAt: number | null;
+  wtrSource: string | null;
+}
+
+/** One Ofcom Wireless Telegraphy Register assignment kept by the importer. */
+export interface WtrLicence {
+  id: number;
+  frequencyHz: number;
+  /** 'T' base transmits here, 'R' base receives here (mobiles transmit), 'TR' both, '-' unknown */
+  direction: string;
+  licensee: string;
+  product: string;
+  /** Raw emission designator, e.g. 11K0G3EJN */
+  emission: string;
+  /** 'DIG' | 'NFM' | 'FM' | '' derived from the emission designator */
+  mode: string;
+  widthHz: number;
+  lat: number | null;
+  lon: number | null;
+  ngr: string;
+  licenceNo: string;
+}
+
+/** A licence matched to a heard frequency, with distance from the user's location if known. */
+export interface WtrMatch extends WtrLicence {
+  distanceKm: number | null;
+}
+
+/** User settings kept by the main process (userData/settings.json). */
+export interface Settings {
+  /** Observer location for distance sorting, decimal degrees. */
+  lat: number | null;
+  lon: number | null;
+  /** Only licences within this distance are matched; null = no limit. */
+  radiusKm: number | null;
 }
 
 export interface ImportResult {
@@ -117,6 +158,10 @@ export const IPC = {
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',
+  wtrImport: 'wtr:import',
+  wtrLookup: 'wtr:lookup',
+  settingsGet: 'settings:get',
+  settingsSet: 'settings:set',
   setTheme: 'theme:set',
 } as const;
 
