@@ -3,6 +3,9 @@ import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
+/** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
+const BADGE = 'inline-flex min-w-[4.25rem] justify-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-widest';
+
 /** `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted does not shift the neighbours. */
 function Param({ label, value, title, minCh }: { label: string; value: string | null | undefined; title?: string; minCh?: number }) {
   if (!value) return null;
@@ -47,20 +50,20 @@ export default function FrequencyHero() {
           <span className="ml-3 text-lg text-ink-3">MHz</span>
         </div>
         <div className="flex min-h-[5.5rem] flex-col items-end gap-1.5 pt-1">
-          <span
-            className={`rounded-md px-2.5 py-1 text-xs font-bold tracking-widest ${
-              rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
-            }`}
-          >
-            {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
-          </span>
-          <div className="flex gap-1.5 font-mono text-xs">
-            {modeText && <span className="rounded border border-edge px-1.5 py-0.5 text-cyan">{modeText}</span>}
+          <div className="flex gap-1.5">
+            <span
+              className={`${BADGE} ${
+                rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
+              }`}
+            >
+              {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
+            </span>
+            {modeText && <span className={`${BADGE} border border-edge text-cyan`}>{modeText}</span>}
             {icons?.signalType && icons.signalTypeName !== modeText ? (
-              <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{icons.signalTypeName}</span>
+              <span className={`${BADGE} border border-edge text-ink-2`}>{icons.signalTypeName}</span>
             ) : null}
-            {objectLine?.type && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{objectLine.type}</span>}
-            {status && !objectLine && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-3">{status.modeName}</span>}
+            {objectLine?.type && <span className={`${BADGE} border border-edge text-ink-2`}>{objectLine.type}</span>}
+            {status && !objectLine && <span className={`${BADGE} border border-edge text-ink-3`}>{status.modeName}</span>}
           </div>
           <div className="flex h-5 gap-1 font-mono text-[10px] tracking-wider" title={objectLine?.flags ? `Object attributes: ${objectLine.flags.raw}` : undefined}>
             {objectLine?.flags &&
