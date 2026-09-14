@@ -112,7 +112,9 @@ export default function FrequencyHero() {
             <Param label="Squelch" value={h.squelchText} />
             {h.miscText && <Param label="Info" value={h.miscText} />}
             <Param label="Started" value={h.startTime.iso?.slice(11) ?? null} title={h.startTime.iso?.replace('T', ' ')} />
-            {h.controlFrequencyHz > 0 && <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />}
+            {h.controlFrequencyHz > 0 && h.controlFrequencyHz !== h.voiceFrequencyHz && (
+              <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />
+            )}
           </>
         ) : (
           <>
