@@ -1,0 +1,116 @@
+import { useEffect, useMemo, useState } from 'react';
+import type { ReceptionRow } from '../../../shared/ipc';
+import { rowMatches, useLog } from '../store/log';
+
+function fmtTime(ms: number): string {
+  const d = new Date(ms);
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+}
+
+function fmtDate(ms: number): string {
+  const d = new Date(ms);
+  const today = new Date();
+  return d.toDateString() === today.toDateString() ? '' : d.toLocaleDateString([], { day: '2-digit', month: 'short' });
+}
+
+function fmtDuration(r: ReceptionRow, now: number): string {
+  const end = r.endedAt ?? now;
+  const s = Math.max(0, end - r.startedAt) / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m ${Math.round(s - m * 60)}s`;
+}
+
+const COLS = 'grid-cols-[4.5rem_3rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_5rem_3rem_2.5rem]';
+
+export default function LogTable() {
+  const rows = useLog((s) => s.rows);
+  const filter = useLog((s) => s.filter);
+  const setFilter = useLog((s) => s.setFilter);
+  const clear = useLog((s) => s.clear);
+  const [now, setNow] = useState(Date.now());
+  const hasOpen = rows.some((r) => r.endedAt === null);
+
+  // Tick once a second only while a reception is open, to grow its duration.
+  useEffect(() => {
+    if (!hasOpen) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [hasOpen]);
+
+  const visible = useMemo(() => rows.filter((r) => rowMatches(r, filter)), [rows, filter]);
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="mb-2 flex items-center gap-2">
+        <input
+          className="w-64 rounded-md border border-edge bg-panel-2 px-2 py-1 text-sm text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+          placeholder="Filter (name, system, frequency, TGID…)"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+        />
+        <span className="text-[11px] text-ink-3">
+          {visible.length === rows.length ? `${rows.length} receptions` : `${visible.length} of ${rows.length}`}
+        </span>
+        <button
+          className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
+          disabled={rows.length === 0}
+          onClick={() => {
+            if (window.confirm('Delete the whole reception log?')) void clear();
+          }}
+        >
+          Clear log
+        </button>
+      </div>
+
+      <div className={`grid ${COLS} gap-x-2 border-b border-edge px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3`}>
+        <span>Time</span>
+        <span>Dur</span>
+        <span>Frequency</span>
+        <span>Mode</span>
+        <span>Name</span>
+        <span>System / list</span>
+        <span>Type</span>
+        <span>TGID/RID</span>
+        <span className="text-right">RSSI</span>
+        <span className="text-right">Hits</span>
+      </div>
+
+      <div className="min-h-0 flex-1 select-text overflow-y-auto font-mono text-[12.5px]">
+        {visible.length === 0 && (
+          <p className="px-2 py-6 text-center font-sans text-sm text-ink-3">
+            {rows.length === 0 ? 'No receptions logged yet. Connect and let the scanner run.' : 'Nothing matches the filter.'}
+          </p>
+        )}
+        {visible.map((r) => {
+          const open = r.endedAt === null;
+          return (
+            <div
+              key={r.id}
+              className={`grid ${COLS} items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? 'bg-green/10 text-ink' : 'text-ink-2 hover:bg-panel-2'}`}
+            >
+              <span className="whitespace-nowrap">
+                {open && <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green align-middle" />}
+                {fmtTime(r.startedAt)}
+                {fmtDate(r.startedAt) && <span className="ml-1 text-[10px] text-ink-3">{fmtDate(r.startedAt)}</span>}
+              </span>
+              <span className="text-ink-3">{fmtDuration(r, now)}</span>
+              <span className="text-amber-2">{(r.frequencyHz / 1e6).toFixed(6)}</span>
+              <span className="text-cyan">{r.signalType || r.mode}</span>
+              <span className="truncate font-sans text-[13px] text-ink">{r.name || <span className="text-ink-3">—</span>}</span>
+              <span className="truncate font-sans text-ink-2">{r.system || r.scanlist}</span>
+              <span className="text-ink-3">{r.objectType}</span>
+              <span className="truncate text-ink-3" title={r.tgid !== null || r.radioId !== null ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}` : undefined}>
+                {r.tgid !== null ? r.tgid : ''}
+                {r.tgid !== null && r.radioId !== null ? '/' : ''}
+                {r.radioId !== null ? r.radioId : ''}
+              </span>
+              <span className="text-right">{r.rssiPeak}</span>
+              <span className="text-right text-ink-3">{r.hits}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

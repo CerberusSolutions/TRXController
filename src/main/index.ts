@@ -1,7 +1,9 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type ScannerSnapshot } from '../shared/ipc';
+import { IPC, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
+import { LogDb } from './log/db';
+import { ReceptionLogger } from './log/logger';
 import { ScannerSession } from './scanner/session';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
 
@@ -13,8 +15,14 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
+let db: LogDb | null = null;
+let logger: ReceptionLogger | null = null;
+
 const session = new ScannerSession(serialTransportFactory, {
-  onSnapshot: (s: ScannerSnapshot) => broadcast(IPC.snapshot, s),
+  onSnapshot: (s: ScannerSnapshot) => {
+    broadcast(IPC.snapshot, s);
+    logger?.onSnapshot(s);
+  },
   onCcDump: (line) => broadcast(IPC.ccdump, line),
   log: (msg) => console.log(`[scanner] ${msg}`),
 });
@@ -31,6 +39,18 @@ function registerIpc(): void {
     await session.pressKey(code);
   });
   ipcMain.handle(IPC.getSnapshot, () => session.getSnapshot());
+  ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
+  ipcMain.handle(IPC.logClear, () => {
+    logger?.flush();
+    db?.clear();
+  });
+}
+
+function openLog(): void {
+  const path = join(app.getPath('userData'), 'trx-log.sqlite');
+  db = new LogDb(path);
+  logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
+  console.log(`[log] ${path} (${db.count()} receptions)`);
 }
 
 function createWindow(): void {
@@ -69,6 +89,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  openLog();
   registerIpc();
   createWindow();
   app.on('activate', () => {
@@ -82,4 +103,8 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   void session.disconnect(false);
+  logger?.flush();
+  db?.close();
+  db = null;
+  logger = null;
 });

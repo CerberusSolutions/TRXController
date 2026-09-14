@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type PortInfo, type ScannerSnapshot } from '../shared/ipc';
+import { IPC, type PortInfo, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
 
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
@@ -23,6 +23,13 @@ const api = {
     const listener = (_e: unknown, line: string): void => cb(line);
     ipcRenderer.on(IPC.ccdump, listener);
     return () => ipcRenderer.removeListener(IPC.ccdump, listener);
+  },
+  logRecent: (limit?: number): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit),
+  logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
+  onLogUpsert: (cb: (row: ReceptionRow) => void): (() => void) => {
+    const listener = (_e: unknown, row: ReceptionRow): void => cb(row);
+    ipcRenderer.on(IPC.logUpsert, listener);
+    return () => ipcRenderer.removeListener(IPC.logUpsert, listener);
   },
 };
 

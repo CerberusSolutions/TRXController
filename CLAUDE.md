@@ -13,8 +13,11 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `serialport` lives in the **main process only**. The renderer never touches the port;
   it talks to main over IPC exposed by the preload (`contextBridge`).
 - Zustand for renderer state.
-- `better-sqlite3` for logging (main process). Not yet added; add it when the logging
-  layer is built, together with `@electron/rebuild -w better-sqlite3` in `postinstall`.
+- Logging uses Node's built-in `node:sqlite` (`DatabaseSync`) in the main process.
+  Electron 44 bundles Node 24, where it is available without flags, so there is no
+  native module and no rebuild step (the original plan was `better-sqlite3`; switching
+  back is a one-file change in `src/main/log/db.ts` if ever needed). Under the host
+  Node 22 used by vitest and the probe it prints an ExperimentalWarning; harmless.
   `serialport` is N-API so it needs **no** Electron rebuild and works under plain Node
   (that is how `scripts/probe.ts` runs).
 - npm workspaces. `packages/rcip` is the pure-TypeScript protocol library, with no
@@ -52,7 +55,9 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 ## Layout
 
 - `packages/rcip/` protocol library (encoder/decoder, parsers, key table, lookup tables, tests)
-- `src/main/` Electron main process (serial, IPC, later logging)
+- `src/main/scanner/` serial transport, request link, polling session
+- `src/main/log/` reception tracker, SQLite log, logger glue
+- `src/main/index.ts` Electron main: window, IPC handlers, wiring
 - `src/preload/` contextBridge API surface
 - `src/renderer/` React UI
 - `scripts/probe.ts` hardware probe, run with `npm run probe -- COM7`
@@ -73,6 +78,17 @@ The renderer only needs `window.trx`. To eyeball it outside Electron, build, ser
 `out/renderer` over HTTP and inject a fake `window.trx` with `page.addInitScript`
 (Playwright); the session 2 screenshots were produced that way from the real frames
 captured on 14 Sep 2026.
+
+## Reception log
+
+- A reception is a period with RF squelch open on one frequency. `ReceptionTracker`
+  opens on squelch, keeps absorbing better details (the `a` header often lands a poll
+  later), closes after the squelch has been shut for 400 ms (it flutters), and splits
+  when the frequency changes mid-reception. Peak RSSI is kept.
+- Rows live in `trx-log.sqlite` under Electron's userData folder
+  (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
+- The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
+  that shares the panel under the hero with the raw scanner display.
 
 ## UI design notes (for session 2 onwards)
 

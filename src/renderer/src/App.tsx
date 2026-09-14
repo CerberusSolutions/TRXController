@@ -1,13 +1,21 @@
 import { useEffect } from 'react';
 import FrequencyHero from './components/FrequencyHero';
 import Keypad from './components/Keypad';
-import LcdPanel from './components/LcdPanel';
+import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
 import TopBar from './components/TopBar';
+import { attachLogEvents } from './store/log';
 import { attachScannerEvents } from './store/scanner';
 
 export default function App() {
-  useEffect(() => attachScannerEvents(), []);
+  useEffect(() => {
+    const offScanner = attachScannerEvents();
+    const offLog = attachLogEvents();
+    return () => {
+      offScanner();
+      offLog();
+    };
+  }, []);
 
   if (!window.trx) {
     return (
@@ -20,10 +28,10 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       <TopBar />
-      <main className="grid flex-1 grid-cols-[minmax(0,1fr)_260px] gap-4 overflow-auto p-4">
-        <div className="flex min-w-0 flex-col gap-4">
+      <main className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_260px] gap-4 p-4">
+        <div className="flex min-h-0 min-w-0 flex-col gap-4">
           <FrequencyHero />
-          <LcdPanel />
+          <MainPanel />
         </div>
         <Keypad />
       </main>

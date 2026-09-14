@@ -11,7 +11,7 @@ digital scanners, replacing Whistler's own remote control software.
 ## Stack
 
 Electron + Vite + React + TypeScript, Tailwind, `serialport` in the main process,
-Zustand in the renderer, `better-sqlite3` for logging. Windows only.
+Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows only.
 
 ## Getting started
 

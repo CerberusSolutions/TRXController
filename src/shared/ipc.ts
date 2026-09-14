@@ -42,6 +42,32 @@ export interface ScannerSnapshot {
   updatedAt: number;
 }
 
+/** One logged reception (a period with squelch open on one frequency). */
+export interface ReceptionRow {
+  id: number;
+  /** ms since epoch */
+  startedAt: number;
+  /** null while the reception is still open */
+  endedAt: number | null;
+  frequencyHz: number;
+  /** AM / FM / NFM from the status frame */
+  mode: string;
+  /** Signal type from the LCD icons (DG, Dg, AM, FM, NFM, ENC, D2) */
+  signalType: string;
+  name: string;
+  system: string;
+  scanlist: string;
+  /** CONV, TGRP, ... from the LCD, or Conventional/Talkgroup/Search from the header */
+  objectType: string;
+  tgid: number | null;
+  radioId: number | null;
+  site: string;
+  squelch: string;
+  rssiPeak: number;
+  /** Number of receptions logged on this frequency, including this one. */
+  hits: number;
+}
+
 export const IPC = {
   listPorts: 'scanner:list-ports',
   connect: 'scanner:connect',
@@ -50,4 +76,7 @@ export const IPC = {
   getSnapshot: 'scanner:get-snapshot',
   snapshot: 'scanner:snapshot',
   ccdump: 'scanner:ccdump',
+  logRecent: 'log:recent',
+  logClear: 'log:clear',
+  logUpsert: 'log:upsert',
 } as const;

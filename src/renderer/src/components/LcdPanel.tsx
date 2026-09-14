@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { describeIcons, LCD_COLUMNS, LCD_ROWS, toHex } from '@trxcontroller/rcip';
 import { useScanner } from '../store/scanner';
 
-export default function LcdPanel() {
+export default function LcdPanel({ embedded = false }: { embedded?: boolean }) {
   const lcd = useScanner((s) => s.snapshot.lcd);
   const online = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
   const [showHex, setShowHex] = useState(false);
@@ -10,9 +10,9 @@ export default function LcdPanel() {
   const iconText = lcd ? describeIcons(lcd.icons) : '';
 
   return (
-    <section className="rounded-xl border border-edge bg-panel p-4">
+    <section className={embedded ? '' : 'rounded-xl border border-edge bg-panel p-4'}>
       <div className="mb-2 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Scanner display</span>
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">{embedded ? '6 × 16 as sent by the scanner' : 'Scanner display'}</span>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] text-ink-3">{iconText && iconText !== '(none)' ? iconText : ''}</span>
           <button
