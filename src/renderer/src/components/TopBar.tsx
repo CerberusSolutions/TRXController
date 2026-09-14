@@ -1,6 +1,7 @@
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
 import DataMenu from './DataMenu';
+import ThemeToggle from './ThemeToggle';
 
 const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
   disconnected: { dot: 'bg-ink-3', text: 'Disconnected' },
@@ -54,7 +55,7 @@ export default function TopBar() {
         </button>
         {connected ? (
           <button
-            className="rounded-md border border-edge bg-panel-2 px-3 py-1.5 text-sm font-medium hover:bg-[#1f2a3c] disabled:opacity-50"
+            className="rounded-md border border-edge bg-panel-2 px-3 py-1.5 text-sm font-medium hover:bg-edge disabled:opacity-50"
             disabled={busy}
             onClick={() => void disconnect()}
           >
@@ -81,6 +82,7 @@ export default function TopBar() {
         )}
         {link.error && <span className="ml-2 text-xs text-red">{link.error}</span>}
       </div>
+      <ThemeToggle />
     </header>
   );
 }

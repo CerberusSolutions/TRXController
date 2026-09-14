@@ -110,6 +110,17 @@ captured on 14 Sep 2026.
 - It is a visual aid ("that band is busy"), not a measurement: the scanner's RSSI is
   uncalibrated and sample density depends on poll rate versus search speed.
 
+## Theme
+
+- Colour tokens live in `src/renderer/src/index.css` as `--t-*` on `:root` (dark) and
+  `:root[data-theme="light"]`, mapped to Tailwind via `@theme inline`, so `bg-panel`,
+  `text-ink` etc. follow the theme. Never hard-code a colour in a component; add a token.
+- The scanner display panel keeps its dark colours in both themes.
+- `ThemeToggle` (sun / moon / monitor) in the top bar sets `trx.theme` in localStorage
+  and tells main over IPC; main sets `nativeTheme.themeSource`, which also flips
+  `prefers-color-scheme` in the renderer (how "system" resolves) and recolours the
+  window background and title-bar overlay.
+
 ## Window chrome
 
 - Frameless: `titleBarStyle: 'hidden'` with `titleBarOverlay` so Windows draws the

@@ -117,4 +117,7 @@ export const IPC = {
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',
+  setTheme: 'theme:set',
 } as const;
+
+export type ThemeMode = 'light' | 'dark' | 'system';

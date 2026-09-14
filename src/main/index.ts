@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
 import { IPC, type ImportResult, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
@@ -9,6 +9,21 @@ import { ScannerSession } from './scanner/session';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
 
 let win: BrowserWindow | null = null;
+
+/** Window chrome colours per theme, matching the renderer's tokens. */
+const CHROME = {
+  dark: { background: '#0b0f14', overlay: '#121821', symbol: '#9fb0c3' },
+  light: { background: '#eef1f5', overlay: '#ffffff', symbol: '#475467' },
+} as const;
+
+function applyChrome(): void {
+  const c = nativeTheme.shouldUseDarkColors ? CHROME.dark : CHROME.light;
+  for (const w of BrowserWindow.getAllWindows()) {
+    if (w.isDestroyed()) continue;
+    w.setBackgroundColor(c.background);
+    w.setTitleBarOverlay({ color: c.overlay, symbolColor: c.symbol, height: 46 });
+  }
+}
 
 function broadcast(channel: string, payload: unknown): void {
   for (const w of BrowserWindow.getAllWindows()) {
@@ -57,6 +72,12 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
   ipcMain.handle(IPC.identityLookup, (_e, id: unknown) => (typeof id === 'number' && db ? (db.lookupDmrUser(id) ?? null) : null));
+  ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {
+    if (mode !== 'light' && mode !== 'dark' && mode !== 'system') throw new Error('Bad theme mode');
+    // Also flips prefers-color-scheme in the renderer, which resolves "system".
+    nativeTheme.themeSource = mode;
+    applyChrome();
+  });
   ipcMain.handle(IPC.identityImport, async (): Promise<ImportResult | null> => {
     if (!db) throw new Error('Database not open');
     const res = await dialog.showOpenDialog({
@@ -93,11 +114,13 @@ function createWindow(): void {
     minHeight: 600,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#0b0f14',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? CHROME.dark.background : CHROME.light.background,
     title: 'TRXController',
     // Frameless with the native window controls drawn over our own top bar.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#121821', symbolColor: '#9fb0c3', height: 46 },
+    titleBarOverlay: nativeTheme.shouldUseDarkColors
+      ? { color: CHROME.dark.overlay, symbolColor: CHROME.dark.symbol, height: 46 }
+      : { color: CHROME.light.overlay, symbolColor: CHROME.light.symbol, height: 46 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
@@ -127,6 +150,7 @@ app.whenReady().then(() => {
   openLog();
   registerIpc();
   createWindow();
+  nativeTheme.on('updated', applyChrome);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
