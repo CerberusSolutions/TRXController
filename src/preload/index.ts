@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import { IPC, type PortInfo, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
+import { IPC, type DmrUser, type IdentityStats, type ImportResult, type PortInfo, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
 
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
@@ -31,6 +31,9 @@ const api = {
     ipcRenderer.on(IPC.logUpsert, listener);
     return () => ipcRenderer.removeListener(IPC.logUpsert, listener);
   },
+  identityStats: (): Promise<IdentityStats> => ipcRenderer.invoke(IPC.identityStats),
+  identityImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.identityImport),
+  identityLookup: (id: number): Promise<DmrUser | null> => ipcRenderer.invoke(IPC.identityLookup, id),
 };
 
 export type TrxApi = typeof api;

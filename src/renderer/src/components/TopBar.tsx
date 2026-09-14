@@ -1,5 +1,6 @@
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
+import DataMenu from './DataMenu';
 
 const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
   disconnected: { dot: 'bg-ink-3', text: 'Disconnected' },
@@ -24,6 +25,7 @@ export default function TopBar() {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
+        <DataMenu />
         <select
           className="rounded-md border border-edge bg-panel-2 px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan disabled:opacity-50"
           value={selectedPort ?? ''}

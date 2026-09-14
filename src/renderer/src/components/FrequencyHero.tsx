@@ -14,7 +14,7 @@ function Param({ label, value }: { label: string; value: string | null | undefin
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, radioUser } = useScanner((s) => s.snapshot);
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
@@ -98,7 +98,15 @@ export default function FrequencyHero() {
             <Param label="Type" value={h.recordingTypeName} />
             {h.recordingType === 1 && <Param label="System" value={h.tsysTypeName} />}
             {h.talkgroupId1 !== 0xffffffff && <Param label="TGID" value={formatId(h.talkgroupId1)} />}
-            {h.radioId1 !== 0xffffffff && <Param label="Radio ID" value={formatId(h.radioId1)} />}
+            {h.radioId1 !== 0xffffffff && (
+              <Param
+                label="Radio ID"
+                value={radioUser ? `${formatId(h.radioId1)} · ${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(h.radioId1)}
+              />
+            )}
+            {radioUser && (radioUser.city || radioUser.country) && (
+              <Param label="Location" value={[radioUser.city, radioUser.country].filter(Boolean).join(', ')} />
+            )}
             {h.siteName && <Param label="Site" value={h.siteName} />}
             <Param label="Squelch" value={h.squelchText} />
             {h.controlFrequencyHz > 0 && <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />}

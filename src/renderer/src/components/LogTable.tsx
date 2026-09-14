@@ -100,10 +100,17 @@ export default function LogTable() {
               <span className="truncate font-sans text-[13px] text-ink">{r.name || <span className="text-ink-3">—</span>}</span>
               <span className="truncate font-sans text-ink-2">{r.system || r.scanlist}</span>
               <span className="text-ink-3">{r.objectType}</span>
-              <span className="truncate text-ink-3" title={r.tgid !== null || r.radioId !== null ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}` : undefined}>
+              <span
+                className="truncate text-ink-3"
+                title={
+                  r.tgid !== null || r.radioId !== null
+                    ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ', ' + r.radioName : ''})` : ''}`
+                    : undefined
+                }
+              >
                 {r.tgid !== null ? r.tgid : ''}
                 {r.tgid !== null && r.radioId !== null ? '/' : ''}
-                {r.radioId !== null ? r.radioId : ''}
+                {r.radioId !== null ? (r.radioCallsign ? <span className="text-ink-2">{r.radioCallsign}</span> : r.radioId) : ''}
               </span>
               <span className="text-right">{r.rssiPeak}</span>
               <span className="text-right text-ink-3">{r.hits}</span>

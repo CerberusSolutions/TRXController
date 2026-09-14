@@ -37,6 +37,8 @@ export interface ScannerSnapshot {
   status: Status | null;
   lcd: Lcd | null;
   active: ActiveChannel | null;
+  /** DMR user matching active.header.radioId1, when the database knows it. */
+  radioUser: DmrUser | null;
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
@@ -66,6 +68,34 @@ export interface ReceptionRow {
   rssiPeak: number;
   /** Number of receptions logged on this frequency, including this one. */
   hits: number;
+  /** Callsign for radioId from the imported DMR user database, if known. */
+  radioCallsign: string | null;
+  /** Name for radioId from the imported DMR user database, if known. */
+  radioName: string | null;
+}
+
+/** One entry of the DMR user database (radioid.net). */
+export interface DmrUser {
+  id: number;
+  callsign: string;
+  name: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
+export interface IdentityStats {
+  dmrUsers: number;
+  /** ms since epoch of the last import, or null */
+  importedAt: number | null;
+  /** File name of the last import, or null */
+  source: string | null;
+}
+
+export interface ImportResult {
+  imported: number;
+  skipped: number;
+  file: string;
 }
 
 export const IPC = {
@@ -79,4 +109,7 @@ export const IPC = {
   logRecent: 'log:recent',
   logClear: 'log:clear',
   logUpsert: 'log:upsert',
+  identityStats: 'identities:stats',
+  identityImport: 'identities:import',
+  identityLookup: 'identities:lookup',
 } as const;

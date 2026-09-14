@@ -3,11 +3,14 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { ReceptionRow } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow } from '../../shared/ipc';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits'>;
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
 
-const HITS_SQL = '(SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits';
+const ROW_SQL = `SELECT r.*,
+  (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
+  u.callsign AS radio_callsign, u.name AS radio_name
+  FROM receptions r LEFT JOIN dmr_users u ON u.id = r.radio_id`;
 
 export class LogDb {
   private readonly db: DatabaseSync;
@@ -35,6 +38,15 @@ export class LogDb {
       );
       CREATE INDEX IF NOT EXISTS receptions_started ON receptions(started_at DESC);
       CREATE INDEX IF NOT EXISTS receptions_freq ON receptions(frequency_hz);
+      CREATE TABLE IF NOT EXISTS dmr_users (
+        id       INTEGER PRIMARY KEY,
+        callsign TEXT NOT NULL DEFAULT '',
+        name     TEXT NOT NULL DEFAULT '',
+        city     TEXT NOT NULL DEFAULT '',
+        state    TEXT NOT NULL DEFAULT '',
+        country  TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
     // A reception left open by a crash has no end time; close it at its start.
     this.db.exec('UPDATE receptions SET ended_at = started_at WHERE ended_at IS NULL');
@@ -75,13 +87,58 @@ export class LogDb {
   }
 
   get(id: number): ReceptionRow | undefined {
-    const row = this.db.prepare(`SELECT r.*, ${HITS_SQL} FROM receptions r WHERE r.id = ?`).get(id);
+    const row = this.db.prepare(`${ROW_SQL} WHERE r.id = ?`).get(id);
     return row ? toRow(row as unknown as Raw) : undefined;
   }
 
   recent(limit = 500): ReceptionRow[] {
-    const rows = this.db.prepare(`SELECT r.*, ${HITS_SQL} FROM receptions r ORDER BY r.started_at DESC, r.id DESC LIMIT ?`).all(limit);
+    const rows = this.db.prepare(`${ROW_SQL} ORDER BY r.started_at DESC, r.id DESC LIMIT ?`).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
+  }
+
+  // --- DMR user database -------------------------------------------------
+
+  /** Replace the DMR user table with the given rows, in one transaction. */
+  replaceDmrUsers(rows: Iterable<DmrUser>, source: string, now = Date.now()): number {
+    const ins = this.db.prepare('INSERT OR REPLACE INTO dmr_users (id, callsign, name, city, state, country) VALUES (?, ?, ?, ?, ?, ?)');
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('DELETE FROM dmr_users');
+      for (const u of rows) {
+        ins.run(u.id, u.callsign, u.name, u.city, u.state, u.country);
+        n++;
+      }
+      this.setMeta('dmr_users.imported_at', String(now));
+      this.setMeta('dmr_users.source', source);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  lookupDmrUser(id: number): DmrUser | undefined {
+    const r = this.db.prepare('SELECT id, callsign, name, city, state, country FROM dmr_users WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? { id: Number(r['id']), callsign: String(r['callsign']), name: String(r['name']), city: String(r['city']), state: String(r['state']), country: String(r['country']) } : undefined;
+  }
+
+  identityStats(): IdentityStats {
+    const n = Number((this.db.prepare('SELECT COUNT(*) AS n FROM dmr_users').get() as { n: number }).n);
+    const at = this.getMeta('dmr_users.imported_at');
+    return { dmrUsers: n, importedAt: at ? Number(at) : null, source: this.getMeta('dmr_users.source') };
+  }
+
+  private setMeta(key: string, value: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value);
+  }
+
+  private getMeta(key: string): string | null {
+    const r = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
+    return r ? r.value : null;
   }
 
   count(): number {
@@ -114,6 +171,8 @@ interface Raw {
   squelch: string;
   rssi_peak: number;
   hits: number;
+  radio_callsign: string | null;
+  radio_name: string | null;
 }
 
 function toRow(r: Raw): ReceptionRow {
@@ -134,5 +193,7 @@ function toRow(r: Raw): ReceptionRow {
     squelch: r.squelch,
     rssiPeak: Number(r.rssi_peak),
     hits: Number(r.hits),
+    radioCallsign: r.radio_callsign ?? null,
+    radioName: r.radio_name ?? null,
   };
 }
