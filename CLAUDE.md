@@ -98,6 +98,25 @@ captured on 14 Sep 2026.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
   that shares the panel under the hero with the raw scanner display.
 
+## Band tab (channel occupancy)
+
+- `src/renderer/src/store/band.ts` accumulates one bin per frequency the scanner visits
+  in Scan, Search, Sweeper or Monitor mode (peak/last RSSI, samples, squelch opens,
+  last seen), capped at 6000 bins, in renderer memory only, until Reset.
+- `BandChart.tsx` draws it as a histogram: bar height = peak RSSI, cyan fading with age,
+  amber where squelch ever opened, dashed marker at the current frequency, hover
+  tooltip. Step = median gap between visited frequencies; isolated single visits far
+  from the rest do not set the axis range.
+- It is a visual aid ("that band is busy"), not a measurement: the scanner's RSSI is
+  uncalibrated and sample density depends on poll rate versus search speed.
+
+## Window chrome
+
+- Frameless: `titleBarStyle: 'hidden'` with `titleBarOverlay` so Windows draws the
+  native minimise/maximise/close buttons over our top bar (46 px). The top bar is the
+  drag region (`.app-drag`); interactive controls carry `.no-drag`. The header's right
+  padding uses `env(titlebar-area-width)` to stay clear of the overlay.
+
 ## UI design notes (for session 2 onwards)
 
 - Frequency display must be large and legible; signal strength and mode likewise.

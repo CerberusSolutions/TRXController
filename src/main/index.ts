@@ -95,6 +95,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     backgroundColor: '#0b0f14',
     title: 'TRXController',
+    // Frameless with the native window controls drawn over our own top bar.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#121821', symbolColor: '#9fb0c3', height: 46 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,

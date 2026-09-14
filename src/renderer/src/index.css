@@ -50,6 +50,10 @@ body {
 .lcd-line { white-space: pre; }
 .lcd-cursor { background: rgba(215, 244, 227, 0.14); }
 
+/* Frameless window: the top bar is the drag handle; controls opt out. */
+.app-drag { -webkit-app-region: drag; }
+.no-drag { -webkit-app-region: no-drag; }
+
 /* Scrollbars: thin, dark, matching the panels (Chromium-only, which is all we run on). */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
