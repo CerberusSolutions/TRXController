@@ -78,7 +78,7 @@ export default function DataMenu() {
         Data
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
+        <div className="absolute left-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
           <Section title="Ofcom Wireless Telegraphy Register">
             <p className="mt-1 text-ink-2">
               {stats.wtrLicences > 0 ? (
