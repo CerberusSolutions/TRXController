@@ -3,12 +3,15 @@ import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
-function Param({ label, value, title }: { label: string; value: string | null | undefined; title?: string }) {
+/** `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted does not shift the neighbours. */
+function Param({ label, value, title, minCh }: { label: string; value: string | null | undefined; title?: string; minCh?: number }) {
   if (!value) return null;
   return (
     <div className="flex shrink-0 flex-col whitespace-nowrap" title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
-      <span className="font-mono text-sm text-ink-2">{value}</span>
+      <span className="font-mono text-sm text-ink-2" style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -145,10 +148,10 @@ export default function FrequencyHero() {
           </>
         ) : (
           <>
-            <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} />
+            <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} minCh={6} />
+            <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} minCh={7} />
+            <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} minCh={3} />
             {detected && <Param label="Detected" value={detected} />}
-            <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} />
-            <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} />
           </>
         )}
       </div>
