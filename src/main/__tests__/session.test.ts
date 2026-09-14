@@ -64,11 +64,29 @@ describe('ScannerSession', () => {
     expect(s.getSnapshot().link.status).toBe('error');
   });
 
+  it('applies a late LCD reply to the snapshot instead of discarding it', async () => {
+    const t = new FakeTransport();
+    t.delayMs = 30;
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 1000, timeoutMs: 10 });
+    // Version is answered late too, so connect through a fast handler first.
+    t.delayMs = 0;
+    await s.connect('COM7');
+    await waitFor(() => s.getSnapshot().lcd !== null);
+    t.delayMs = 30;
+    await s.pollOnce(false);
+    expect(s.getSnapshot().stats.timeouts).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 80));
+    expect(s.getSnapshot().stats.late).toBeGreaterThan(0);
+    expect(s.getSnapshot().lcd?.lines[3]).toBe('TC NW Deps      ');
+    await s.disconnect();
+  });
+
   it('reports unresponsive after repeated timeouts and recovers', async () => {
     const t = new FakeTransport();
     let mute = false;
     t.handler = (cmd) => (mute ? null : defaultHandler(cmd));
     const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 2, timeoutMs: 5, unresponsiveAfter: 3 });
+    // (link timeoutGapMs default 150 ms keeps this test slower but realistic)
     await s.connect('COM7');
     mute = true;
     await waitFor(() => s.getSnapshot().link.status === 'unresponsive', 2000);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, renderLcd } from '../lcd';
 import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
@@ -76,6 +76,24 @@ describe('parseLcd', () => {
     const out = renderLcd(parseLcd(lcdData(LINES, [0, 0, 0])));
     expect(out.split('\n')).toHaveLength(8);
     expect(out.split('\n')[1]).toBe('|Scan            |');
+  });
+});
+
+describe('parseScanObjectLine', () => {
+  it('splits the object type from the attribute flags', () => {
+    const r = parseScanObjectLine('CONV        psDr');
+    expect(r?.type).toBe('CONV');
+    expect(r?.flags).toEqual({ priority: false, skip: false, delay: true, record: false, raw: 'psDr' });
+  });
+
+  it('reads uppercase as enabled', () => {
+    expect(parseScanObjectLine('TGRP        PSDR')?.flags).toMatchObject({ priority: true, skip: true, delay: true, record: true });
+    expect(parseScanObjectLine('TGRP        psdr')?.flags).toMatchObject({ priority: false, skip: false, delay: false, record: false });
+  });
+
+  it('copes with a type but no flags, and with junk', () => {
+    expect(parseScanObjectLine('CONV            ')).toEqual({ type: 'CONV', flags: null });
+    expect(parseScanObjectLine('                ')).toBeNull();
   });
 });
 

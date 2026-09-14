@@ -12,8 +12,15 @@ export interface LinkOptions {
   timeoutMs?: number;
   /** Pause after a no-response command so the scanner can act on it. */
   sendGapMs?: number;
+  /** Pause after a timeout so a late reply can land before the next request. */
+  timeoutGapMs?: number;
   onNoise?: (bytes: Uint8Array) => void;
-  onUnexpectedFrame?: (frame: Frame) => void;
+  /**
+   * A well-formed frame that no request is waiting for. Usually the late
+   * reply to a request that timed out; its data is still current, so callers
+   * should use it.
+   */
+  onUnexpectedFrame?: (frame: Frame, late: boolean) => void;
   onFrameError?: (message: string) => void;
 }
 
@@ -27,25 +34,29 @@ interface Pending {
 export class ScannerLink {
   private readonly decoder: FrameDecoder;
   private pending: Pending | null = null;
+  private lastTimedOutCode: string | null = null;
   private queue: Promise<unknown> = Promise.resolve();
   private closed = false;
   readonly stats: LinkStats = {
     requests: 0,
     responses: 0,
     timeouts: 0,
+    late: 0,
     frameErrors: 0,
     consecutiveTimeouts: 0,
     lastRttMs: null,
   };
   private readonly timeoutMs: number;
   private readonly sendGapMs: number;
+  private readonly timeoutGapMs: number;
 
   constructor(
     private readonly transport: Transport,
     private readonly opts: LinkOptions = {},
   ) {
-    this.timeoutMs = opts.timeoutMs ?? 500;
+    this.timeoutMs = opts.timeoutMs ?? 750;
     this.sendGapMs = opts.sendGapMs ?? 30;
+    this.timeoutGapMs = opts.timeoutGapMs ?? 150;
     this.decoder = new FrameDecoder({
       onEvent: (e) => {
         if (e.type === 'frame') this.onFrame(e.frame);
@@ -72,10 +83,9 @@ export class ScannerLink {
         const timer = setTimeout(() => {
           if (this.pending?.resolve === resolve) {
             this.pending = null;
+            this.lastTimedOutCode = expectCode;
             this.stats.timeouts++;
             this.stats.consecutiveTimeouts++;
-            // Anything half-received belongs to the request we just gave up on.
-            this.decoder.reset();
             resolve(null);
           }
         }, this.timeoutMs);
@@ -86,6 +96,9 @@ export class ScannerLink {
           resolve(null);
         });
       });
+      // Give a late reply a moment to arrive before the next command goes
+      // out, otherwise a slow scanner stays one reply behind indefinitely.
+      if (result === null && !this.closed) await sleep(this.timeoutGapMs);
       return result;
     };
     const p = this.queue.then(run, run);
@@ -124,13 +137,21 @@ export class ScannerLink {
     if (p && frame.codeChar === p.expectCode) {
       clearTimeout(p.timer);
       this.pending = null;
+      this.lastTimedOutCode = null;
       this.stats.responses++;
       this.stats.consecutiveTimeouts = 0;
       this.stats.lastRttMs = Date.now() - p.startedAt;
       p.resolve(frame);
-    } else {
-      this.opts.onUnexpectedFrame?.(frame);
+      return;
     }
+    const late = frame.codeChar === this.lastTimedOutCode;
+    if (late) {
+      this.lastTimedOutCode = null;
+      this.stats.late++;
+      // The scanner is answering, just slowly; do not count towards unresponsive.
+      this.stats.consecutiveTimeouts = 0;
+    }
+    this.opts.onUnexpectedFrame?.(frame, late);
   }
 }
 

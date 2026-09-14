@@ -19,6 +19,8 @@ export interface LinkStats {
   requests: number;
   responses: number;
   timeouts: number;
+  /** Responses that arrived after their request had timed out (still used). */
+  late: number;
   frameErrors: number;
   consecutiveTimeouts: number;
   /** Round-trip of the last successful request, ms. */

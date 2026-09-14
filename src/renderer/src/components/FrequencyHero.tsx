@@ -1,4 +1,4 @@
-import { formatId } from '@trxcontroller/rcip';
+import { formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
@@ -23,6 +23,11 @@ export default function FrequencyHero() {
   const h = active?.header ?? null;
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
+  const scanning = status?.mode === 0x0a;
+  const objectLine = scanning && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
+  // Header present but squelch closed: the scanner is holding on the channel
+  // through its scan delay after a transmission.
+  const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
 
   return (
     <section className={`rounded-xl border border-edge bg-panel p-5 ${receiving ? 'shadow-[inset_0_0_0_1px_rgba(61,220,132,0.35)]' : ''}`}>
@@ -39,18 +44,35 @@ export default function FrequencyHero() {
         <div className="flex flex-col items-end gap-1.5 pt-1">
           <span
             className={`rounded-md px-2.5 py-1 text-xs font-bold tracking-widest ${
-              receiving ? 'bg-green text-bg' : 'border border-edge text-ink-3'
+              rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
             }`}
           >
-            {receiving ? 'RX' : 'IDLE'}
+            {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
           </span>
           <div className="flex gap-1.5 font-mono text-xs">
             {modeText && <span className="rounded border border-edge px-1.5 py-0.5 text-cyan">{modeText}</span>}
             {icons?.signalType && icons.signalTypeName !== modeText ? (
               <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{icons.signalTypeName}</span>
             ) : null}
-            {status && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-3">{status.modeName}</span>}
+            {objectLine?.type && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-2">{objectLine.type}</span>}
+            {status && !objectLine && <span className="rounded border border-edge px-1.5 py-0.5 text-ink-3">{status.modeName}</span>}
           </div>
+          {objectLine?.flags && (
+            <div className="flex gap-1 font-mono text-[10px] tracking-wider" title={`Object attributes: ${objectLine.flags.raw}`}>
+              {(
+                [
+                  ['PRI', objectLine.flags.priority],
+                  ['SKIP', objectLine.flags.skip],
+                  ['DLY', objectLine.flags.delay],
+                  ['REC', objectLine.flags.record],
+                ] as const
+              ).map(([label, on]) => (
+                <span key={label} className={`rounded px-1.5 py-0.5 ${on ? 'bg-cyan/15 text-cyan' : 'border border-edge text-ink-3/60'}`}>
+                  {label}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

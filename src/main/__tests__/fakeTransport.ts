@@ -9,6 +9,8 @@ export class FakeTransport implements Transport {
   private closeCb: (() => void) | null = null;
   closed = false;
   delayMs = 0;
+  /** Per-command delay override; wins over delayMs when it returns a number. */
+  delayFor: ((cmd: Frame) => number | undefined) | null = null;
   /** Return a response frame (or null for none) for a command frame. */
   handler: (cmd: Frame) => Uint8Array | null = defaultHandler;
   /** Split responses into chunks of this size to exercise reassembly. */
@@ -27,7 +29,8 @@ export class FakeTransport implements Transport {
         this.dataCb(resp);
       }
     };
-    if (this.delayMs > 0) setTimeout(deliver, this.delayMs);
+    const delay = this.delayFor?.(cmd) ?? this.delayMs;
+    if (delay > 0) setTimeout(deliver, delay);
     else queueMicrotask(deliver);
   }
 

@@ -17,7 +17,7 @@ export default function StatusBar() {
       <span>{online ? batteryText(status) : '—'}</span>
       <span>{link.port ?? ''}</span>
       <span className="ml-auto">
-        rtt {stats.lastRttMs ?? '—'} ms · {stats.responses}/{stats.requests} ok · {stats.timeouts} t/o · {stats.frameErrors} bad
+        rtt {stats.lastRttMs ?? '—'} ms · {stats.responses}/{stats.requests} ok · {stats.timeouts} t/o · {stats.late} late · {stats.frameErrors} bad
       </span>
       {ccdumpCount > 0 && <span>ccdump {ccdumpCount}</span>}
       <span>{updatedAt ? new Date(updatedAt).toLocaleTimeString() : ''}</span>

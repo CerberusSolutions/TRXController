@@ -36,7 +36,7 @@ describe('ScannerLink', () => {
     let mute = true;
     const base = t.handler;
     t.handler = (cmd) => (mute ? null : base(cmd));
-    const link = new ScannerLink(t, { timeoutMs: 20 });
+    const link = new ScannerLink(t, { timeoutMs: 20, timeoutGapMs: 1 });
     expect(await link.request(getStatus(), 'A')).toBeNull();
     expect(link.stats.timeouts).toBe(1);
     expect(link.stats.consecutiveTimeouts).toBe(1);
@@ -45,14 +45,29 @@ describe('ScannerLink', () => {
     expect(link.stats.consecutiveTimeouts).toBe(0);
   });
 
-  it('discards a late response to a timed-out request', async () => {
+  it('hands a late response to onUnexpectedFrame flagged as late, and does not count it as unresponsive', async () => {
     const t = new FakeTransport();
     t.delayMs = 40;
-    const unexpected: string[] = [];
-    const link = new ScannerLink(t, { timeoutMs: 10, onUnexpectedFrame: (f) => unexpected.push(f.codeChar) });
+    const seen: [string, boolean][] = [];
+    const link = new ScannerLink(t, { timeoutMs: 10, timeoutGapMs: 1, onUnexpectedFrame: (f, late) => seen.push([f.codeChar, late]) });
     expect(await link.request(getStatus(), 'A')).toBeNull();
+    expect(link.stats.consecutiveTimeouts).toBe(1);
     await new Promise((r) => setTimeout(r, 60));
-    expect(unexpected).toEqual(['A']);
+    expect(seen).toEqual([['A', true]]);
+    expect(link.stats.late).toBe(1);
+    expect(link.stats.consecutiveTimeouts).toBe(0);
+  });
+
+  it('pauses after a timeout so a slow scanner does not stay one reply behind', async () => {
+    const t = new FakeTransport();
+    // One slow reply (A): slower than the timeout, faster than timeout + gap. L is normal.
+    t.delayFor = (cmd) => (cmd.codeChar === 'A' ? 30 : 5);
+    const link = new ScannerLink(t, { timeoutMs: 20, timeoutGapMs: 40 });
+    expect(await link.request(getStatus(), 'A')).toBeNull();
+    // By now the late A has landed in the gap; the next request pairs up correctly.
+    expect((await link.request(getLcd(), 'L'))?.codeChar).toBe('L');
+    expect(link.stats.late).toBe(1);
+    expect(link.stats.responses).toBe(1);
   });
 
   it('routes non-frame bytes to onNoise', async () => {

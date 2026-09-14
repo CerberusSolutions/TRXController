@@ -84,7 +84,7 @@ export class ScannerSession {
       timeoutMs: this.opts.timeoutMs,
       onNoise: (b) => this.onNoise(b),
       onFrameError: (m) => this.opts.log?.(`frame error: ${m}`),
-      onUnexpectedFrame: (f) => this.opts.log?.(`unexpected frame '${f.codeChar}'`),
+      onUnexpectedFrame: (f, late) => this.applyFrame(f, late),
     });
 
     const v = await this.link.request(getVersion(), 'V');
@@ -173,6 +173,41 @@ export class ScannerSession {
     }
   }
 
+  /**
+   * Use a frame that arrived outside the request/response pairing (a late
+   * reply). Its contents are still the scanner's current state.
+   */
+  private applyFrame(frame: Frame, late: boolean): void {
+    let changed = false;
+    const next = { ...this.snapshot };
+    switch (frame.codeChar) {
+      case 'L': {
+        const lcd = safe(() => parseLcd(frame.data));
+        if (lcd) { next.lcd = lcd; changed = true; }
+        break;
+      }
+      case 'A': {
+        const status = safe(() => parseStatus(frame.data));
+        if (status) { next.status = status; changed = true; }
+        break;
+      }
+      case 'a': {
+        const active = safe(() => parseActiveChannel(frame.data));
+        if (active) { next.active = active; changed = true; }
+        break;
+      }
+      default:
+        this.opts.log?.(`unexpected frame '${frame.codeChar}' (${frame.data.length} bytes)`);
+    }
+    if (!late) this.opts.log?.(`unsolicited frame '${frame.codeChar}'`);
+    if (changed && this.link) {
+      next.stats = { ...this.link.stats };
+      next.updatedAt = Date.now();
+      this.snapshot = next;
+      this.publish();
+    }
+  }
+
   private onNoise(bytes: Uint8Array): void {
     // CC Dump and anything else non-RCIP arrives as ASCII lines.
     this.noiseText += Buffer.from(bytes).toString('latin1');
@@ -202,7 +237,7 @@ export function emptySnapshot(): ScannerSnapshot {
     status: null,
     lcd: null,
     active: null,
-    stats: { requests: 0, responses: 0, timeouts: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
+    stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
   };
 }
