@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+@theme {
+  --color-bg: #0b0f14;
+  --color-panel: #121821;
+  --color-panel-2: #182130;
+  --color-edge: #243044;
+  --color-ink: #e6edf3;
+  --color-ink-2: #9fb0c3;
+  --color-ink-3: #5c6b7f;
+  --color-amber: #ffb020;
+  --color-amber-2: #ffd27a;
+  --color-cyan: #4fd1ff;
+  --color-green: #3ddc84;
+  --color-red: #ff5d5d;
+  --color-lcd: #0c1410;
+  --color-lcd-ink: #d7f4e3;
+  --color-lcd-dim: #3f5a4a;
+  --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+html, body, #root { height: 100%; }
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+.freq-digits { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+
+.key {
+  @apply relative flex flex-col items-center justify-center rounded-lg border border-edge bg-panel-2 text-ink
+         transition-[transform,background-color,box-shadow] duration-75 select-none;
+  min-height: 3.1rem;
+}
+.key:hover { background: #1f2a3c; }
+.key:active, .key.pressed { transform: translateY(1px); background: #26334a; box-shadow: inset 0 0 0 1px var(--color-cyan); }
+.key:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.key-nav { @apply text-cyan text-xl; }
+.key-sel { @apply text-amber font-semibold; }
+.key-fn { @apply text-ink-2 text-sm font-semibold tracking-wide; }
+.key-digit { @apply text-ink text-lg font-mono; }
+.key-knob { @apply text-ink-2 text-lg; }
+.key-power { @apply text-red; }
+.key .sub { @apply text-[10px] text-ink-3 leading-none mt-0.5 tracking-wide uppercase; }
+
+.lcd-line { white-space: pre; }
+.lcd-cursor { background: rgba(215, 244, 227, 0.14); }

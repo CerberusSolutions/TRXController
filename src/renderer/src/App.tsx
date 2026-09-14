@@ -1,21 +1,33 @@
-import { useConnectionStore } from './store/connection';
+import { useEffect } from 'react';
+import FrequencyHero from './components/FrequencyHero';
+import Keypad from './components/Keypad';
+import LcdPanel from './components/LcdPanel';
+import StatusBar from './components/StatusBar';
+import TopBar from './components/TopBar';
+import { attachScannerEvents } from './store/scanner';
 
-// Placeholder shell. The live LCD, keypad and polling loop are session 2.
 export default function App() {
-  const status = useConnectionStore((s) => s.status);
-  const v = window.trx?.versions;
+  useEffect(() => attachScannerEvents(), []);
+
+  if (!window.trx) {
+    return (
+      <main className="flex h-full items-center justify-center text-ink-2">
+        This page must be opened inside the TRXController Electron app.
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen p-6 font-sans">
-      <h1 className="text-2xl font-semibold tracking-tight">TRXController</h1>
-      <p className="mt-2 text-slate-400">Whistler TRX-1 / TRX-1E / TRX-2 remote control</p>
-      <p className="mt-6 text-sm text-slate-500">
-        Scanner: <span className="text-slate-300">{status}</span>
-      </p>
-      {v && (
-        <p className="mt-1 text-xs text-slate-600">
-          Electron {v.electron} · Node {v.node} · Chrome {v.chrome}
-        </p>
-      )}
-    </main>
+    <div className="flex h-full flex-col">
+      <TopBar />
+      <main className="grid flex-1 grid-cols-[minmax(0,1fr)_260px] gap-4 overflow-auto p-4">
+        <div className="flex min-w-0 flex-col gap-4">
+          <FrequencyHero />
+          <LcdPanel />
+        </div>
+        <Keypad />
+      </main>
+      <StatusBar />
+    </div>
   );
 }
