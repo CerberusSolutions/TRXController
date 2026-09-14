@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { PortInfo, ScannerSnapshot } from '../../../shared/ipc';
+import { useBand } from './band';
 
 function emptySnapshot(): ScannerSnapshot {
   return {
@@ -8,6 +9,7 @@ function emptySnapshot(): ScannerSnapshot {
     status: null,
     lcd: null,
     active: null,
+    radioUser: null,
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
   };
@@ -45,7 +47,10 @@ export const useScanner = create<ScannerState>((set, get) => ({
   ccdump: [],
   lastKey: null,
 
-  setSnapshot: (snapshot) => set({ snapshot }),
+  setSnapshot: (snapshot) => {
+    set({ snapshot });
+    useBand.getState().ingest(snapshot);
+  },
 
   refreshPorts: async () => {
     const ports = await api().listPorts();

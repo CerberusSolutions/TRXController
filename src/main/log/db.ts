@@ -3,11 +3,17 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { ReceptionRow } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow } from '../../shared/ipc';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits'>;
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
 
-const HITS_SQL = '(SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits';
+/** Newest activity first: open rows, then by last-heard, then by start. */
+const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.started_at DESC, r.id DESC';
+
+const ROW_SQL = `SELECT r.*,
+  (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
+  u.callsign AS radio_callsign, u.name AS radio_name
+  FROM receptions r LEFT JOIN dmr_users u ON u.id = r.radio_id`;
 
 export class LogDb {
   private readonly db: DatabaseSync;
@@ -31,25 +37,44 @@ export class LogDb {
         radio_id     INTEGER,
         site         TEXT NOT NULL DEFAULT '',
         squelch      TEXT NOT NULL DEFAULT '',
-        rssi_peak    INTEGER NOT NULL DEFAULT 0
+        tone         TEXT NOT NULL DEFAULT '',
+        rssi_peak    INTEGER NOT NULL DEFAULT 0,
+        calls        INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS receptions_started ON receptions(started_at DESC);
       CREATE INDEX IF NOT EXISTS receptions_freq ON receptions(frequency_hz);
+      CREATE TABLE IF NOT EXISTS dmr_users (
+        id       INTEGER PRIMARY KEY,
+        callsign TEXT NOT NULL DEFAULT '',
+        name     TEXT NOT NULL DEFAULT '',
+        city     TEXT NOT NULL DEFAULT '',
+        state    TEXT NOT NULL DEFAULT '',
+        country  TEXT NOT NULL DEFAULT ''
+      );
+      CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
+    this.migrate();
     // A reception left open by a crash has no end time; close it at its start.
     this.db.exec('UPDATE receptions SET ended_at = started_at WHERE ended_at IS NULL');
+  }
+
+  /** Add columns introduced after the first release to databases created before them. */
+  private migrate(): void {
+    const cols = (this.db.prepare('PRAGMA table_info(receptions)').all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes('calls')) this.db.exec('ALTER TABLE receptions ADD COLUMN calls INTEGER NOT NULL DEFAULT 1');
+    if (!cols.includes('tone')) this.db.exec("ALTER TABLE receptions ADD COLUMN tone TEXT NOT NULL DEFAULT ''");
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, rssi_peak)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.rssiPeak,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -60,7 +85,7 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', rssiPeak: 'rssi_peak',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -75,13 +100,58 @@ export class LogDb {
   }
 
   get(id: number): ReceptionRow | undefined {
-    const row = this.db.prepare(`SELECT r.*, ${HITS_SQL} FROM receptions r WHERE r.id = ?`).get(id);
+    const row = this.db.prepare(`${ROW_SQL} WHERE r.id = ?`).get(id);
     return row ? toRow(row as unknown as Raw) : undefined;
   }
 
   recent(limit = 500): ReceptionRow[] {
-    const rows = this.db.prepare(`SELECT r.*, ${HITS_SQL} FROM receptions r ORDER BY r.started_at DESC, r.id DESC LIMIT ?`).all(limit);
+    const rows = this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
+  }
+
+  // --- DMR user database -------------------------------------------------
+
+  /** Replace the DMR user table with the given rows, in one transaction. */
+  replaceDmrUsers(rows: Iterable<DmrUser>, source: string, now = Date.now()): number {
+    const ins = this.db.prepare('INSERT OR REPLACE INTO dmr_users (id, callsign, name, city, state, country) VALUES (?, ?, ?, ?, ?, ?)');
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('DELETE FROM dmr_users');
+      for (const u of rows) {
+        ins.run(u.id, u.callsign, u.name, u.city, u.state, u.country);
+        n++;
+      }
+      this.setMeta('dmr_users.imported_at', String(now));
+      this.setMeta('dmr_users.source', source);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  lookupDmrUser(id: number): DmrUser | undefined {
+    const r = this.db.prepare('SELECT id, callsign, name, city, state, country FROM dmr_users WHERE id = ?').get(id) as
+      | Record<string, unknown>
+      | undefined;
+    return r ? { id: Number(r['id']), callsign: String(r['callsign']), name: String(r['name']), city: String(r['city']), state: String(r['state']), country: String(r['country']) } : undefined;
+  }
+
+  identityStats(): IdentityStats {
+    const n = Number((this.db.prepare('SELECT COUNT(*) AS n FROM dmr_users').get() as { n: number }).n);
+    const at = this.getMeta('dmr_users.imported_at');
+    return { dmrUsers: n, importedAt: at ? Number(at) : null, source: this.getMeta('dmr_users.source') };
+  }
+
+  private setMeta(key: string, value: string): void {
+    this.db.prepare('INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)').run(key, value);
+  }
+
+  private getMeta(key: string): string | null {
+    const r = this.db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as { value: string } | undefined;
+    return r ? r.value : null;
   }
 
   count(): number {
@@ -112,8 +182,12 @@ interface Raw {
   radio_id: number | null;
   site: string;
   squelch: string;
+  tone: string;
   rssi_peak: number;
+  calls: number;
   hits: number;
+  radio_callsign: string | null;
+  radio_name: string | null;
 }
 
 function toRow(r: Raw): ReceptionRow {
@@ -132,7 +206,11 @@ function toRow(r: Raw): ReceptionRow {
     radioId: r.radio_id === null ? null : Number(r.radio_id),
     site: r.site,
     squelch: r.squelch,
+    tone: r.tone ?? '',
     rssiPeak: Number(r.rssi_peak),
+    calls: Number(r.calls),
     hits: Number(r.hits),
+    radioCallsign: r.radio_callsign ?? null,
+    radioName: r.radio_name ?? null,
   };
 }

@@ -1,5 +1,6 @@
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
+import DataMenu from './DataMenu';
 
 const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
   disconnected: { dot: 'bg-ink-3', text: 'Disconnected' },
@@ -17,13 +18,18 @@ export default function TopBar() {
   const v = snapshot.version;
 
   return (
-    <header className="flex items-center gap-4 border-b border-edge bg-panel px-4 py-2.5">
+    <header
+      className="app-drag flex h-[46px] items-center gap-4 border-b border-edge bg-panel px-4"
+      // Leave room for the native minimise / maximise / close overlay on Windows.
+      style={{ paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }}
+    >
       <div className="flex items-baseline gap-2">
         <span className="text-lg font-semibold tracking-tight">TRX</span>
         <span className="text-lg font-light tracking-tight text-ink-2">Controller</span>
       </div>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="no-drag ml-auto flex items-center gap-2">
+        <DataMenu />
         <select
           className="rounded-md border border-edge bg-panel-2 px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan disabled:opacity-50"
           value={selectedPort ?? ''}
@@ -65,7 +71,7 @@ export default function TopBar() {
         )}
       </div>
 
-      <div className="flex items-center gap-2 border-l border-edge pl-4 text-sm">
+      <div className="no-drag flex items-center gap-2 border-l border-edge pl-4 text-sm">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${style.dot}`} />
         <span className="text-ink-2">{style.text}</span>
         {v && (

@@ -85,10 +85,37 @@ captured on 14 Sep 2026.
   opens on squelch, keeps absorbing better details (the `a` header often lands a poll
   later), closes after the squelch has been shut for 400 ms (it flutters), and splits
   when the frequency changes mid-reception. Peak RSSI is kept.
+- Nothing is written until the squelch has been open for 500 ms: noise bursts and the
+  scanner's brief pauses on chattering frequencies are discarded (counted in memory only).
+- A new opening on the same frequency and channel (same name / talkgroup, or unknown)
+  within 10 s of the previous row ending reopens that row: first-heard stays, last-heard
+  and `calls` move on, peak RSSI is the max. One conversation, one row. Rows are ordered
+  by last activity, open rows first. Clearing the log resets the merge memory.
+- DMR radio IDs resolve to callsign/name via the `dmr_users` table, imported from the
+  radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
   that shares the panel under the hero with the raw scanner display.
+
+## Band tab (channel occupancy)
+
+- `src/renderer/src/store/band.ts` accumulates one bin per frequency the scanner visits
+  in Scan, Search, Sweeper or Monitor mode (peak/last RSSI, samples, squelch opens,
+  last seen), capped at 6000 bins, in renderer memory only, until Reset.
+- `BandChart.tsx` draws it as a histogram: bar height = peak RSSI, cyan fading with age,
+  amber where squelch ever opened, dashed marker at the current frequency, hover
+  tooltip. Step = median gap between visited frequencies; isolated single visits far
+  from the rest do not set the axis range.
+- It is a visual aid ("that band is busy"), not a measurement: the scanner's RSSI is
+  uncalibrated and sample density depends on poll rate versus search speed.
+
+## Window chrome
+
+- Frameless: `titleBarStyle: 'hidden'` with `titleBarOverlay` so Windows draws the
+  native minimise/maximise/close buttons over our top bar (46 px). The top bar is the
+  drag region (`.app-drag`); interactive controls carry `.no-drag`. The header's right
+  padding uses `env(titlebar-area-width)` to stay clear of the overlay.
 
 ## UI design notes (for session 2 onwards)
 

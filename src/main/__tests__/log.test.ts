@@ -47,6 +47,16 @@ describe('describe()', () => {
     const d = describeSnapshot(snap({ header: true }));
     expect(d).toMatchObject({ name: 'Fire Dispatch', system: 'County P25', tgid: 1234, radioId: 7654321, site: 'Site 3', squelch: 'NAC 293' });
   });
+  it('takes TGID and RadioID from the DMR display when there is no header', () => {
+    const d = describeSnapshot(snap({ lcd: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] }));
+    expect(d).toMatchObject({ name: '', scanlist: 'Shopwatch', objectType: 'CONV', tgid: 251, radioId: 104 });
+  });
+
+  it('records a detected tone from the display', () => {
+    const d = describeSnapshot(snap({ lcd: ['', 'Bucks A+D Rep', 'CONV        psDr', 'RBW18', 'Auto  433.225000', 'CTCSS 77.0  S'] }));
+    expect(d).toMatchObject({ name: 'RBW18', tone: 'CTCSS 77.0' });
+  });
+
   it('does not treat the sweeping screen as a channel', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'] }));
     expect(d.name).toBe('');
@@ -57,7 +67,7 @@ describe('describe()', () => {
 
 describe('ReceptionTracker', () => {
   it('opens on squelch, absorbs later details, closes after the debounce', () => {
-    const t = new ReceptionTracker({ closeDebounceMs: 400 });
+    const t = new ReceptionTracker({ closeDebounceMs: 400, minDurationMs: 0, mergeWindowMs: 0 });
     expect(t.update(snap({ rf: false }), 0)).toEqual([]);
     const e1 = t.update(snap({ rf: true, rssi: 200 }), 1000);
     expect(e1.map((e) => e.type)).toEqual(['open']);
@@ -80,7 +90,7 @@ describe('ReceptionTracker', () => {
   });
 
   it('closes and reopens when the frequency changes while receiving', () => {
-    const t = new ReceptionTracker();
+    const t = new ReceptionTracker({ minDurationMs: 0, mergeWindowMs: 0 });
     t.update(snap({ rf: true, hz: 119775000 }), 0);
     const e = t.update(snap({ rf: true, hz: 121025000, lcd: ['', 'Civil Airband', 'CONV        psDr', 'TC Midlands', 'AM    121.025000'] }), 500);
     expect(e.map((x) => x.type)).toEqual(['close', 'open']);
@@ -89,7 +99,7 @@ describe('ReceptionTracker', () => {
   });
 
   it('never replaces real details with blanks', () => {
-    const t = new ReceptionTracker();
+    const t = new ReceptionTracker({ minDurationMs: 0 });
     t.update(snap({ rf: true, header: true }), 0);
     const e = t.update(snap({ rf: true, lcd: ['', 'Civil Airband', 'Military Airband', '', '', ''] }), 100);
     expect(e).toEqual([]);
@@ -97,11 +107,45 @@ describe('ReceptionTracker', () => {
   });
 
   it('flush closes an open reception', () => {
-    const t = new ReceptionTracker();
+    const t = new ReceptionTracker({ minDurationMs: 0 });
     t.update(snap({ rf: true }), 0);
     const e = t.flush(900);
     expect(e[0]!.type).toBe('close');
     expect(e[0]!.reception.endedAt).toBe(900);
+  });
+
+  it('discards openings shorter than the minimum duration', () => {
+    const t = new ReceptionTracker({ minDurationMs: 500, closeDebounceMs: 100 });
+    expect(t.update(snap({ rf: true }), 0)).toEqual([]);
+    expect(t.update(snap({ rf: true }), 200)).toEqual([]);
+    expect(t.update(snap({ rf: false }), 300)).toEqual([]);
+    const e = t.update(snap({ rf: false }), 450);
+    expect(e.map((x) => x.type)).toEqual(['discard']);
+    // a long one is reported once it passes the threshold, with details absorbed meanwhile
+    expect(t.update(snap({ rf: true, rssi: 100 }), 1000)).toEqual([]);
+    const open = t.update(snap({ rf: true, rssi: 250, header: true }), 1600);
+    expect(open).toHaveLength(1);
+    expect(open[0]).toMatchObject({ type: 'open', merged: false, reception: { startedAt: 1000, rssiPeak: 250, name: 'Fire Dispatch', calls: 1 } });
+  });
+
+  it('merges a new opening on the same channel within the merge window', () => {
+    const t = new ReceptionTracker({ minDurationMs: 0, closeDebounceMs: 100, mergeWindowMs: 10_000 });
+    t.update(snap({ rf: true, rssi: 300 }), 0);
+    t.update(snap({ rf: false }), 5000);
+    expect(t.update(snap({ rf: false }), 5200).map((e) => e.type)).toEqual(['close']);
+    const e = t.update(snap({ rf: true, rssi: 320 }), 9000);
+    expect(e).toHaveLength(1);
+    expect(e[0]).toMatchObject({ type: 'open', merged: true, reception: { startedAt: 0, calls: 2, rssiPeak: 320, name: 'TC NW Deps' } });
+    // not merged: different talkgroup on the same frequency
+    t.update(snap({ rf: false }), 9500);
+    t.update(snap({ rf: false }), 9800);
+    const other = t.update(snap({ rf: true, header: true }), 10_000);
+    expect(other[0]).toMatchObject({ type: 'open', merged: false, reception: { calls: 1, name: 'Fire Dispatch' } });
+    // not merged: outside the window
+    t.update(snap({ rf: false, header: true }), 11_000);
+    t.update(snap({ rf: false, header: true }), 11_200);
+    const late = t.update(snap({ rf: true, header: true }), 30_000);
+    expect(late[0]).toMatchObject({ type: 'open', merged: false });
   });
 
   it('ignores snapshots without status', () => {
@@ -113,16 +157,21 @@ describe('ReceptionTracker', () => {
 describe('LogDb', () => {
   it('inserts, updates, lists newest first and counts hits per frequency', () => {
     const db = new LogDb(':memory:');
-    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', rssiPeak: 1 };
+    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', rssiPeak: 1, calls: 1 };
     const r1 = db.insert({ ...base, startedAt: 1000, frequencyHz: 100 });
     const r2 = db.insert({ ...base, startedAt: 2000, frequencyHz: 200, name: 'B' });
     const r3 = db.insert({ ...base, startedAt: 3000, frequencyHz: 100, name: 'A2' });
     expect([r1.hits, r2.hits, r3.hits]).toEqual([1, 1, 2]);
+    expect(r1.calls).toBe(1);
     const rows = db.recent();
     expect(rows.map((r) => r.id)).toEqual([r3.id, r2.id, r1.id]);
     expect(rows[0]!.hits).toBe(2);
-    const u = db.update(r3.id, { endedAt: 3500, rssiPeak: 99, tgid: 7 });
-    expect(u).toMatchObject({ endedAt: 3500, rssiPeak: 99, tgid: 7, name: 'A2' });
+    const u = db.update(r3.id, { endedAt: 3500, rssiPeak: 99, tgid: 7, calls: 3 });
+    expect(u).toMatchObject({ endedAt: 3500, rssiPeak: 99, tgid: 7, name: 'A2', calls: 3 });
+    // a reopened (ended_at NULL) row sorts first, then by last-heard
+    db.update(r1.id, { endedAt: null });
+    db.update(r2.id, { endedAt: 9000 });
+    expect(db.recent().map((r) => r.id)).toEqual([r1.id, r2.id, r3.id]);
     expect(db.count()).toBe(3);
     db.clear();
     expect(db.count()).toBe(0);
@@ -131,7 +180,7 @@ describe('LogDb', () => {
 
   it('closes receptions left open by a previous run', () => {
     const db = new LogDb(':memory:');
-    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', rssiPeak: 0 });
+    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', rssiPeak: 0, calls: 1 });
     expect(r.endedAt).toBeNull();
     // simulate restart by constructing on the same in-memory handle is not possible; exercise the statement directly
     const db2 = new LogDb(':memory:');
@@ -145,7 +194,7 @@ describe('ReceptionLogger', () => {
   it('writes open, update and close through to the database and emits rows', () => {
     const db = new LogDb(':memory:');
     const rows: ReceptionRow[] = [];
-    const log = new ReceptionLogger(db, (r) => rows.push(r), { closeDebounceMs: 100 });
+    const log = new ReceptionLogger(db, (r) => rows.push(r), { closeDebounceMs: 100, minDurationMs: 0, mergeWindowMs: 0 });
     log.onSnapshot(snap({ rf: true, rssi: 100 }), 0);
     log.onSnapshot(snap({ rf: true, rssi: 300, header: true }), 50);
     log.onSnapshot(snap({ rf: false, header: true }), 100);
@@ -158,6 +207,41 @@ describe('ReceptionLogger', () => {
     const dis = emptySnapshot();
     log.onSnapshot(dis, 1500);
     expect(db.recent()[0]!.endedAt).toBe(1500);
+    db.close();
+  });
+
+  it('keeps transients out of the database and merges a resumed conversation into one row', () => {
+    const db = new LogDb(':memory:');
+    const rows: ReceptionRow[] = [];
+    const log = new ReceptionLogger(db, (r) => rows.push(r), { closeDebounceMs: 100, minDurationMs: 500, mergeWindowMs: 10_000 });
+    // 200 ms burst: nothing written
+    log.onSnapshot(snap({ rf: true }), 0);
+    log.onSnapshot(snap({ rf: false }), 200);
+    log.onSnapshot(snap({ rf: false }), 400);
+    expect(db.count()).toBe(0);
+    expect(log.discarded).toBe(1);
+    // real call
+    log.onSnapshot(snap({ rf: true, rssi: 200 }), 1000);
+    log.onSnapshot(snap({ rf: true, rssi: 200 }), 1600);
+    log.onSnapshot(snap({ rf: false }), 3000);
+    log.onSnapshot(snap({ rf: false }), 3200);
+    expect(db.count()).toBe(1);
+    expect(db.recent()[0]).toMatchObject({ startedAt: 1000, endedAt: 3000, calls: 1 });
+    // reply 4 s later on the same channel: same row, second call
+    log.onSnapshot(snap({ rf: true, rssi: 340 }), 7000);
+    log.onSnapshot(snap({ rf: true, rssi: 340 }), 7600);
+    expect(db.count()).toBe(1);
+    expect(db.recent()[0]).toMatchObject({ startedAt: 1000, endedAt: null, calls: 2, rssiPeak: 340 });
+    log.onSnapshot(snap({ rf: false }), 9000);
+    log.onSnapshot(snap({ rf: false }), 9200);
+    expect(db.recent()[0]).toMatchObject({ endedAt: 9000, calls: 2 });
+    // after clearing the log nothing merges into a deleted row
+    db.clear();
+    log.reset();
+    log.onSnapshot(snap({ rf: true }), 10_000);
+    log.onSnapshot(snap({ rf: true }), 10_600);
+    expect(db.count()).toBe(1);
+    expect(db.recent()[0]!.calls).toBe(1);
     db.close();
   });
 });

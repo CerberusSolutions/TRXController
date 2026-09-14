@@ -237,6 +237,7 @@ export function emptySnapshot(): ScannerSnapshot {
     status: null,
     lcd: null,
     active: null,
+    radioUser: null,
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
   };

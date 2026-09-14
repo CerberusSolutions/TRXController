@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
+import { IPC, type ImportResult, type ReceptionRow, type ScannerSnapshot } from '../shared/ipc';
+import { readUserFile } from './identities/radioid';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
 import { ScannerSession } from './scanner/session';
@@ -18,8 +19,17 @@ function broadcast(channel: string, payload: unknown): void {
 let db: LogDb | null = null;
 let logger: ReceptionLogger | null = null;
 
+/** Attach the DMR user record for the current radio ID, if the database knows it. */
+function enrich(s: ScannerSnapshot): ScannerSnapshot {
+  const rid = s.active?.header?.radioId1;
+  if (!db || rid === undefined || rid === 0xffffffff) return { ...s, radioUser: null };
+  if (s.radioUser && s.radioUser.id === rid) return s;
+  return { ...s, radioUser: db.lookupDmrUser(rid) ?? null };
+}
+
 const session = new ScannerSession(serialTransportFactory, {
-  onSnapshot: (s: ScannerSnapshot) => {
+  onSnapshot: (raw: ScannerSnapshot) => {
+    const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
   },
@@ -38,11 +48,33 @@ function registerIpc(): void {
     if (typeof code !== 'number' || !isKeyCode(code)) throw new Error(`Unknown key code ${String(code)}`);
     await session.pressKey(code);
   });
-  ipcMain.handle(IPC.getSnapshot, () => session.getSnapshot());
+  ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
   ipcMain.handle(IPC.logClear, () => {
     logger?.flush();
     db?.clear();
+    logger?.reset();
+  });
+  ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
+  ipcMain.handle(IPC.identityLookup, (_e, id: unknown) => (typeof id === 'number' && db ? (db.lookupDmrUser(id) ?? null) : null));
+  ipcMain.handle(IPC.identityImport, async (): Promise<ImportResult | null> => {
+    if (!db) throw new Error('Database not open');
+    const res = await dialog.showOpenDialog({
+      title: 'Import DMR user database (radioid.net)',
+      filters: [
+        { name: 'radioid.net export', extensions: ['csv', 'json'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    });
+    const file = res.filePaths[0];
+    if (res.canceled || !file) return null;
+    const parsed = await readUserFile(file);
+    if (parsed.users.length === 0) throw new Error('No DMR users found in that file');
+    const name = file.split(/[\\/]/).pop() ?? file;
+    const imported = db.replaceDmrUsers(parsed.users, name);
+    console.log(`[identities] imported ${imported} DMR users from ${file} (${parsed.skipped} rows skipped, header: ${parsed.hadHeader})`);
+    return { imported, skipped: parsed.skipped, file: name };
   });
 }
 
@@ -63,6 +95,9 @@ function createWindow(): void {
     autoHideMenuBar: true,
     backgroundColor: '#0b0f14',
     title: 'TRXController',
+    // Frameless with the native window controls drawn over our own top bar.
+    titleBarStyle: 'hidden',
+    titleBarOverlay: { color: '#121821', symbolColor: '#9fb0c3', height: 46 },
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,

@@ -38,6 +38,8 @@ export const useLog = create<LogState>((set, get) => ({
     }
     // A new reception on a frequency bumps the hit count of earlier rows too.
     if (i < 0) next = next.map((r) => (r.id !== row.id && r.frequencyHz === row.frequencyHz ? { ...r, hits: r.hits + 1 } : r));
+    // A reopened row moves back to the top: order by last activity, open rows first.
+    next.sort((a, b) => lastActivity(b) - lastActivity(a) || b.startedAt - a.startedAt || b.id - a.id);
     set({ rows: next });
   },
 
@@ -47,6 +49,10 @@ export const useLog = create<LogState>((set, get) => ({
     set({ rows: [] });
   },
 }));
+
+function lastActivity(r: ReceptionRow): number {
+  return r.endedAt ?? Number.MAX_SAFE_INTEGER;
+}
 
 export function attachLogEvents(): () => void {
   if (!window.trx) return () => undefined;
@@ -58,7 +64,7 @@ export function attachLogEvents(): () => void {
 export function rowMatches(r: ReceptionRow, filter: string): boolean {
   const f = filter.trim().toLowerCase();
   if (!f) return true;
-  const hay = [r.name, r.system, r.scanlist, r.objectType, r.mode, r.site, r.squelch, (r.frequencyHz / 1e6).toFixed(6), r.tgid ?? '', r.radioId ?? '']
+  const hay = [r.name, r.system, r.scanlist, r.objectType, r.mode, r.site, r.squelch, r.tone, (r.frequencyHz / 1e6).toFixed(6), r.tgid ?? '', r.radioId ?? '', r.radioCallsign ?? '', r.radioName ?? '']
     .join(' ')
     .toLowerCase();
   return f.split(/\s+/).every((word) => hay.includes(word));

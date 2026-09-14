@@ -1,4 +1,4 @@
-import { parseScanObjectLine, type ActiveChannel, type Lcd, type Status } from '@trxcontroller/rcip';
+import { parseScanObjectLine, parseScanScreen, type ActiveChannel, type Lcd, type Status } from '@trxcontroller/rcip';
 
 /** "119.775000" -> { mhz: "119", khz: "775000" } */
 export function splitFrequency(hz: number): { mhz: string; frac: string } {
@@ -48,8 +48,9 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
     return { name: h.objectTag || '—', system, detail, source: 'active' };
   }
   if (lcd && channelScreen) {
-    const name = lcd.lines[3]?.trim() ?? '';
-    const detail = parseScanObjectLine(lcd.lines[2] ?? '')?.type ?? '';
+    const screen = parseScanScreen(lcd);
+    const name = screen?.name ?? (screen?.tgid !== null && screen?.tgid !== undefined ? `TG ${screen.tgid}` : '');
+    const detail = screen?.type ?? '';
     if (name || scanlist) return { name: name || '—', system: scanlist, detail, source: 'lcd' };
   }
   if (lcd && status?.mode === 0x0a) {

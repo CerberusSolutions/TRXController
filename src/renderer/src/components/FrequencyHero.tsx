@@ -1,12 +1,12 @@
-import { formatId, parseScanObjectLine } from '@trxcontroller/rcip';
+import { formatId, parseScanObjectLine, parseScanScreen } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
-function Param({ label, value }: { label: string; value: string | null | undefined }) {
+function Param({ label, value, title }: { label: string; value: string | null | undefined; title?: string }) {
   if (!value) return null;
   return (
-    <div className="flex flex-col">
+    <div className="flex shrink-0 flex-col whitespace-nowrap" title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
       <span className="font-mono text-sm text-ink-2">{value}</span>
     </div>
@@ -14,7 +14,7 @@ function Param({ label, value }: { label: string; value: string | null | undefin
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, radioUser } = useScanner((s) => s.snapshot);
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
@@ -24,6 +24,8 @@ export default function FrequencyHero() {
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
   const objectLine = isChannelScreen(lcd, status) && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
+  const screen = isChannelScreen(lcd, status) && lcd ? parseScanScreen(lcd) : null;
+  const detected = screen?.detectedTone ?? null;
   // Header present but squelch closed: the scanner is holding on the channel
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
@@ -92,22 +94,35 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-4 flex h-12 gap-x-8 overflow-hidden border-t border-edge pt-3">
+      <div className="mt-4 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
         {h ? (
           <>
-            <Param label="Type" value={h.recordingTypeName} />
-            {h.recordingType === 1 && <Param label="System" value={h.tsysTypeName} />}
+            <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />
             {h.talkgroupId1 !== 0xffffffff && <Param label="TGID" value={formatId(h.talkgroupId1)} />}
-            {h.radioId1 !== 0xffffffff && <Param label="Radio ID" value={formatId(h.radioId1)} />}
+            {h.radioId1 !== 0xffffffff && (
+              <Param
+                label="Radio ID"
+                value={radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(h.radioId1)}
+                title={
+                  radioUser
+                    ? `${formatId(h.radioId1)} · ${[radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ')}`
+                    : 'Radio ID (import the radioid.net database to resolve callsigns)'
+                }
+              />
+            )}
             {h.siteName && <Param label="Site" value={h.siteName} />}
-            <Param label="Squelch" value={h.squelchText} />
-            {h.controlFrequencyHz > 0 && <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />}
+            <Param label="Squelch" value={h.squelchText} title="Programmed on the object" />
+            {detected && <Param label="Detected" value={detected} title="Tone found by the scanner's tone lookup" />}
             {h.miscText && <Param label="Info" value={h.miscText} />}
-            <Param label="Started" value={h.startTime.iso?.replace('T', ' ') ?? null} />
+            <Param label="Started" value={h.startTime.iso?.slice(11) ?? null} title={h.startTime.iso?.replace('T', ' ')} />
+            {h.controlFrequencyHz > 0 && h.controlFrequencyHz !== h.voiceFrequencyHz && (
+              <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />
+            )}
           </>
         ) : (
           <>
             <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} />
+            {detected && <Param label="Detected" value={detected} />}
             <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} />
             <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} />
           </>

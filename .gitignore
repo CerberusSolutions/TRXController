@@ -146,3 +146,6 @@ vite.config.ts.timestamp-*
 out/
 dist/
 release/
+
+# Local data files (radioid.net exports etc.)
+data/

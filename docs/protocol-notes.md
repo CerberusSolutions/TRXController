@@ -75,7 +75,12 @@ used). The scanner fills the time as local time and leaves `tm_yday` and `tm_isd
 zero. Strings are `char[17]`, NUL-terminated. Radio/talkgroup IDs are 0xFFFFFFFF when
 unavailable. Layout in `packages/rcip/src/activeChannel.ts`.
 
-Observed for a conventional (non-trunked) object: object tag set, system and site tags
+Observed for a conventional DMR object (TRX-1e, 14 Sep 2026): recording type 0, TGID
+and radio ID populated (251 / 104), the misc text field `"Slot:2 Color: 7"` (slot and
+colour code, as the spec says), control frequency equal to the voice frequency, signal
+type DG on the LCD icons.
+
+Observed for a conventional analogue object: object tag set, system and site tags
 empty, info tag holds the frequency as displayed with a leading space (`" 119.775000"`),
 object ID 0, all four IDs 0xFFFFFFFF, control frequency 0, squelch "No Tone", TSYS type
 0 (meaningless when recording type is 0). The frequency field is Hz, big-endian.
@@ -120,6 +125,14 @@ the top level (LEFT/back). LEFT is therefore known by elimination only.
 ```
 
 Icons during that reception were `4D 40 03`: RSSI 5/5, S, ext power, PLAY, signal AM.
+For DMR objects the display alternates between two screens: line 3 `TGID:        251`
+with line 5 `RadioID:     104`, and line 3 the object name with line 5
+`Slot:2  Color: 7`. Line 4 reads `DMR   456.025000`. `parseScanScreen` handles both.
+
+When the tone lookup finds the transmitter's tone, line 4 shows `Auto  433.225000` and
+line 5 `CTCSS 77.0  S` (the trailing letter is a status flag; `S` observed). The `a`
+header's squelch field is the object's *programmed* setting and does not change.
+
 The `psDr` flags at the right of line 2 are the object's attributes, uppercase when
 enabled: **p**riority, **s**kip, **D**elay, **r**ecord (confirmed by the author on the
 TRX-1e). `parseScanObjectLine` in `packages/rcip/src/lcd.ts` reads them.

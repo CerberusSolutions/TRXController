@@ -21,7 +21,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
   return `${m}m ${Math.round(s - m * 60)}s`;
 }
 
-const COLS = 'grid-cols-[4.5rem_3rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_5rem_3rem_2.5rem]';
+const COLS = 'grid-cols-[4.5rem_4rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_5rem_3rem_2.5rem]';
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -71,7 +71,7 @@ export default function LogTable() {
         <span>Name</span>
         <span>System / list</span>
         <span>Type</span>
-        <span>TGID/RID</span>
+        <span>TGID/RID · Tone</span>
         <span className="text-right">RSSI</span>
         <span className="text-right">Hits</span>
       </div>
@@ -94,16 +94,32 @@ export default function LogTable() {
                 {fmtTime(r.startedAt)}
                 {fmtDate(r.startedAt) && <span className="ml-1 text-[10px] text-ink-3">{fmtDate(r.startedAt)}</span>}
               </span>
-              <span className="text-ink-3">{fmtDuration(r, now)}</span>
+              <span
+                className="text-ink-3"
+                title={`First heard ${fmtTime(r.startedAt)}${r.endedAt ? `, last heard ${fmtTime(r.endedAt)}` : ''}${r.calls > 1 ? `, ${r.calls} calls` : ''}`}
+              >
+                {fmtDuration(r, now)}
+                {r.calls > 1 && <span className="ml-1 text-ink-2">×{r.calls}</span>}
+              </span>
               <span className="text-amber-2">{(r.frequencyHz / 1e6).toFixed(6)}</span>
               <span className="text-cyan">{r.signalType || r.mode}</span>
               <span className="truncate font-sans text-[13px] text-ink">{r.name || <span className="text-ink-3">—</span>}</span>
               <span className="truncate font-sans text-ink-2">{r.system || r.scanlist}</span>
               <span className="text-ink-3">{r.objectType}</span>
-              <span className="truncate text-ink-3" title={r.tgid !== null || r.radioId !== null ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}` : undefined}>
+              <span
+                className="truncate text-ink-3"
+                title={
+                  r.tgid !== null || r.radioId !== null
+                    ? `TGID ${r.tgid ?? '—'} · RID ${r.radioId ?? '—'}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ', ' + r.radioName : ''})` : ''}`
+                    : r.tone
+                      ? `Detected ${r.tone}${r.squelch ? ` (programmed ${r.squelch})` : ''}`
+                      : undefined
+                }
+              >
                 {r.tgid !== null ? r.tgid : ''}
                 {r.tgid !== null && r.radioId !== null ? '/' : ''}
-                {r.radioId !== null ? r.radioId : ''}
+                {r.radioId !== null ? (r.radioCallsign ? <span className="text-ink-2">{r.radioCallsign}</span> : r.radioId) : ''}
+                {r.tgid === null && r.radioId === null && r.tone ? <span className="text-ink-2">{r.tone.replace('CTCSS ', 'CT ').replace('DCS ', 'DCS ')}</span> : ''}
               </span>
               <span className="text-right">{r.rssiPeak}</span>
               <span className="text-right text-ink-3">{r.hits}</span>
