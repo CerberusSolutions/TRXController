@@ -25,11 +25,14 @@ function fmtDuration(r: ReceptionRow, now: number): string {
   const s = Math.max(0, end - r.startedAt) / 1000;
   if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
   const m = Math.floor(s / 60);
-  return `${m}m ${Math.round(s - m * 60)}s`;
+  const sec = Math.floor(s - m * 60);
+  if (m < 60) return `${m}:${String(sec).padStart(2, '0')}`;
+  const h = Math.floor(m / 60);
+  return `${h}h${String(m - h * 60).padStart(2, '0')}`;
 }
 
 const COLS =
-  "grid-cols-[4.5rem_4rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_7rem_3rem_2.5rem]";
+  "grid-cols-[4.5rem_4.75rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_7rem_3rem_2.5rem]";
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
