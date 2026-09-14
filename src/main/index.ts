@@ -194,8 +194,9 @@ function openLog(): void {
 
 function createWindow(): void {
   win = new BrowserWindow({
-    width: 1180,
-    height: 760,
+    // Wide enough for the log table without truncating the system column.
+    width: 1320,
+    height: 780,
     minWidth: 900,
     minHeight: 600,
     show: false,
