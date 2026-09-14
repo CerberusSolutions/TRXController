@@ -71,7 +71,7 @@ export default function TopBar() {
         )}
       </div>
 
-      <div className="no-drag flex items-center gap-2 border-l border-edge pl-4 text-sm">
+      <div className="no-drag flex items-center gap-2 whitespace-nowrap border-l border-edge pl-4 text-sm">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${style.dot}`} />
         <span className="text-ink-2">{style.text}</span>
         {v && (
