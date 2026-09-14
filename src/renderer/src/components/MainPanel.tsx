@@ -43,7 +43,7 @@ export default function MainPanel() {
         {btn('band', 'Band')}
         {btn('display', 'Scanner display')}
       </div>
-      <div className="min-h-0 flex-1">
+      <div className={`min-h-0 flex-1 ${tab === 'display' ? 'overflow-y-auto' : ''}`}>
         {tab === 'log' ? <LogTable /> : tab === 'band' ? <BandChart /> : <LcdPanel embedded />}
       </div>
     </section>

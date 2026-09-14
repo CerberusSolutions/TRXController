@@ -6,8 +6,21 @@ export default function LcdPanel({ embedded = false }: { embedded?: boolean }) {
   const lcd = useScanner((s) => s.snapshot.lcd);
   const online = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
   const [showHex, setShowHex] = useState(false);
+  const [copied, setCopied] = useState(false);
   const lines = lcd?.lines ?? Array.from({ length: LCD_ROWS }, () => ' '.repeat(LCD_COLUMNS));
   const iconText = lcd ? describeIcons(lcd.icons) : '';
+  const hexText = lcd
+    ? [
+        ...Array.from({ length: LCD_ROWS }, (_, r) => `${r}  ${toHex(lcd.raw.subarray(r * LCD_COLUMNS, (r + 1) * LCD_COLUMNS))}  |${lines[r] ?? ''}|`),
+        `icons ${toHex(lcd.icons.raw)}`,
+      ].join('\n')
+    : '';
+  const copyHex = (): void => {
+    void navigator.clipboard.writeText(hexText).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
 
   return (
     <section className={embedded ? '' : 'rounded-xl border border-edge bg-panel p-4'}>
@@ -32,10 +45,16 @@ export default function LcdPanel({ embedded = false }: { embedded?: boolean }) {
         ))}
       </div>
       {showHex && lcd && (
-        <pre className="mt-2 select-text overflow-x-auto rounded-md bg-panel-2 px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-2">
-          {Array.from({ length: LCD_ROWS }, (_, r) => `${r}  ${toHex(lcd.raw.subarray(r * LCD_COLUMNS, (r + 1) * LCD_COLUMNS))}`).join('\n')}
-          {`\nicons ${toHex(lcd.icons.raw)}`}
-        </pre>
+        <div className="relative mt-2">
+          <pre className="select-text overflow-x-auto rounded-md bg-panel-2 px-3 py-2 pr-16 font-mono text-[11px] leading-relaxed text-ink-2">{hexText}</pre>
+          <button
+            className="absolute top-1.5 right-1.5 rounded border border-edge bg-panel px-1.5 py-0.5 font-mono text-[10px] text-ink-3 hover:text-ink"
+            onClick={copyHex}
+            title="Copy the bytes and text to the clipboard"
+          >
+            {copied ? 'copied' : 'copy'}
+          </button>
+        </div>
       )}
     </section>
   );
