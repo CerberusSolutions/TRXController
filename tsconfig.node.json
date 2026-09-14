@@ -8,9 +8,10 @@
   "include": [
     "electron.vite.config.ts",
     "src/main/**/*.ts",
+    "src/shared/**/*.ts",
     "src/preload/**/*.ts",
     "scripts/**/*.ts",
     "packages/rcip/src/**/*.ts"
   ],
-  "exclude": ["packages/rcip/src/__tests__/**"]
+  "exclude": ["packages/rcip/src/__tests__/**", "src/main/__tests__/**"]
 }
