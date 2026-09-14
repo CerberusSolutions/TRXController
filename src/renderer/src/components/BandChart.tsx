@@ -30,6 +30,22 @@ export default function BandChart() {
   const [size, setSize] = useState({ w: 600, h: 200 });
   const [hover, setHover] = useState<Bin | null>(null);
   const [now, setNow] = useState(Date.now());
+  // 'frequency': linear axis (right for a Search sweep). 'channels': every visited
+  // frequency gets an equal-width bar (right for Scan lists spanning several bands).
+  const [layout, setLayout] = useState<'frequency' | 'channels'>(() => {
+    try {
+      return localStorage.getItem('trx.bandLayout') === 'channels' ? 'channels' : 'frequency';
+    } catch {
+      return 'frequency';
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('trx.bandLayout', layout);
+    } catch {
+      /* ignore */
+    }
+  }, [layout]);
 
   useEffect(() => {
     const el = ref.current;
@@ -85,17 +101,36 @@ export default function BandChart() {
     );
   }
 
-  const { list, minHz, step, rangeHz, maxRssi } = model;
-  const x = (hz: number): number => PAD.left + ((hz - minHz + step / 2) / rangeHz) * plotW;
-  const barW = Math.max(2, (step / rangeHz) * plotW - 2);
+  const { minHz, step, rangeHz, maxRssi } = model;
+  const channels = layout === 'channels';
+  // In channel layout every bin is drawn, outliers included, since the axis is ordinal.
+  const list = channels ? [...bins.values()].sort((a, b) => a.hz - b.hz) : model.list;
+  const slotW = channels ? plotW / list.length : (step / rangeHz) * plotW;
+  const index = new Map(list.map((b, i) => [b.hz, i]));
+  const x = (hz: number): number =>
+    channels ? PAD.left + ((index.get(hz) ?? 0) + 0.5) * slotW : PAD.left + ((hz - minHz + step / 2) / rangeHz) * plotW;
+  const barW = Math.max(2, slotW - 2);
   const y = (rssi: number): number => PAD.top + plotH - (Math.max(0, rssi) / maxRssi) * plotH;
   const tick = niceStep(rangeHz, plotW);
   const ticks: number[] = [];
-  for (let t = Math.ceil(minHz / tick) * tick; t <= minHz + rangeHz; t += tick) ticks.push(t);
+  if (channels) {
+    // Label every k-th channel so labels stay ~70 px apart.
+    const every = Math.max(1, Math.ceil(70 / slotW));
+    for (let i = 0; i < list.length; i += every) ticks.push(list[i]!.hz);
+  } else {
+    for (let t = Math.ceil(minHz / tick) * tick; t <= minHz + rangeHz; t += tick) ticks.push(t);
+  }
+  const tickX = (t: number): number => (channels ? x(t) : x(t) - slotW / 2 + barW / 2);
+  const tickLabel = (t: number): string => (channels ? (t / 1e6).toFixed(3) : fmtMHz(t, tick));
 
   const onMove = (e: React.MouseEvent<SVGSVGElement>): void => {
     const rect = e.currentTarget.getBoundingClientRect();
     const px = e.clientX - rect.left;
+    if (channels) {
+      const i = Math.floor((px - PAD.left) / slotW);
+      setHover(i >= 0 && i < list.length ? list[i]! : null);
+      return;
+    }
     const hz = minHz - step / 2 + ((px - PAD.left) / plotW) * rangeHz;
     let best: Bin | null = null;
     for (const b of list) if (!best || Math.abs(b.hz - hz) < Math.abs(best.hz - hz)) best = b;
@@ -135,16 +170,16 @@ export default function BandChart() {
           );
         })}
         {/* current frequency marker */}
-        {currentHz !== null && currentHz >= minHz - step && currentHz <= minHz + rangeHz && (
+        {currentHz !== null && (channels ? index.has(currentHz) : currentHz >= minHz - step && currentHz <= minHz + rangeHz) && (
           <line x1={x(currentHz)} x2={x(currentHz)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-ink)" strokeWidth={1} strokeDasharray="2 3" opacity={0.8} />
         )}
         {/* baseline + x axis */}
         <line x1={PAD.left} x2={size.w - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} stroke="var(--color-edge)" />
         {ticks.map((t) => (
           <g key={t}>
-            <line x1={x(t) - (step / rangeHz) * plotW / 2 + barW / 2} x2={x(t) - (step / rangeHz) * plotW / 2 + barW / 2} y1={PAD.top + plotH} y2={PAD.top + plotH + 4} stroke="var(--color-ink-3)" />
-            <text x={x(t) - (step / rangeHz) * plotW / 2 + barW / 2} y={PAD.top + plotH + 16} textAnchor="middle" fontSize={10} fill="var(--color-ink-3)" fontFamily="var(--font-mono)">
-              {fmtMHz(t, tick)}
+            <line x1={tickX(t)} x2={tickX(t)} y1={PAD.top + plotH} y2={PAD.top + plotH + 4} stroke="var(--color-ink-3)" />
+            <text x={tickX(t)} y={PAD.top + plotH + 16} textAnchor="middle" fontSize={10} fill="var(--color-ink-3)" fontFamily="var(--font-mono)">
+              {tickLabel(t)}
             </text>
           </g>
         ))}
@@ -173,7 +208,19 @@ export default function BandChart() {
         <span>{mode !== null ? modeName(mode) : ''}</span>
         <span>{list.length} bins</span>
         <span>
-          {(minHz / 1e6).toFixed(3)}–{((minHz + rangeHz - step) / 1e6).toFixed(3)} MHz
+          {(list[0]!.hz / 1e6).toFixed(3)}–{(list[list.length - 1]!.hz / 1e6).toFixed(3)} MHz
+        </span>
+        <span className="pointer-events-auto flex overflow-hidden rounded border border-edge">
+          {(['frequency', 'channels'] as const).map((l) => (
+            <button
+              key={l}
+              className={`px-1.5 py-0.5 ${layout === l ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink-2'}`}
+              title={l === 'frequency' ? 'Linear frequency axis (Search)' : 'One equal-width bar per visited frequency (Scan)'}
+              onClick={() => setLayout(l)}
+            >
+              {l}
+            </button>
+          ))}
         </span>
         <button className="pointer-events-auto rounded border border-edge px-1.5 py-0.5 text-ink-3 hover:text-ink-2" onClick={reset}>
           reset
