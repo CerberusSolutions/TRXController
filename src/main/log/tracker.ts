@@ -2,11 +2,18 @@
  * Turns the stream of scanner snapshots into reception open/update/close
  * events. Pure logic, no I/O.
  *
- * A reception is a period with the RF squelch open on one frequency. The
- * scanner's squelch flutters, so a close is only confirmed after it has been
- * shut for `closeDebounceMs`. Channel details often arrive a poll or two
- * after the squelch opens, so an open reception keeps absorbing better
- * information until it closes.
+ * A reception is a period with the RF squelch open on one frequency.
+ *
+ * - Nothing is reported until the squelch has been open for `minDurationMs`,
+ *   so noise bursts and the scanner's brief pauses on a chattering frequency
+ *   never become rows ("discard" events are emitted for them instead).
+ * - The squelch flutters, so a close is only confirmed after it has been shut
+ *   for `closeDebounceMs`.
+ * - A new opening on the same frequency and channel within `mergeWindowMs`
+ *   of the previous close continues that reception ("open" with
+ *   `merged: true`): first-heard stays, last-heard and the call count move.
+ * - Channel details often arrive a poll or two after the squelch opens, so an
+ *   open reception keeps absorbing better information until it closes.
  */
 import { NO_ID, parseScanObjectLine } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
@@ -16,16 +23,21 @@ export interface OpenReception extends NewReception {
   endedAt: null;
 }
 
+export type ClosedReception = NewReception & { endedAt: number };
+
 export type TrackerEvent =
-  | { type: 'open'; reception: OpenReception }
+  | { type: 'open'; reception: OpenReception; merged: boolean }
   | { type: 'update'; reception: OpenReception }
-  | { type: 'close'; reception: NewReception & { endedAt: number } };
+  | { type: 'close'; reception: ClosedReception }
+  | { type: 'discard'; reception: ClosedReception };
 
 export interface TrackerOptions {
   closeDebounceMs?: number;
+  minDurationMs?: number;
+  mergeWindowMs?: number;
 }
 
-export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequencyHz'>;
+export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequencyHz' | 'calls'>;
 
 const FIELDS: (keyof Description)[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'rssiPeak',
@@ -33,13 +45,20 @@ const FIELDS: (keyof Description)[] = [
 
 export class ReceptionTracker {
   private current: OpenReception | null = null;
+  private committed = false;
   private squelchClosedAt: number | null = null;
+  private lastClosed: ClosedReception | null = null;
   private readonly closeDebounceMs: number;
+  private readonly minDurationMs: number;
+  private readonly mergeWindowMs: number;
 
   constructor(opts: TrackerOptions = {}) {
     this.closeDebounceMs = opts.closeDebounceMs ?? 400;
+    this.minDurationMs = opts.minDurationMs ?? 500;
+    this.mergeWindowMs = opts.mergeWindowMs ?? 10_000;
   }
 
+  /** The reception being tracked, whether or not it has been reported yet. */
   get open(): OpenReception | null {
     return this.current;
   }
@@ -52,39 +71,32 @@ export class ReceptionTracker {
 
     if (this.current) {
       const freqChanged = status.frequencyHz !== this.current.frequencyHz;
-      if (!receiving || freqChanged) {
-        if (freqChanged) {
-          events.push(this.close(this.squelchClosedAt ?? now));
-        } else {
-          this.squelchClosedAt ??= now;
-          if (now - this.squelchClosedAt >= this.closeDebounceMs) events.push(this.close(this.squelchClosedAt));
-        }
+      if (freqChanged) {
+        events.push(this.close(this.squelchClosedAt ?? now));
+      } else if (!receiving) {
+        this.squelchClosedAt ??= now;
+        if (now - this.squelchClosedAt >= this.closeDebounceMs) events.push(this.close(this.squelchClosedAt));
       } else {
         this.squelchClosedAt = null;
       }
     }
 
     if (receiving && !this.current) {
-      this.current = { ...describe(s), startedAt: now, endedAt: null, frequencyHz: status.frequencyHz };
+      this.current = { ...describe(s), startedAt: now, endedAt: null, frequencyHz: status.frequencyHz, calls: 1 };
+      this.committed = false;
       this.squelchClosedAt = null;
-      events.push({ type: 'open', reception: this.current });
-      return events;
     }
 
     if (this.current && receiving) {
-      const fresh = describe(s);
-      let changed = false;
-      for (const f of FIELDS) {
-        const next = fresh[f];
-        const cur = this.current[f];
-        // Keep the best value seen: never replace real data with blanks.
-        const better = f === 'rssiPeak' ? (next as number) > (cur as number) : next !== '' && next !== null && next !== cur;
-        if (better) {
-          (this.current as unknown as Record<string, unknown>)[f] = next;
-          changed = true;
+      const changed = this.absorb(describe(s));
+      if (!this.committed) {
+        if (now - this.current.startedAt >= this.minDurationMs) {
+          this.committed = true;
+          events.push(this.commit(now));
         }
+      } else if (changed) {
+        events.push({ type: 'update', reception: this.current });
       }
-      if (changed) events.push({ type: 'update', reception: this.current });
     }
     return events;
   }
@@ -94,11 +106,70 @@ export class ReceptionTracker {
     return this.current ? [this.close(this.squelchClosedAt ?? now)] : [];
   }
 
+  /** Forget the previous reception so nothing merges into it (e.g. after the log is cleared). */
+  reset(): void {
+    this.lastClosed = null;
+  }
+
+  /** Merge fresh details into the current reception; true if anything improved. */
+  private absorb(fresh: Description): boolean {
+    let changed = false;
+    const cur = this.current!;
+    for (const f of FIELDS) {
+      const next = fresh[f];
+      const prev = cur[f];
+      // Keep the best value seen: never replace real data with blanks.
+      const better = f === 'rssiPeak' ? (next as number) > (prev as number) : next !== '' && next !== null && next !== prev;
+      if (better) {
+        (cur as unknown as Record<string, unknown>)[f] = next;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** First report of the current reception, continuing the previous row if it is the same conversation. */
+  private commit(now: number): TrackerEvent {
+    const cur = this.current!;
+    const prev = this.lastClosed;
+    const sameChannel =
+      prev !== null &&
+      prev.frequencyHz === cur.frequencyHz &&
+      (prev.name === '' || cur.name === '' || prev.name === cur.name) &&
+      (prev.tgid === null || cur.tgid === null || prev.tgid === cur.tgid) &&
+      cur.startedAt - prev.endedAt <= this.mergeWindowMs;
+    if (sameChannel && prev) {
+      const merged: OpenReception = {
+        ...prev,
+        ...cur,
+        startedAt: prev.startedAt,
+        endedAt: null,
+        calls: prev.calls + 1,
+        rssiPeak: Math.max(prev.rssiPeak, cur.rssiPeak),
+      };
+      // Blanks in the new opening must not erase what the earlier one knew.
+      for (const f of FIELDS) {
+        if ((merged[f] === '' || merged[f] === null) && prev[f] !== '' && prev[f] !== null) {
+          (merged as unknown as Record<string, unknown>)[f] = prev[f];
+        }
+      }
+      this.current = merged;
+      this.lastClosed = null;
+      return { type: 'open', reception: merged, merged: true };
+    }
+    void now;
+    return { type: 'open', reception: cur, merged: false };
+  }
+
   private close(endedAt: number): TrackerEvent {
     const r = this.current!;
+    const closed: ClosedReception = { ...r, endedAt: Math.max(endedAt, r.startedAt) };
     this.current = null;
     this.squelchClosedAt = null;
-    return { type: 'close', reception: { ...r, endedAt: Math.max(endedAt, r.startedAt) } };
+    if (!this.committed) return { type: 'discard', reception: closed };
+    this.committed = false;
+    this.lastClosed = closed;
+    return { type: 'close', reception: closed };
   }
 }
 

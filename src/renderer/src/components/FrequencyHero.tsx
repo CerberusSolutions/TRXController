@@ -3,10 +3,10 @@ import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
-function Param({ label, value }: { label: string; value: string | null | undefined }) {
+function Param({ label, value, title }: { label: string; value: string | null | undefined; title?: string }) {
   if (!value) return null;
   return (
-    <div className="flex flex-col">
+    <div className="flex shrink-0 flex-col whitespace-nowrap" title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
       <span className="font-mono text-sm text-ink-2">{value}</span>
     </div>
@@ -92,26 +92,27 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-4 flex h-12 gap-x-8 overflow-hidden border-t border-edge pt-3">
+      <div className="mt-4 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
         {h ? (
           <>
-            <Param label="Type" value={h.recordingTypeName} />
-            {h.recordingType === 1 && <Param label="System" value={h.tsysTypeName} />}
+            <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />
             {h.talkgroupId1 !== 0xffffffff && <Param label="TGID" value={formatId(h.talkgroupId1)} />}
             {h.radioId1 !== 0xffffffff && (
               <Param
                 label="Radio ID"
-                value={radioUser ? `${formatId(h.radioId1)} · ${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(h.radioId1)}
+                value={radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(h.radioId1)}
+                title={
+                  radioUser
+                    ? `${formatId(h.radioId1)} · ${[radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ')}`
+                    : 'Radio ID (import the radioid.net database to resolve callsigns)'
+                }
               />
-            )}
-            {radioUser && (radioUser.city || radioUser.country) && (
-              <Param label="Location" value={[radioUser.city, radioUser.country].filter(Boolean).join(', ')} />
             )}
             {h.siteName && <Param label="Site" value={h.siteName} />}
             <Param label="Squelch" value={h.squelchText} />
-            {h.controlFrequencyHz > 0 && <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />}
             {h.miscText && <Param label="Info" value={h.miscText} />}
-            <Param label="Started" value={h.startTime.iso?.replace('T', ' ') ?? null} />
+            <Param label="Started" value={h.startTime.iso?.slice(11) ?? null} title={h.startTime.iso?.replace('T', ' ')} />
+            {h.controlFrequencyHz > 0 && <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />}
           </>
         ) : (
           <>

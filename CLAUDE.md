@@ -85,6 +85,14 @@ captured on 14 Sep 2026.
   opens on squelch, keeps absorbing better details (the `a` header often lands a poll
   later), closes after the squelch has been shut for 400 ms (it flutters), and splits
   when the frequency changes mid-reception. Peak RSSI is kept.
+- Nothing is written until the squelch has been open for 500 ms: noise bursts and the
+  scanner's brief pauses on chattering frequencies are discarded (counted in memory only).
+- A new opening on the same frequency and channel (same name / talkgroup, or unknown)
+  within 10 s of the previous row ending reopens that row: first-heard stays, last-heard
+  and `calls` move on, peak RSSI is the max. One conversation, one row. Rows are ordered
+  by last activity, open rows first. Clearing the log resets the merge memory.
+- DMR radio IDs resolve to callsign/name via the `dmr_users` table, imported from the
+  radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

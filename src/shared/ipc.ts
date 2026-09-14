@@ -66,6 +66,8 @@ export interface ReceptionRow {
   site: string;
   squelch: string;
   rssiPeak: number;
+  /** Squelch openings merged into this row (a conversation with gaps). */
+  calls: number;
   /** Number of receptions logged on this frequency, including this one. */
   hits: number;
   /** Callsign for radioId from the imported DMR user database, if known. */

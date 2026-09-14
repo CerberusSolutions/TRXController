@@ -7,6 +7,9 @@ import type { DmrUser, IdentityStats, ReceptionRow } from '../../shared/ipc';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
 
+/** Newest activity first: open rows, then by last-heard, then by start. */
+const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.started_at DESC, r.id DESC';
+
 const ROW_SQL = `SELECT r.*,
   (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
   u.callsign AS radio_callsign, u.name AS radio_name
@@ -34,7 +37,8 @@ export class LogDb {
         radio_id     INTEGER,
         site         TEXT NOT NULL DEFAULT '',
         squelch      TEXT NOT NULL DEFAULT '',
-        rssi_peak    INTEGER NOT NULL DEFAULT 0
+        rssi_peak    INTEGER NOT NULL DEFAULT 0,
+        calls        INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS receptions_started ON receptions(started_at DESC);
       CREATE INDEX IF NOT EXISTS receptions_freq ON receptions(frequency_hz);
@@ -48,20 +52,27 @@ export class LogDb {
       );
       CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     `);
+    this.migrate();
     // A reception left open by a crash has no end time; close it at its start.
     this.db.exec('UPDATE receptions SET ended_at = started_at WHERE ended_at IS NULL');
+  }
+
+  /** Add columns introduced after the first release to databases created before them. */
+  private migrate(): void {
+    const cols = (this.db.prepare('PRAGMA table_info(receptions)').all() as { name: string }[]).map((c) => c.name);
+    if (!cols.includes('calls')) this.db.exec('ALTER TABLE receptions ADD COLUMN calls INTEGER NOT NULL DEFAULT 1');
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, rssi_peak)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.rssiPeak,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -72,7 +83,7 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', rssiPeak: 'rssi_peak',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -92,7 +103,7 @@ export class LogDb {
   }
 
   recent(limit = 500): ReceptionRow[] {
-    const rows = this.db.prepare(`${ROW_SQL} ORDER BY r.started_at DESC, r.id DESC LIMIT ?`).all(limit);
+    const rows = this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
   }
 
@@ -170,6 +181,7 @@ interface Raw {
   site: string;
   squelch: string;
   rssi_peak: number;
+  calls: number;
   hits: number;
   radio_callsign: string | null;
   radio_name: string | null;
@@ -192,6 +204,7 @@ function toRow(r: Raw): ReceptionRow {
     site: r.site,
     squelch: r.squelch,
     rssiPeak: Number(r.rssi_peak),
+    calls: Number(r.calls),
     hits: Number(r.hits),
     radioCallsign: r.radio_callsign ?? null,
     radioName: r.radio_name ?? null,

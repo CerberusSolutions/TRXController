@@ -53,6 +53,7 @@ function registerIpc(): void {
   ipcMain.handle(IPC.logClear, () => {
     logger?.flush();
     db?.clear();
+    logger?.reset();
   });
   ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
   ipcMain.handle(IPC.identityLookup, (_e, id: unknown) => (typeof id === 'number' && db ? (db.lookupDmrUser(id) ?? null) : null));
