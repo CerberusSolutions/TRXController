@@ -44,7 +44,8 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 
 - `L` returns 96 text bytes + 3 icon bytes (99 data, 103 total). The spec's "lcd96" is a typo.
 - Byte 0x93 in column 16 marks the highlighted menu line (`Lcd.cursorLine`), despite the
-  spec saying cursors are not sent.
+  spec saying cursors are not sent. Scanlists check boxes: 0x8B ticked, 0x89 empty
+  (`LCD_GLYPHS` in `packages/rcip/src/lcd.ts`; unknown glyph bytes render as ▯).
 - Arrow keys: UP=8, DOWN=10, LEFT=16, RIGHT=2. RIGHT also selects the highlighted menu item.
 - The `a` recording header is big-endian except its `stm` start time, which is
   little-endian (local time, yday and isdst left at zero). Confirmed on a live reception.

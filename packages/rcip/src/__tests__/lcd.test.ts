@@ -53,8 +53,25 @@ describe('parseLcd', () => {
     expect(lcd.icons.raw).toEqual([0, 0, 0]);
   });
 
+  it('renders the Scanlists check boxes (bytes captured on a TRX-1e)', () => {
+    // Middle list ticked only, cursor on line 1.
+    const rows = [
+      '20202D5363616E6C697374732D202020', //   -Scanlists-
+      '8948414D20554B20412B442052707493', // ☐HAM UK A+D Rpt◄
+      '89326D2053696D706C65782020202020', // ☐2m Simplex
+      '8B3730436D2053696D706C6578202020', // ☑70Cm Simplex
+      '89504D522034343620412B4420202020', // ☐PMR 446 A+D
+      '89536174656C6C697465732020202020', // ☐Satellites
+    ];
+    const lcd = parseLcd(fromHex(rows.join('') + '400000'));
+    expect(lcd.lines).toEqual(['  -Scanlists-   ', '☐HAM UK A+D Rpt◄', '☐2m Simplex     ', '☑70Cm Simplex   ', '☐PMR 446 A+D    ', '☐Satellites     ']);
+    expect(lcd.cursorLine).toBe(1);
+  });
+
   it('never renders scanner glyphs as invisible control characters', () => {
     expect(lcdChar(0x93)).toBe('◄');
+    expect(lcdChar(0x8b)).toBe('☑');
+    expect(lcdChar(0x89)).toBe('☐');
     expect(lcdChar(0x85)).toBe('▯');
     expect(lcdChar(0x00)).toBe(' ');
     expect(lcdChar(0x41)).toBe('A');

@@ -137,9 +137,10 @@ The `psDr` flags at the right of line 2 are the object's attributes, uppercase w
 enabled: **p**riority, **s**kip, **D**elay, **r**ecord (confirmed by the author on the
 TRX-1e). `parseScanObjectLine` in `packages/rcip/src/lcd.ts` reads them.
 
-The Scanlists menu prefixes each entry with a check-box glyph byte (0x80 and above);
-the checked/unchecked values are not yet identified. Use the `hex` toggle in the app's
-Scanner Display panel to read them.
+The Scanlists menu prefixes each entry with a check-box glyph byte: **0x8B = ticked,
+0x89 = empty** (captured on the TRX-1e, 14 Sep 2026, via the `hex` toggle in the app's
+Scanner Display panel; the cursor byte 0x93 still lands in column 16 of the highlighted
+row). `LCD_GLYPHS` renders them as ☑ and ☐.
 
 ## `t` Clock Set
 

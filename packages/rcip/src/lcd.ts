@@ -10,9 +10,15 @@ export const LCD_ROWS = 6;
  */
 export const LCD_CURSOR_BYTE = 0x93;
 
+/** Scanlists menu check boxes (TRX-1e, captured 14 Sep 2026). */
+export const LCD_CHECKED_BYTE = 0x8b;
+export const LCD_UNCHECKED_BYTE = 0x89;
+
 /** Printable stand-ins for scanner-specific glyph bytes (0x80 and above). */
 export const LCD_GLYPHS: Readonly<Record<number, string>> = {
   [LCD_CURSOR_BYTE]: '◄',
+  [LCD_CHECKED_BYTE]: '☑',
+  [LCD_UNCHECKED_BYTE]: '☐',
 };
 
 export interface LcdIcons {
