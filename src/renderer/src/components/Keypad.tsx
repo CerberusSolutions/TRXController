@@ -91,7 +91,8 @@ export default function Keypad() {
         <div className="flex gap-1.5">
           <input
             className="min-w-0 flex-1 rounded-md border border-edge bg-panel-2 px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-cyan disabled:opacity-50"
-            placeholder="MHz e.g. 145.500"
+            placeholder="144.800"
+            title="Frequency in MHz, e.g. 144.800"
             inputMode="decimal"
             value={freqText}
             disabled={!enabled}
