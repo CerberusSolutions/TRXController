@@ -1,0 +1,65 @@
+# Build the Windows installer and attach it to a GitHub Release.
+#
+# Trigger: push a tag named after the version in package.json, e.g.
+#   git tag v0.2.0 && git push origin v0.2.0
+# The job refuses to run if the tag and package.json disagree, so the release
+# page, the installer file name and the version shown in the app always match.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Check the tag matches package.json
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p "require('./package.json').version")"
+          if [ "$tag" != "$pkg" ]; then
+            echo "Tag v$tag does not match package.json version $pkg" >&2
+            exit 1
+          fi
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+
+      # electron-builder would try to publish on its own when it sees a tag;
+      # the release step below does that instead.
+      - name: Build the installer
+        run: npm run dist -- --publish never
+
+      - name: Keep the installer as a workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TRXController-Setup
+          path: release/*.exe
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.exe
+          generate_release_notes: true
+          body: |
+            Windows installer for TRXController (beta). Unsigned, so SmartScreen will warn on first run:
+            choose "More info" then "Run anyway".
+
+            Installs per user under `%LOCALAPPDATA%\Programs\TRXController`; log, settings and imported
+            data live in `%APPDATA%\TRXController`.

@@ -50,6 +50,22 @@ is unsigned, so SmartScreen shows a warning the first time it runs. The app inst
 `%APPDATA%\TRXController`, the same folder the dev build uses, so nothing needs re-importing.
 The last port used is reopened at launch.
 
+## Releases on GitHub
+
+Pushing a version tag builds the installer on a Windows runner and attaches it to a GitHub
+Release (`.github/workflows/release.yml`), so users download it from the Releases page:
+
+```
+npm version patch          # bumps package.json (0.2.0 -> 0.2.1), commits, tags v0.2.1
+git push --follow-tags     # the tag starts the Release workflow
+```
+
+Use `minor` or `major` instead of `patch` as appropriate. The workflow checks the tag against
+`package.json`, runs the tests, builds `TRXController-Setup-<version>.exe` and publishes the
+release with generated notes. Progress is under the repository's Actions tab; the installer is
+also kept as a workflow artifact for manual runs (Actions > Release > Run workflow).
+`.github/workflows/ci.yml` runs the tests, typecheck and build on every push and pull request.
+
 ## Status
 
 Beta, from Cerberus Systems, for the TRX-1 / TRX-1E / TRX-2. Provided as is with no warranty or

@@ -85,6 +85,11 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   serialport's prebuilt N-API binding is used as is, and only its win32-x64 prebuild is packaged.
   Only `serialport` is a runtime dependency; everything else is bundled by Vite, so keep new
   packages in `devDependencies` unless main needs to `require` them at run time.
+- Releases: `npm version patch && git push --follow-tags`. The `v*` tag runs
+  `.github/workflows/release.yml` on `windows-latest`, which checks the tag against
+  package.json, tests, builds with `--publish never` and attaches `release/*.exe` to a GitHub
+  Release via softprops/action-gh-release. `ci.yml` runs test / typecheck / build on pushes
+  and PRs.
 
 ## UI preview without a scanner
 
