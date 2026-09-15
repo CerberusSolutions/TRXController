@@ -16,6 +16,7 @@ export default function App() {
     const offScanner = attachScannerEvents();
     const offLog = attachLogEvents();
     void useUi.getState().loadAppInfo();
+    const offUpdate = window.trx?.onUpdate ? window.trx.onUpdate((u) => useUi.getState().setUpdate(u)) : () => undefined;
     if (isFirstRun()) useUi.getState().openHelp();
     const onKey = (e: KeyboardEvent): void => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
@@ -25,6 +26,7 @@ export default function App() {
     };
     window.addEventListener('keydown', onKey);
     return () => {
+      offUpdate();
       window.removeEventListener('keydown', onKey);
       offTheme();
       offScanner();

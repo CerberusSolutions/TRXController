@@ -37,6 +37,7 @@ export default function HelpDialog() {
   const open = useUi((s) => s.helpOpen);
   const close = useUi((s) => s.closeHelp);
   const app = useUi((s) => s.app);
+  const update = useUi((s) => s.update);
 
   useEffect(() => {
     if (!open) return;
@@ -144,6 +145,33 @@ export default function HelpDialog() {
                 <span className="font-semibold text-ink-2">RadioReference</span> · coming soon.
               </li>
             </ul>
+          </Section>
+
+          <Section title="Updates">
+            {update ? (
+              update.newer ? (
+                <p>
+                  <b className="text-green">Version {update.latest} is available</b> (you have {update.current}). Download the new installer and
+                  run it; settings, log and imported data are kept.{' '}
+                  <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href={update.downloadUrl ?? update.url} target="_blank" rel="noreferrer">
+                    {update.downloadUrl ? 'Download TRXController-Setup-' + update.latest + '.exe' : 'Open the release page'}
+                  </a>
+                </p>
+              ) : (
+                <p>
+                  You have the latest version, {update.current}.
+                  <span className="text-ink-3"> Checked {new Date(update.checkedAt).toLocaleTimeString()}.</span>
+                </p>
+              )
+            ) : (
+              <p className="text-ink-3">Not checked yet, or GitHub could not be reached. The app looks shortly after launch and every six hours.</p>
+            )}
+            <p className="mt-1 text-ink-3">
+              All releases:{' '}
+              <a className="underline decoration-ink-3/40 underline-offset-2" href="https://github.com/CerberusSolutions/TRXController/releases" target="_blank" rel="noreferrer">
+                github.com/CerberusSolutions/TRXController/releases
+              </a>
+            </p>
           </Section>
 
           <Section title="Keyboard">

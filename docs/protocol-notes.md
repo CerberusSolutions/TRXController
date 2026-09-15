@@ -162,7 +162,8 @@ Spectrum Sweep, Service Search, Limit Search, Tune Mode. Tune Mode shows:
 
 with icons `43 80 00` (the 0x80 in icons2 is the pause flag). A frequency is entered as the
 digits with the decimal point (e.g. `4 1 7 . 9 0 0`) followed by SEL, after which line 3
-shows it. `A` reports an unlisted mode byte here; the app recognises the screen by its text.
+shows it. `A` reports mode 0x12 (Search) while in Tune Mode, so the app recognises the screen
+by its text rather than the mode byte. Confirmed working end to end on 15 Sep 2026.
 
 ## `t` Clock Set
 

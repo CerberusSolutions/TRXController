@@ -178,6 +178,11 @@ captured on 14 Sep 2026.
   that file. The Keypad ignores keyboard shortcuts while it is open.
 - `app:info` IPC returns name/version from package.json for the top bar (`BETA v0.2.0`).
   `productName` is set so dev and packaged builds share `%APPDATA%\TRXController`.
+- Update check: `src/main/updates.ts` fetches GitHub's `/releases/latest` (public API, no
+  token) 5 s after launch and every 6 h, compares the tag with `app.getVersion()`, and
+  broadcasts `app:update`; the top bar shows a "vX available" link and the help screen an
+  Updates section with the installer link. Notification only, never an auto-install (the exe is
+  unsigned). Failures are silent (null).
 - Testing aids stay out of the normal UI: `useUi.diagnostics` (Ctrl+Shift+D, persisted in
   localStorage, `DIAG` tag in the status bar) gates the hex / copy dump on the Scanner display
   tab. Put any future debugging control behind the same flag.

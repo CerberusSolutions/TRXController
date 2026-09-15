@@ -159,6 +159,19 @@ export interface AppInfo {
   electron: string;
 }
 
+/** Result of asking GitHub for the latest release. */
+export interface UpdateInfo {
+  current: string;
+  latest: string;
+  newer: boolean;
+  /** The release page. */
+  url: string;
+  /** The installer asset, if the release has one. */
+  downloadUrl: string | null;
+  publishedAt: number | null;
+  checkedAt: number;
+}
+
 export interface ImportResult {
   imported: number;
   skipped: number;
@@ -187,6 +200,8 @@ export const IPC = {
   settingsSet: 'settings:set',
   setTheme: 'theme:set',
   appInfo: 'app:info',
+  updateCheck: 'app:update-check',
+  update: 'app:update',
 } as const;
 
 export type ThemeMode = 'light' | 'dark' | 'system';
