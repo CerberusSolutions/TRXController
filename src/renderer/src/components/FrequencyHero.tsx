@@ -6,13 +6,17 @@ import SignalMeter from './SignalMeter';
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
 const BADGE = 'inline-flex min-w-[4.25rem] justify-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-widest';
 
-/** `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted does not shift the neighbours. */
-function Param({ label, value, title, minCh }: { label: string; value: string | null | undefined; title?: string; minCh?: number }) {
+/**
+ * `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted
+ * does not shift the neighbours. `flex` lets a long value (a radio user's location) take the
+ * room that is left, up to a cap, and end in an ellipsis when the window is narrow.
+ */
+function Param({ label, value, title, minCh, flex }: { label: string; value: string | null | undefined; title?: string; minCh?: number; flex?: boolean }) {
   if (!value) return null;
   return (
-    <div className="flex shrink-0 flex-col whitespace-nowrap" title={title}>
+    <div className={`flex flex-col whitespace-nowrap ${flex ? 'min-w-[6rem] max-w-[26rem] shrink' : 'shrink-0'}`} title={title}>
       <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
-      <span className="font-mono text-sm text-ink-2" style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
+      <span className={`font-mono text-sm text-ink-2 ${flex ? 'truncate' : ''}`} style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
         {value}
       </span>
     </div>
@@ -47,18 +51,16 @@ export default function FrequencyHero() {
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
 
+  const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
       {radioId !== null && (
         <Param
           label="Radio ID"
-          value={radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(radioId)}
-          title={
-            radioUser
-              ? `${formatId(radioId)} · ${[radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ')}`
-              : 'Radio ID (import the radioid.net database to resolve callsigns)'
-          }
+          value={radioUser ? [`${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}`, location].filter(Boolean).join(' · ') : formatId(radioId)}
+          title={radioUser ? `${formatId(radioId)} · ${radioUser.callsign} ${radioUser.name}${location ? ' · ' + location : ''}` : 'Radio ID (import the radioid.net database to resolve callsigns)'}
+          flex={!!radioUser}
         />
       )}
       {slotText && <Param label="Slot" value={slotText} title="DMR time slot and colour code" />}
