@@ -10,6 +10,16 @@ export default function Keypad() {
   const pressKey = useScanner((s) => s.pressKey);
   const lastKey = useScanner((s) => s.lastKey);
   const enabled = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
+  const tune = useScanner((s) => s.tune);
+  const resumeScan = useScanner((s) => s.resumeScan);
+  const tuneState = useScanner((s) => s.tuneState);
+  const [freqText, setFreqText] = useState('');
+  const freqHz = Math.round(parseFloat(freqText) * 1e6);
+  const freqOk = Number.isFinite(freqHz) && freqHz >= 25e6 && freqHz <= 1300e6;
+  const tuning = tuneState?.phase === 'tuning';
+  const submitTune = (): void => {
+    if (enabled && freqOk && !tuning) void tune(freqHz);
+  };
   const [armPower, setArmPower] = useState(false);
   const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -64,6 +74,42 @@ export default function Keypad() {
             </button>
           );
         })}
+      </div>
+      <div className="mt-3 border-t border-edge pt-3">
+        <div className="mb-1.5 flex items-center justify-between">
+          <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Tune</span>
+          <span className="text-[11px] text-ink-3">via Searches › Tune Mode</span>
+        </div>
+        <div className="flex gap-1.5">
+          <input
+            className="min-w-0 flex-1 rounded-md border border-edge bg-panel-2 px-2 py-1.5 font-mono text-sm text-ink outline-none focus:border-cyan disabled:opacity-50"
+            placeholder="MHz e.g. 145.500"
+            inputMode="decimal"
+            value={freqText}
+            disabled={!enabled}
+            onChange={(e) => setFreqText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') submitTune();
+            }}
+          />
+          <button
+            className="rounded-md bg-cyan px-3 py-1.5 text-sm font-semibold text-bg hover:brightness-110 disabled:opacity-50"
+            disabled={!enabled || !freqOk || tuning}
+            onClick={submitTune}
+            title="Reach Tune Mode through the menus, enter the frequency, press SEL"
+          >
+            {tuning ? '…' : 'Tune'}
+          </button>
+          <button
+            className="rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
+            disabled={!enabled || tuning}
+            onClick={() => void resumeScan()}
+            title="Main Menu › Scan"
+          >
+            Scan
+          </button>
+        </div>
+        {tuneState?.phase === 'error' && <p className="mt-1.5 text-[11px] text-red">{tuneState.message}</p>}
       </div>
     </section>
   );

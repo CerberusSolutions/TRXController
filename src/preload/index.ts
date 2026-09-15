@@ -25,6 +25,9 @@ const api = {
   connect: (path: string): Promise<void> => ipcRenderer.invoke(IPC.connect, path),
   disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.disconnect),
   sendKey: (code: number): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code),
+  /** Tune Mode via the menus, then the frequency as keystrokes; rejects with the reason if the display disagrees. */
+  tune: (hz: number): Promise<void> => ipcRenderer.invoke(IPC.tune, hz),
+  resumeScan: (): Promise<void> => ipcRenderer.invoke(IPC.resumeScan),
   getSnapshot: (): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot),
   onSnapshot: (cb: (s: ScannerSnapshot) => void): (() => void) => {
     const listener = (_e: unknown, s: ScannerSnapshot): void => cb(s);

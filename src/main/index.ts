@@ -120,6 +120,18 @@ function registerIpc(): void {
     if (typeof code !== 'number' || !isKeyCode(code)) throw new Error(`Unknown key code ${String(code)}`);
     await session.pressKey(code);
   });
+  ipcMain.handle(IPC.tune, async (_e, hz: unknown) => {
+    if (typeof hz !== 'number' || !Number.isFinite(hz)) throw new Error('Frequency required');
+    try {
+      await session.tuneTo(hz);
+      console.log(`[scanner] tuned to ${(hz / 1e6).toFixed(6)} MHz`);
+    } catch (err) {
+      const screen = (err as { screen?: string[] }).screen;
+      console.log(`[scanner] tune failed: ${(err as Error).message}${screen?.length ? ` | display: ${screen.map((l) => `|${l}|`).join(' ')}` : ''}`);
+      throw err;
+    }
+  });
+  ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
   ipcMain.handle(IPC.logClear, () => {

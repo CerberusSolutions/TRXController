@@ -148,6 +148,22 @@ does not drop the requests it receives meanwhile: it queues them and answers eve
 order, when it resumes. A host that keeps sending one request per timeout therefore never
 catches up. `ScannerLink` waits for the line to go quiet after a timeout before sending again.
 
+### Menus and Tune Mode (observed)
+`-Main Menu-` (cursor byte 0x93 in column 16) lists Scan, Scanlists, Browse Library, Browse
+Objects, Program Menu, ... and Searches. `-Searches-` (cursor in column 0) lists Main Menu,
+Spectrum Sweep, Service Search, Limit Search, Tune Mode. Tune Mode shows:
+
+```
+|                |
+|-Service Search-|
+|Tune Mode       |
+|au     25.000000|   line 3: mode ("au" = auto) and the frequency, right-aligned
+```
+
+with icons `43 80 00` (the 0x80 in icons2 is the pause flag). A frequency is entered as the
+digits with the decimal point (e.g. `4 1 7 . 9 0 0`) followed by SEL, after which line 3
+shows it. `A` reports an unlisted mode byte here; the app recognises the screen by its text.
+
 ## `t` Clock Set
 
 Nine 16-bit values: sec, min, hour, mday, month(0-11), year(since 1900), wday, yday,

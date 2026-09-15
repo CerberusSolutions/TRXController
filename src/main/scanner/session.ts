@@ -20,6 +20,7 @@ import {
 } from '@trxcontroller/rcip';
 import type { LinkStatus, ScannerSnapshot } from '../../shared/ipc';
 import { ScannerLink } from './link';
+import { resumeScan as resumeScanMacro, tuneTo as tuneToMacro, type MacroHost } from './macros';
 import type { Transport, TransportFactory } from './transport';
 
 export interface SessionOptions {
@@ -119,6 +120,34 @@ export class ScannerSession {
     await this.link.send(sendKey(code));
     // Refresh the display straight away so the UI reflects the key press.
     await this.pollOnce(true);
+  }
+
+  /** Reach Tune Mode through the menus and enter `hz`; see macros.ts. */
+  tuneTo(hz: number): Promise<void> {
+    return this.runMacro((host) => tuneToMacro(host, hz));
+  }
+
+  /** Main Menu > Scan. */
+  resumeScan(): Promise<void> {
+    return this.runMacro(resumeScanMacro);
+  }
+
+  private macroRunning = false;
+
+  /** One key sequence at a time: two macros interleaving would confuse both. */
+  private async runMacro<T>(fn: (host: MacroHost) => Promise<T>): Promise<T> {
+    if (!this.link) throw new Error('Not connected');
+    if (this.macroRunning) throw new Error('Another key sequence is still running');
+    this.macroRunning = true;
+    try {
+      return await fn({
+        press: (code) => this.pressKey(code),
+        lcd: () => this.snapshot.lcd,
+        refresh: () => this.pollOnce(true),
+      });
+    } finally {
+      this.macroRunning = false;
+    }
   }
 
   private startPolling(): void {

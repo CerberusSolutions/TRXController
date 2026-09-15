@@ -170,6 +170,8 @@ export const IPC = {
   connect: 'scanner:connect',
   disconnect: 'scanner:disconnect',
   sendKey: 'scanner:send-key',
+  tune: 'scanner:tune',
+  resumeScan: 'scanner:resume-scan',
   getSnapshot: 'scanner:get-snapshot',
   snapshot: 'scanner:snapshot',
   ccdump: 'scanner:ccdump',
