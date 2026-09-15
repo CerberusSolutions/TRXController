@@ -31,6 +31,12 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   or "go to object" command. The only way to change what the scanner does is the
   `K` (Send Key) command, exactly as a human would press the keys. Higher-level
   actions must be implemented as key sequences, never as invented commands.
+  `src/main/scanner/macros.ts` is where those live: each step is verified against the
+  LCD (menu title, cursor line, Tune Mode screen) before the next key, and the menu
+  navigator finds items by label so menu order and scrolling do not matter. Click-to-tune
+  on the Band tab and the Tune box under the keypad are Main Menu > Searches > Tune Mode,
+  the digits with the decimal point, then SEL (the scanner's ENTER); "Scan" is
+  Main Menu > Scan. One macro runs at a time (`ScannerSession.runMacro`).
 - Serial: 115200 baud, 8N1, no flow control. Remote control mode is always active;
   no special mode switch is needed.
 - Frame format: `STX code data ETX sum`, `sum = (sum of bytes from code through ETX) & 0xFF`.
@@ -43,8 +49,9 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 ## Hardware facts (TRX-1e, CPU firmware 7.4, probed 14 Sep 2026)
 
 - `L` returns 96 text bytes + 3 icon bytes (99 data, 103 total). The spec's "lcd96" is a typo.
-- Byte 0x93 in column 16 marks the highlighted menu line (`Lcd.cursorLine`), despite the
-  spec saying cursors are not sent. Scanlists check boxes: 0x8B ticked, 0x89 empty
+- Byte 0x93 marks the highlighted menu line (`Lcd.cursorLine`), despite the spec saying
+  cursors are not sent: column 16 on the main and Scanlists menus, column 0 on the Searches
+  menu. Scanlists check boxes: 0x8B ticked, 0x89 empty
   (`LCD_GLYPHS` in `packages/rcip/src/lcd.ts`; unknown glyph bytes render as ▯).
 - Arrow keys: UP=8, DOWN=10, LEFT=16, RIGHT=2. RIGHT also selects the highlighted menu item.
 - The `a` recording header is big-endian except its `stm` start time, which is

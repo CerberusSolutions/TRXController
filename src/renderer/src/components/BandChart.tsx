@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { modeName } from '@trxcontroller/rcip';
 import { useBand, type Bin } from '../store/band';
+import { useScanner } from '../store/scanner';
 
 const PAD = { top: 12, right: 12, bottom: 26, left: 40 };
 /** A bin this many steps from any neighbour, with few samples, is a stray visit and does not set the axis. */
@@ -30,6 +31,9 @@ export default function BandChart() {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 600, h: 200 });
   const [hover, setHover] = useState<Bin | null>(null);
+  const tune = useScanner((s) => s.tune);
+  const tuneState = useScanner((s) => s.tuneState);
+  const online = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
   const [now, setNow] = useState(Date.now());
   // 'frequency': linear axis (right for a Search sweep). 'channels': every visited
   // frequency gets an equal-width bar (right for Scan lists spanning several bands).
@@ -143,7 +147,18 @@ export default function BandChart() {
 
   return (
     <div className="flex h-full flex-col">
-      <Header caption="Peak RSSI · amber = squelch opened · fades with age">
+      <Header
+        caption={
+          tuneState
+            ? tuneState.phase === 'tuning'
+              ? `Tuning ${(tuneState.hz / 1e6).toFixed(4)} MHz…`
+              : tuneState.phase === 'done'
+                ? `Tuned to ${(tuneState.hz / 1e6).toFixed(4)} MHz`
+                : `Tune failed: ${tuneState.message ?? ''}`
+            : 'Peak RSSI · amber = squelch opened · click a bar to tune'
+        }
+        captionClass={tuneState ? (tuneState.phase === 'error' ? 'text-red' : tuneState.phase === 'done' ? 'text-green' : 'text-amber') : ''}
+      >
         <span>{mode !== null ? modeName(mode) : ''}</span>
         <span>{list.length} bins</span>
         <span>
@@ -166,7 +181,16 @@ export default function BandChart() {
         </button>
       </Header>
       <div ref={ref} className="relative min-h-0 w-full flex-1">
-      <svg width={size.w} height={size.h} className="block" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg
+        width={size.w}
+        height={size.h}
+        className={`block ${hover && online ? 'cursor-pointer' : ''}`}
+        onMouseMove={onMove}
+        onMouseLeave={() => setHover(null)}
+        onClick={() => {
+          if (hover && online && tuneState?.phase !== 'tuning') void tune(hover.hz);
+        }}
+      >
         {/* y grid: recessive */}
         {[0.25, 0.5, 0.75, 1].map((f) => (
           <line key={f} x1={PAD.left} x2={size.w - PAD.right} y1={y(maxRssi * f)} y2={y(maxRssi * f)} stroke="var(--color-edge)" strokeWidth={1} />
@@ -224,6 +248,7 @@ export default function BandChart() {
           <div>
             {hover.opens > 0 ? `${hover.opens} squelch open · ` : ''}
             seen {Math.round((now - hover.lastSeenAt) / 1000)}s ago
+            {online ? ' · click to tune' : ''}
           </div>
         </div>
       )}
@@ -234,10 +259,10 @@ export default function BandChart() {
 }
 
 /** Caption on the left, controls on the right, above the plot so nothing overlays it. */
-function Header({ caption, children }: { caption: string; children?: React.ReactNode }) {
+function Header({ caption, captionClass = '', children }: { caption: string; captionClass?: string; children?: React.ReactNode }) {
   return (
     <div className="mb-1 flex h-6 shrink-0 items-center gap-3 font-mono text-[11px] text-ink-3">
-      <span className="uppercase tracking-wider">{caption}</span>
+      <span className={`truncate uppercase tracking-wider ${captionClass}`}>{caption}</span>
       <div className="ml-auto flex items-center gap-3">{children}</div>
     </div>
   );

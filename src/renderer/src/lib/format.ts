@@ -53,6 +53,9 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
     const detail = screen?.type ?? '';
     if (name || scanlist) return { name: name || '—', system: scanlist, detail, source: 'lcd' };
   }
+  if (lcd && lcd.lines[2]?.trim() === 'Tune Mode' && /Service Search/.test(lcd.lines[1] ?? '')) {
+    return { name: 'Tune Mode', system: 'Direct frequency entry', detail: '', source: 'lcd' };
+  }
   if (lcd && status?.mode === 0x0a) {
     // Sweeping: the display lists the enabled scanlists.
     const lists = lcd.lines.map((l) => l.trim()).filter(Boolean);

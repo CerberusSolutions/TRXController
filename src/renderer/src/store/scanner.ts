@@ -26,6 +26,10 @@ interface ScannerState {
   ccdump: string[];
   /** Key code most recently pressed, for a brief highlight. */
   lastKey: number | null;
+  /** Progress of a click-to-tune / typed tune, shown until it clears. */
+  tuneState: { hz: number; phase: 'tuning' | 'done' | 'error'; message?: string } | null;
+  tune: (hz: number) => Promise<void>;
+  resumeScan: () => Promise<void>;
   setSnapshot: (s: ScannerSnapshot) => void;
   refreshPorts: () => Promise<void>;
   selectPort: (path: string) => void;
@@ -33,6 +37,11 @@ interface ScannerState {
   disconnect: () => Promise<void>;
   pressKey: (code: number) => Promise<void>;
   pushCcDump: (line: string) => void;
+}
+
+/** Electron wraps thrown errors as "Error invoking remote method 'x': Error: msg". */
+function ipcMessage(e: unknown): string {
+  return (e as Error).message.replace(/^Error invoking remote method '[^']+': (?:\w*Error: )?/, '');
 }
 
 const api = (): Window['trx'] => {
@@ -47,6 +56,29 @@ export const useScanner = create<ScannerState>((set, get) => ({
   busy: false,
   ccdump: [],
   lastKey: null,
+  tuneState: null,
+
+  tune: async (hz) => {
+    set({ tuneState: { hz, phase: 'tuning' } });
+    try {
+      await api().tune(hz);
+      set({ tuneState: { hz, phase: 'done' } });
+      setTimeout(() => {
+        if (get().tuneState?.phase === 'done') set({ tuneState: null });
+      }, 2500);
+    } catch (e) {
+      set({ tuneState: { hz, phase: 'error', message: ipcMessage(e) } });
+    }
+  },
+
+  resumeScan: async () => {
+    set({ tuneState: null });
+    try {
+      await api().resumeScan();
+    } catch (e) {
+      set({ tuneState: { hz: 0, phase: 'error', message: ipcMessage(e) } });
+    }
+  },
 
   setSnapshot: (snapshot) => {
     const { ports, selectedPort } = get();
