@@ -32,7 +32,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
 }
 
 const COLS =
-  "grid-cols-[4.5rem_4.75rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_minmax(4rem,0.5fr)_minmax(6.5rem,0.9fr)_3rem_2.5rem]";
+  "grid-cols-[4.5rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_minmax(6.75rem,0.8fr)_minmax(6rem,0.6fr)_3rem_2.5rem]";
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
