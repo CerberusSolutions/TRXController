@@ -48,6 +48,18 @@ describe('holdDetails', () => {
     expect(held).toBeNull();
   });
 
+  it('keeps the resolved DMR user on the polls where the display shows the TGID line', () => {
+    const user = { id: 2352157, callsign: 'G8CRB', name: 'Steve', city: 'Cambridge', state: 'England', country: 'United Kingdom' };
+    let held = holdDetails(null, { ...snap({ lcd: RID }), radioUser: user }, 1000);
+    expect(held?.radioUser?.callsign).toBe('G8CRB');
+    held = holdDetails(held, { ...snap({ lcd: TG }), radioUser: null }, 1200);
+    expect(held).toMatchObject({ radioId: 2352157, tgid: 9 });
+    expect(held?.radioUser?.callsign).toBe('G8CRB');
+    // A different radio ID drops the stale user until main resolves the new one.
+    held = holdDetails(held, { ...snap({ lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 1234567'] }), radioUser: null }, 1400);
+    expect(held).toMatchObject({ radioId: 1234567, radioUser: null });
+  });
+
   it('starts afresh when the frequency changes', () => {
     let held = holdDetails(null, snap({ lcd: TG }), 1000);
     held = holdDetails(held, snap({ lcd: RID, hz: 145_650_000 }), 1100);

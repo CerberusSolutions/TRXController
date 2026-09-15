@@ -1,5 +1,5 @@
 import { isModeFrequencyText, parseScanObjectLine, parseScanScreen, parseSearchScreen, type ActiveChannel, type Lcd, type SignalDetails, type Status } from '@trxcontroller/rcip';
-import type { ScannerSnapshot } from '../../../shared/ipc';
+import type { DmrUser, ScannerSnapshot } from '../../../shared/ipc';
 
 /** "119.775000" -> { mhz: "119", khz: "775000" } */
 export function splitFrequency(hz: number): { mhz: string; frac: string } {
@@ -103,6 +103,11 @@ export interface HeldDetails extends SignalDetails {
   frequencyHz: number;
   /** When the signal was last up, so a squelch flutter does not blank the row. */
   liveAt: number;
+  /**
+   * The DMR user main resolved for `radioId`. Main looks it up from the current
+   * poll only, so it is null on the polls where the display shows the TGID line.
+   */
+  radioUser: DmrUser | null;
 }
 
 /** How long the held details survive after the signal drops (the squelch flutters). */
@@ -120,13 +125,16 @@ export function holdDetails(prev: HeldDetails | null, s: ScannerSnapshot, now = 
   const kept = prev && prev.frequencyHz === status.frequencyHz ? prev : null;
   if (!live) return kept && now - kept.liveAt < HOLD_GRACE_MS ? kept : null;
   const fresh = signalDetails(s.lcd, status);
-  const base: HeldDetails = kept ?? { frequencyHz: status.frequencyHz, liveAt: now, tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null };
-  if (!fresh) return { ...base, liveAt: now };
+  const base: HeldDetails = kept ?? { frequencyHz: status.frequencyHz, liveAt: now, tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null, radioUser: null };
+  const radioId = fresh?.radioId ?? base.radioId;
+  const radioUser = s.radioUser && s.radioUser.id === radioId ? s.radioUser : base.radioUser && base.radioUser.id === radioId ? base.radioUser : null;
+  if (!fresh) return { ...base, liveAt: now, radioUser };
   return {
     ...base,
     liveAt: now,
     tgid: fresh.tgid ?? base.tgid,
-    radioId: fresh.radioId ?? base.radioId,
+    radioId,
+    radioUser,
     slot: fresh.slot ?? base.slot,
     colorCode: fresh.colorCode ?? base.colorCode,
     detectedTone: fresh.detectedTone ?? base.detectedTone,

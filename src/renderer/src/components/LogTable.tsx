@@ -32,7 +32,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
 }
 
 const COLS =
-  "grid-cols-[4.5rem_4.75rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_3.25rem_7rem_3rem_2.5rem]";
+  "grid-cols-[4.5rem_4.75rem_6.5rem_2.75rem_minmax(7rem,1.4fr)_minmax(5rem,1fr)_minmax(4rem,0.5fr)_minmax(6.5rem,0.9fr)_3rem_2.5rem]";
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -89,9 +89,9 @@ export default function LogTable() {
           <span>Dur</span>
           <span>Frequency</span>
           <span>Mode</span>
-          <span>Name</span>
-          <span>System / list</span>
-          <span>Type</span>
+          <span className="truncate">Name</span>
+          <span className="truncate">System / list</span>
+          <span className="truncate">Type</span>
           <span className="whitespace-nowrap">TGID/RID · Tone</span>
           <span className="text-right">RSSI</span>
           <span className="text-right">Hits</span>
@@ -136,8 +136,18 @@ export default function LogTable() {
                   {(r.frequencyHz / 1e6).toFixed(6)}
                 </span>
                 <span className="text-cyan">{r.signalType || r.mode}</span>
-                <span className="truncate font-sans text-[13px] text-ink" title={r.licensee ? `Licensed: ${r.licensee}` : undefined}>
-                {r.name || (r.licensee ? <span className="text-ink-2">{r.licensee}</span> : <span className="text-ink-3">—</span>)}
+                <span
+                  className="truncate font-sans text-[13px] text-ink"
+                  title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (radioid.net)`}
+                >
+                {r.name ||
+                  (r.radioCallsign ? (
+                    `${r.radioCallsign}${r.radioName ? " " + r.radioName : ""}`
+                  ) : r.licensee ? (
+                    <span className="text-ink-2">{r.licensee}</span>
+                  ) : (
+                    <span className="text-ink-3">—</span>
+                  ))}
               </span>
                 <span className="truncate font-sans text-ink-2">
                   {r.system || r.scanlist}
