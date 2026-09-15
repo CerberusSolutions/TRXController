@@ -9,7 +9,9 @@ const POWER_CONFIRM_MS = 2500;
 export default function Keypad() {
   const pressKey = useScanner((s) => s.pressKey);
   const lastKey = useScanner((s) => s.lastKey);
-  const enabled = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
+  const stalled = useScanner((s) => s.snapshot.link.stall !== null);
+  // Held while the scanner is not answering: it queues every key and fires them all when it wakes.
+  const enabled = useScanner((s) => (s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive') && s.snapshot.link.stall === null);
   const tune = useScanner((s) => s.tune);
   const resumeScan = useScanner((s) => s.resumeScan);
   const tuneState = useScanner((s) => s.tuneState);
@@ -54,7 +56,7 @@ export default function Keypad() {
     <section className="rounded-xl border border-edge bg-panel p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Keypad</span>
-        <span className="text-[11px] text-ink-3">arrows · Enter · Esc · 0-9</span>
+        <span className={`text-[11px] ${stalled ? 'text-amber' : 'text-ink-3'}`}>{stalled ? 'held: scanner busy' : 'arrows · Enter · Esc · 0-9'}</span>
       </div>
       <div className="grid grid-cols-3 gap-2">
         {KEYPAD_ROWS.flat().map((def) => {

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
 import { useUi } from '../store/ui';
@@ -15,7 +16,20 @@ const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
 export default function TopBar() {
   const { snapshot, ports, selectedPort, busy, selectPort, connect, disconnect, refreshPorts } = useScanner();
   const link = snapshot.link;
-  const style = STATUS_STYLE[link.status];
+  const stall = link.stall;
+  // Elapsed-time ticker for the busy notice.
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!stall) return;
+    const t = setInterval(() => setTick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [stall]);
+  const style = stall
+    ? {
+        dot: 'bg-amber animate-pulse',
+        text: `${stall.loading ? 'Loading scanlists' : 'Scanner busy'} · ${Math.max(0, Math.round((Date.now() - stall.since) / 1000))} s`,
+      }
+    : STATUS_STYLE[link.status];
   const connected = link.status === 'connected' || link.status === 'unresponsive' || link.status === 'connecting';
   const v = snapshot.version;
   const app = useUi((s) => s.app);
@@ -93,7 +107,9 @@ export default function TopBar() {
 
       <div className="no-drag flex items-center gap-2 whitespace-nowrap border-l border-edge pl-4 text-sm">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${style.dot}`} />
-        <span className="text-ink-2">{style.text}</span>
+        <span className="text-ink-2" title={stall ? 'The scanner stops answering while it loads scanlists; key presses would queue up and fire afterwards, so the keypad is held.' : undefined}>
+          {style.text}
+        </span>
         {v && (
           <span className="ml-2 font-mono text-xs text-ink-3" title={`boot ${v.boot.text} · cpu ${v.cpu.text} · dsp ${v.dsp1.text}/${v.dsp2.text}`}>
             {v.model} · fw {v.cpu.text}

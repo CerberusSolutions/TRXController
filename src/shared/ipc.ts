@@ -32,6 +32,13 @@ export interface ScannerSnapshot {
     status: LinkStatus;
     port: string | null;
     error: string | null;
+    /**
+     * Set while the scanner has stopped answering. `loading` when the last
+     * reply came from a menu (Main Menu, Scanlist Edit...), which is what a
+     * scanlist load looks like: it takes up to a couple of minutes, during
+     * which every request and key press is queued and executed afterwards.
+     */
+    stall: { since: number; loading: boolean } | null;
   };
   version: Version | null;
   status: Status | null;
