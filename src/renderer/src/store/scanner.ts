@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { PortInfo, ScannerSnapshot } from '../../../shared/ipc';
 import { useBand } from './band';
+import { holdDetails, type HeldDetails } from '../lib/format';
 
 function emptySnapshot(): ScannerSnapshot {
   return {
@@ -20,6 +21,8 @@ export const MAX_CCDUMP_LINES = 200;
 
 interface ScannerState {
   snapshot: ScannerSnapshot;
+  /** TGID / radio ID / slot seen so far on the current reception; null once the signal has dropped. */
+  held: HeldDetails | null;
   ports: PortInfo[];
   selectedPort: string | null;
   busy: boolean;
@@ -51,6 +54,7 @@ const api = (): Window['trx'] => {
 
 export const useScanner = create<ScannerState>((set, get) => ({
   snapshot: emptySnapshot(),
+  held: null,
   ports: [],
   selectedPort: null,
   busy: false,
@@ -83,12 +87,13 @@ export const useScanner = create<ScannerState>((set, get) => ({
   setSnapshot: (snapshot) => {
     const { ports, selectedPort } = get();
     const port = snapshot.link.port;
+    const held = holdDetails(get().held, snapshot);
     // Main may connect on its own (remembered port): keep the selector in step.
     if (port && snapshot.link.status !== 'disconnected' && port !== selectedPort) {
-      set({ snapshot, selectedPort: port });
+      set({ snapshot, held, selectedPort: port });
       if (!ports.some((p) => p.path === port)) void get().refreshPorts();
     } else {
-      set({ snapshot });
+      set({ snapshot, held });
     }
     useBand.getState().ingest(snapshot);
   },

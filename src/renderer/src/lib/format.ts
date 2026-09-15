@@ -1,4 +1,5 @@
 import { isModeFrequencyText, parseScanObjectLine, parseScanScreen, parseSearchScreen, type ActiveChannel, type Lcd, type SignalDetails, type Status } from '@trxcontroller/rcip';
+import type { ScannerSnapshot } from '../../../shared/ipc';
 
 /** "119.775000" -> { mhz: "119", khz: "775000" } */
 export function splitFrequency(hz: number): { mhz: string; frac: string } {
@@ -40,20 +41,25 @@ const FREQ_TEXT = /^\d{1,4}\.\d{3,6}$/;
  * ("Service Search") as the subtitle. The name stays put while the display
  * alternates its TGID and RadioID lines; a DMR talkgroup goes in the detail.
  */
-function searchIdentity(search: NonNullable<ReturnType<typeof parseSearchScreen>>, receiving: boolean): ChannelIdentity {
-  const detail = search.tgid !== null ? `TG ${search.tgid}` : search.name === 'Tune Mode' && !receiving ? 'Direct frequency entry' : '';
+function searchIdentity(search: NonNullable<ReturnType<typeof parseSearchScreen>>, receiving: boolean, tgid: number | null): ChannelIdentity {
+  const detail = tgid !== null ? `TG ${tgid}` : search.name === 'Tune Mode' && !receiving ? 'Direct frequency entry' : '';
   return { name: search.name, system: search.family, detail, source: 'lcd' };
 }
 
-export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: Status | null): ChannelIdentity {
+/**
+ * @param held  details accumulated over the reception (see `holdDetails`), so
+ *              the talkgroup does not blink as the scanner alternates its lines
+ */
+export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: Status | null, held: HeldDetails | null = null): ChannelIdentity {
   const h = active?.header;
   const channelScreen = isChannelScreen(lcd, status);
   const scanlist = channelScreen ? (lcd?.lines[1]?.trim() ?? '') : '';
   const search = lcd ? parseSearchScreen(lcd) : null;
+  const tgid = held?.tgid ?? search?.tgid ?? null;
   if (h) {
     // In a search there is no object: the tag is just the mode and frequency
     // ("DMRs 145.637500"), so the search screen is the better identity.
-    if (search && isModeFrequencyText(h.objectTag)) return searchIdentity(search, true);
+    if (search && isModeFrequencyText(h.objectTag)) return searchIdentity(search, true, tgid);
     // For conventional objects the info tag is just the frequency again, and
     // there is no system tag, so the scanlist from the LCD is the better label.
     const info = FREQ_TEXT.test(h.infoTag.trim()) ? '' : h.infoTag.trim();
@@ -67,7 +73,7 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
     const detail = screen?.type ?? '';
     if (name || scanlist) return { name: name || '—', system: scanlist, detail, source: 'lcd' };
   }
-  if (search) return searchIdentity(search, false);
+  if (search) return searchIdentity(search, false, tgid);
   if (lcd && status?.mode === 0x0a) {
     // Sweeping: the display lists the enabled scanlists.
     const lists = lcd.lines.map((l) => l.trim()).filter(Boolean);
@@ -90,4 +96,40 @@ export function signalDetails(lcd: Lcd | null, status: Status | null): SignalDet
   if (!lcd) return null;
   if (isChannelScreen(lcd, status)) return parseScanScreen(lcd);
   return parseSearchScreen(lcd);
+}
+
+/** Signal details accumulated over one reception on one frequency. */
+export interface HeldDetails extends SignalDetails {
+  frequencyHz: number;
+  /** When the signal was last up, so a squelch flutter does not blank the row. */
+  liveAt: number;
+}
+
+/** How long the held details survive after the signal drops (the squelch flutters). */
+export const HOLD_GRACE_MS = 1500;
+
+/**
+ * The scanner alternates "TGID:" and "RadioID:" on the same display line, so
+ * any one poll has only one of them. Keep every field seen while the signal
+ * is up on this frequency, and let go once it has been down for a moment.
+ */
+export function holdDetails(prev: HeldDetails | null, s: ScannerSnapshot, now = Date.now()): HeldDetails | null {
+  const status = s.status;
+  if (!status) return null;
+  const live = status.squelch.rf || !!s.active?.header;
+  const kept = prev && prev.frequencyHz === status.frequencyHz ? prev : null;
+  if (!live) return kept && now - kept.liveAt < HOLD_GRACE_MS ? kept : null;
+  const fresh = signalDetails(s.lcd, status);
+  const base: HeldDetails = kept ?? { frequencyHz: status.frequencyHz, liveAt: now, tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null };
+  if (!fresh) return { ...base, liveAt: now };
+  return {
+    ...base,
+    liveAt: now,
+    tgid: fresh.tgid ?? base.tgid,
+    radioId: fresh.radioId ?? base.radioId,
+    slot: fresh.slot ?? base.slot,
+    colorCode: fresh.colorCode ?? base.colorCode,
+    detectedTone: fresh.detectedTone ?? base.detectedTone,
+    toneFlag: fresh.toneFlag ?? base.toneFlag,
+  };
 }

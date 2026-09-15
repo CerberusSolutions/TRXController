@@ -142,7 +142,7 @@ export default function LogTable() {
                 <span className="truncate font-sans text-ink-2">
                   {r.system || r.scanlist}
                 </span>
-                <span className="text-ink-3">{r.objectType}</span>
+                <span className="truncate text-ink-3" title={r.objectType}>{r.objectType}</span>
                 <span
                   className="truncate text-ink-3"
                   title={

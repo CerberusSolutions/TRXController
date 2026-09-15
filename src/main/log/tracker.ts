@@ -192,7 +192,7 @@ export function describe(s: ScannerSnapshot): Description {
     name: (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '',
     system: h?.systemTag ?? '',
     scanlist: screen?.scanlist ?? search?.name ?? '',
-    objectType: screen?.type || (search ? search.family : h ? h.recordingTypeName : ''),
+    objectType: screen?.type || (h ? h.recordingTypeName : search ? 'Search' : ''),
     tgid: idOr(h?.talkgroupId1) ?? details?.tgid ?? null,
     radioId: idOr(h?.radioId1) ?? details?.radioId ?? null,
     site: h?.siteName ?? '',
