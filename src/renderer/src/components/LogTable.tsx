@@ -65,8 +65,8 @@ export default function LogTable() {
         />
         <span className="text-[11px] text-ink-3">
           {visible.length === rows.length
-            ? `${rows.length} receptions`
-            : `${visible.length} of ${rows.length}`}
+            ? `${rows.length} log ${rows.length === 1 ? "entry" : "entries"}`
+            : `${visible.length} of ${rows.length} log entries`}
         </span>
         <button
           className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
