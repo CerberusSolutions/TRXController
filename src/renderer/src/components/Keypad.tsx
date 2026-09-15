@@ -56,7 +56,13 @@ export default function Keypad() {
     <section className="rounded-xl border border-edge bg-panel p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Keypad</span>
-        <span className={`text-[11px] ${stalled ? 'text-amber' : 'text-ink-3'}`}>{stalled ? 'held: scanner busy' : 'arrows · Enter · Esc · 0-9'}</span>
+        {stalled ? (
+          <span className="rounded-md border border-amber/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber" title="The scanner is not answering; key presses would queue up and fire later, so the keypad is held.">
+            Scanner busy
+          </span>
+        ) : (
+          <span className="text-[11px] text-ink-3">arrows · Enter · Esc · 0-9</span>
+        )}
       </div>
       <div className="grid grid-cols-3 gap-2">
         {KEYPAD_ROWS.flat().map((def) => {
