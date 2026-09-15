@@ -13,6 +13,12 @@ files:
 # serialport ships prebuilt N-API binaries; nothing needs compiling against Electron.
 npmRebuild: false
 asar: true
+# Installer size: LZMA at its slowest setting, and only the English Chromium locales
+# (the other 53 are 47 MB unpacked). Our own code is ~2 MB; the rest is Electron.
+compression: maximum
+electronLanguages:
+  - en-GB
+  - en-US
 win:
   target:
     - target: nsis

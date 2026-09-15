@@ -85,6 +85,8 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   serialport's prebuilt N-API binding is used as is, and only its win32-x64 prebuild is packaged.
   Only `serialport` is a runtime dependency; everything else is bundled by Vite, so keep new
   packages in `devDependencies` unless main needs to `require` them at run time.
+  The installer is ~98% Electron; `compression: maximum` and `electronLanguages` (English only)
+  keep it around 85-90 MB. Do not strip Chromium DLLs to go lower.
 - Releases: `.\scripts\release.ps1 [patch|minor|major]` (clean tree, checkout main, pull,
   `npm version`, `git push --follow-tags`, stops at the first failure). The `v*` tag runs
   `.github/workflows/release.yml` on `windows-latest`, which checks the tag against
