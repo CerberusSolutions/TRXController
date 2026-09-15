@@ -32,7 +32,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
 }
 
 const COLS =
-  "grid-cols-[4.5rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_minmax(6.75rem,0.8fr)_minmax(6rem,0.6fr)_3rem_2.5rem]";
+  "grid-cols-[4.25rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_minmax(6.75rem,0.7fr)_minmax(6.75rem,0.7fr)_3rem_2.5rem]";
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -157,7 +157,7 @@ export default function LogTable() {
                   className="truncate text-ink-3"
                   title={
                     r.tgid !== null || r.radioId !== null
-                      ? `TGID ${r.tgid ?? "—"} · RID ${r.radioId ?? "—"}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ", " + r.radioName : ""})` : ""}`
+                      ? `TGID ${r.tgid ?? "—"} · RID ${r.radioId ?? "—"}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ", " + r.radioName : ""})` : ""}${r.tone ? ` · ${r.tone}` : ""}`
                       : r.tone
                         ? `Detected ${r.tone}${r.squelch ? ` (programmed ${r.squelch})` : ""}`
                         : undefined
