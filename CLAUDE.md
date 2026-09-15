@@ -224,6 +224,13 @@ captured on 14 Sep 2026.
 - Channel identity comes from `a` while receiving (object tag, system tag), falling back
   to the scan-mode LCD lines (line 1 scanlist, line 3 object name). For conventional
   objects the `a` info tag is just the frequency, so the scanlist is used as the subtitle.
+  In Tune Mode / the searches (mode 0x12) there is no object: the `a` object tag is just
+  "DMRs 145.637500" and its ID fields are empty, so `parseSearchScreen` takes TGID, radio
+  ID, slot and colour code off the LCD (`-Service Search-` / `Tune Mode` / mode+frequency /
+  `Slot:1  Color:15` / `RadioID:` alternating with `TGID:`). The hero shows "TG 9" under
+  "Service Search · Tune Mode", the log row has scanlist "Tune Mode" and type "Service
+  Search", and the radio ID resolves through `dmr_users` from either source
+  (`snapshotRadioId`).
 - Keypad rows in `src/renderer/src/lib/keypad.ts` are a design choice, not the
   scanner's physical layout. Keyboard shortcuts map onto the same table. POWER needs a
   second click within 2.5 s.

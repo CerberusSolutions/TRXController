@@ -165,6 +165,26 @@ digits with the decimal point (e.g. `4 1 7 . 9 0 0`) followed by SEL, after whic
 shows it. `A` reports mode 0x12 (Search) while in Tune Mode, so the app recognises the screen
 by its text rather than the mode byte. Confirmed working end to end on 15 Sep 2026.
 
+On a DMR signal in Tune Mode (145.6375 MHz, 15 Sep 2026) lines 3-5 become:
+
+```
+|DMRs  145.637500|   icons 44 80 00, first poll: no slot line yet ("DMRs")
+|                |
+|                |
+
+|DMR   145.637500|   icons 4C 80 00 / 45 80 00
+|Slot:1  Color:15|
+|RadioID: 2352157|   alternates with "   TGID:       9"
+```
+
+The `a` header is sent, but with no object to describe: its object tag is just line 3
+("DMRs 145.637500"), the talkgroup and radio ID fields are NO_ID, and `miscText` is
+"Slot:1 Color:--" (the colour code is only on the display). `parseSearchScreen` reads the
+family ("Service Search"), the search name ("Tune Mode"), the mode / frequency and the DMR
+lines, so the hero and the log get TGID, radio ID (resolved through `dmr_users`), slot and
+colour code the same way as in Scan mode. Service Search and Limit Search are assumed to use
+the same layout (the title is matched on `-...Search...-`); unverified.
+
 ## `t` Clock Set
 
 Nine 16-bit values: sec, min, hour, mday, month(0-11), year(since 1900), wday, yday,

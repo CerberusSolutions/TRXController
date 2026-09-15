@@ -1,4 +1,4 @@
-import { parseScanObjectLine, parseScanScreen, type ActiveChannel, type Lcd, type Status } from '@trxcontroller/rcip';
+import { isModeFrequencyText, parseScanObjectLine, parseScanScreen, parseSearchScreen, type ActiveChannel, type Lcd, type SignalDetails, type Status } from '@trxcontroller/rcip';
 
 /** "119.775000" -> { mhz: "119", khz: "775000" } */
 export function splitFrequency(hz: number): { mhz: string; frac: string } {
@@ -35,11 +35,25 @@ export function isChannelScreen(lcd: Lcd | null, status: Status | null): boolean
 
 const FREQ_TEXT = /^\d{1,4}\.\d{3,6}$/;
 
+/**
+ * The scanner's own name for a search screen ("Tune Mode") with its family
+ * ("Service Search") as the subtitle. The name stays put while the display
+ * alternates its TGID and RadioID lines; a DMR talkgroup goes in the detail.
+ */
+function searchIdentity(search: NonNullable<ReturnType<typeof parseSearchScreen>>, receiving: boolean): ChannelIdentity {
+  const detail = search.tgid !== null ? `TG ${search.tgid}` : search.name === 'Tune Mode' && !receiving ? 'Direct frequency entry' : '';
+  return { name: search.name, system: search.family, detail, source: 'lcd' };
+}
+
 export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: Status | null): ChannelIdentity {
   const h = active?.header;
   const channelScreen = isChannelScreen(lcd, status);
   const scanlist = channelScreen ? (lcd?.lines[1]?.trim() ?? '') : '';
+  const search = lcd ? parseSearchScreen(lcd) : null;
   if (h) {
+    // In a search there is no object: the tag is just the mode and frequency
+    // ("DMRs 145.637500"), so the search screen is the better identity.
+    if (search && isModeFrequencyText(h.objectTag)) return searchIdentity(search, true);
     // For conventional objects the info tag is just the frequency again, and
     // there is no system tag, so the scanlist from the LCD is the better label.
     const info = FREQ_TEXT.test(h.infoTag.trim()) ? '' : h.infoTag.trim();
@@ -53,9 +67,7 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
     const detail = screen?.type ?? '';
     if (name || scanlist) return { name: name || '—', system: scanlist, detail, source: 'lcd' };
   }
-  if (lcd && lcd.lines[2]?.trim() === 'Tune Mode' && /Service Search/.test(lcd.lines[1] ?? '')) {
-    return { name: 'Tune Mode', system: 'Direct frequency entry', detail: '', source: 'lcd' };
-  }
+  if (search) return searchIdentity(search, false);
   if (lcd && status?.mode === 0x0a) {
     // Sweeping: the display lists the enabled scanlists.
     const lists = lcd.lines.map((l) => l.trim()).filter(Boolean);
@@ -67,4 +79,15 @@ export function identify(active: ActiveChannel | null, lcd: Lcd | null, status: 
 export function batteryText(status: Status | null): string {
   if (!status) return '—';
   return status.battery.usb ? `USB · ${status.battery.level}` : `Batt ${status.battery.level}`;
+}
+
+/**
+ * TGID, radio ID, slot, colour code and detected tone for the current
+ * reception, from whichever screen the scanner is showing (Scan channel or
+ * Search). Null fields mean the display does not say.
+ */
+export function signalDetails(lcd: Lcd | null, status: Status | null): SignalDetails | null {
+  if (!lcd) return null;
+  if (isChannelScreen(lcd, status)) return parseScanScreen(lcd);
+  return parseSearchScreen(lcd);
 }
