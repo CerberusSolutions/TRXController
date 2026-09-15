@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: { alias: { '@trxcontroller/rcip': resolve(__dirname, 'packages/rcip/src/index.ts') } },
   test: {
-    include: ['packages/**/src/**/*.test.ts', 'src/main/**/*.test.ts'],
+    include: ['packages/**/src/**/*.test.ts', 'src/main/**/*.test.ts', 'src/renderer/src/lib/**/*.test.ts'],
     environment: 'node',
   },
 });

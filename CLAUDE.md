@@ -227,10 +227,12 @@ captured on 14 Sep 2026.
   In Tune Mode / the searches (mode 0x12) there is no object: the `a` object tag is just
   "DMRs 145.637500" and its ID fields are empty, so `parseSearchScreen` takes TGID, radio
   ID, slot and colour code off the LCD (`-Service Search-` / `Tune Mode` / mode+frequency /
-  `Slot:1  Color:15` / `RadioID:` alternating with `TGID:`). The hero shows "TG 9" under
-  "Service Search · Tune Mode", the log row has scanlist "Tune Mode" and type "Service
-  Search", and the radio ID resolves through `dmr_users` from either source
-  (`snapshotRadioId`).
+  `Slot:1  Color:15` / `RadioID:` alternating with `TGID:`). The hero shows "Tune Mode" over
+  "Service Search · TG 9", the log row has scanlist "Tune Mode" and type "Search", and the
+  radio ID resolves through `dmr_users` from either source (`snapshotRadioId`). Because the
+  display alternates, the renderer keeps `held` details (`holdDetails` in `lib/format.ts`)
+  for the current reception: every field seen while the signal is up, cleared 1.5 s after
+  it drops or when the frequency changes, so TGID, radio ID and slot show together.
 - Keypad rows in `src/renderer/src/lib/keypad.ts` are a design choice, not the
   scanner's physical layout. Keyboard shortcuts map onto the same table. POWER needs a
   second click within 2.5 s.

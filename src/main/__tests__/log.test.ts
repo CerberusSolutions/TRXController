@@ -61,9 +61,9 @@ describe('describe()', () => {
 
   it('takes TGID, RadioID and the search name from the Tune Mode display, ignoring the mode+frequency tag', () => {
     // Captured 15 Sep 2026: the `a` header in Tune Mode tags the call "DMRs 145.637500" and carries no IDs.
-    const tune = { objectTag: 'DMRs 145.637500', systemTag: '', infoTag: '', talkgroupId1: NO_ID, radioId1: NO_ID, siteName: '', miscText: 'Slot:1 Color:--' };
+    const tune = { objectTag: 'DMRs 145.637500', systemTag: '', infoTag: '', talkgroupId1: NO_ID, radioId1: NO_ID, siteName: '', miscText: 'Slot:1 Color:--', recordingType: 5, recordingTypeName: 'Search' };
     const rid = describeSnapshot(snap({ mode: 0x12, header: tune, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'] }));
-    expect(rid).toMatchObject({ name: '', scanlist: 'Tune Mode', objectType: 'Service Search', tgid: null, radioId: 2352157 });
+    expect(rid).toMatchObject({ name: '', scanlist: 'Tune Mode', objectType: 'Search', tgid: null, radioId: 2352157 });
     const tg = describeSnapshot(snap({ mode: 0x12, header: tune, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', '   TGID:       9'] }));
     expect(tg).toMatchObject({ name: '', tgid: 9, radioId: null });
     expect(snapshotRadioId(snap({ mode: 0x12, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'] }))).toBe(2352157);

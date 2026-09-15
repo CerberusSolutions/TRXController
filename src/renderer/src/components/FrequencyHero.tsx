@@ -1,5 +1,5 @@
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
-import { identify, isChannelScreen, signalDetails, splitFrequency } from '../lib/format';
+import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
@@ -21,20 +21,23 @@ function Param({ label, value, title, minCh }: { label: string; value: string | 
 
 export default function FrequencyHero() {
   const { status, lcd, active, link, radioUser, licences } = useScanner((s) => s.snapshot);
+  const held = useScanner((s) => s.held);
 
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
   const hz = status?.frequencyHz ?? 0;
   const { mhz, frac } = splitFrequency(hz);
-  const id = identify(active, lcd, status);
+  const id = identify(active, lcd, status, held);
   const h = active?.header ?? null;
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
   const objectLine = isChannelScreen(lcd, status) && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
-  const details = signalDetails(lcd, status);
+  // Details seen so far on this reception: the display alternates its TGID and
+  // RadioID lines, so the held copy shows both at once until the signal drops.
+  const details = held;
   const detected = details?.detectedTone ?? null;
   // The header carries the IDs on trunked / scanned objects; in Tune Mode and
-  // the searches they only appear on the display (TGID and RadioID alternate).
+  // the searches they only appear on the display.
   const tgid = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : (details?.tgid ?? null);
   const radioId = h && h.radioId1 !== NO_ID ? h.radioId1 : (details?.radioId ?? null);
   // The header's misc text repeats the slot line, with "--" where the display has the colour code.
