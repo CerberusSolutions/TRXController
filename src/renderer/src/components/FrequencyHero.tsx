@@ -24,8 +24,9 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, radioUser, licences } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
+  const snapshotUser = useScanner((s) => s.snapshot.radioUser);
 
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
@@ -51,6 +52,9 @@ export default function FrequencyHero() {
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
 
+  // Main resolves the user from the current poll only; the held copy keeps the
+  // name on screen on the polls where the display shows the TGID line instead.
+  const radioUser = snapshotUser && snapshotUser.id === radioId ? snapshotUser : held?.radioUser && held.radioUser.id === radioId ? held.radioUser : null;
   const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
   const ids = (
     <>
