@@ -63,7 +63,13 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   go quiet (`ScannerLink.drain`) before sending more, otherwise the scanner stays several
   replies behind for good and every answer lands as "unsolicited". The session also polls
   once a second instead of every 150 ms while timeouts are consecutive, to keep that backlog
-  small.
+  small. Measured 15 Sep 2026 with `probe --log`: two large scanlists = 80.7 s of silence,
+  26 unanswered polls, all 52 replies delivered in one burst on waking, with a few bytes of
+  one reply leaking out mid-load. `link.stall` in the snapshot marks the silence (with
+  `loading` when the last reply came from a menu); the top bar shows "Loading scanlists · N s"
+  and the keypad is held so presses are not queued into the scanner.
+- The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
+  text or icon bytes (checked with `probe --log`): nothing to show for it.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 
 ## Layout

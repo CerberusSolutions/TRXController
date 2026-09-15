@@ -466,7 +466,8 @@ async function logChanges(link: Link, args: Args): Promise<void> {
         if (st.frequencyHz !== prevStatus.frequencyHz) ch.push(`freq ${formatFrequency(prevStatus.frequencyHz)} -> ${formatFrequency(st.frequencyHz)}`);
         if (st.rxMode !== prevStatus.rxMode) ch.push(`rxmode ${prevStatus.rxModeName} -> ${st.rxModeName}`);
         if (st.squelch.raw !== prevStatus.squelch.raw) ch.push(`squelch 0x${prevStatus.squelch.raw.toString(16)} -> 0x${st.squelch.raw.toString(16)} (rf=${st.squelch.rf} unmuted=${st.squelch.unmuted})`);
-        if (st.battery.level !== prevStatus.battery.level || st.battery.usb !== prevStatus.battery.usb) ch.push(`battery ${st.battery.level} usb=${st.battery.usb}`);
+        // The level wobbles by tens every poll; only real moves are worth a line.
+        if (Math.abs(st.battery.level - prevStatus.battery.level) >= 100 || st.battery.usb !== prevStatus.battery.usb) ch.push(`battery ${st.battery.level} usb=${st.battery.usb}`);
         if (st.led.r !== prevStatus.led.r || st.led.g !== prevStatus.led.g || st.led.b !== prevStatus.led.b) ch.push(`led ${st.led.r},${st.led.g},${st.led.b}`);
         if (Math.abs(st.rssi - prevStatus.rssi) >= 40) ch.push(`rssi ${prevStatus.rssi} -> ${st.rssi}`);
         for (const c of ch) console.log(`${stamp()} A  ${c}`);

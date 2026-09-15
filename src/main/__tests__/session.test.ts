@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { encodeFrame, Key } from '@trxcontroller/rcip';
 import { ScannerSession } from '../scanner/session';
 import type { ScannerSnapshot } from '../../shared/ipc';
-import { FakeTransport, defaultHandler, factoryFor } from './fakeTransport';
+import { FakeTransport, STATUS_DATA, defaultHandler, factoryFor } from './fakeTransport';
 
 function waitFor(pred: () => boolean, ms = 500): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -92,6 +92,39 @@ describe('ScannerSession', () => {
     await waitFor(() => s.getSnapshot().link.status === 'unresponsive', 2000);
     mute = false;
     await waitFor(() => s.getSnapshot().link.status === 'connected', 2000);
+    await s.disconnect();
+  });
+
+  it('reports a stall, flagged as a scanlist load when the last reply came from a menu', async () => {
+    const t = new FakeTransport();
+    let mute = false;
+    // Main Menu status, then silence: what selecting Scan looks like.
+    t.handler = (cmd) => (mute ? null : cmd.codeChar === 'A' ? encodeFrame('A', [0x00, ...STATUS_DATA.slice(1)]) : defaultHandler(cmd));
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 2, timeoutMs: 5, unresponsiveAfter: 3 });
+    await s.connect('COM7');
+    await waitFor(() => s.getSnapshot().status?.mode === 0x00);
+    expect(s.getSnapshot().link.stall).toBeNull();
+    mute = true;
+    await waitFor(() => s.getSnapshot().link.stall !== null, 2000);
+    expect(s.getSnapshot().link.stall?.loading).toBe(true);
+    mute = false;
+    await waitFor(() => s.getSnapshot().link.stall === null, 2000);
+    expect(s.getSnapshot().link.status).toBe('connected');
+    await s.disconnect();
+  });
+
+  it('a stall while scanning is not called a scanlist load', async () => {
+    const t = new FakeTransport();
+    let mute = false;
+    t.handler = (cmd) => (mute ? null : defaultHandler(cmd));
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 2, timeoutMs: 5, unresponsiveAfter: 3 });
+    await s.connect('COM7');
+    await waitFor(() => s.getSnapshot().status?.mode === 0x0a);
+    mute = true;
+    await waitFor(() => s.getSnapshot().link.stall !== null, 2000);
+    expect(s.getSnapshot().link.stall?.loading).toBe(false);
+    mute = false;
+    await waitFor(() => s.getSnapshot().link.stall === null, 2000);
     await s.disconnect();
   });
 

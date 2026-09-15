@@ -4,7 +4,7 @@ import { useBand } from './band';
 
 function emptySnapshot(): ScannerSnapshot {
   return {
-    link: { status: 'disconnected', port: null, error: null },
+    link: { status: 'disconnected', port: null, error: null, stall: null },
     version: null,
     status: null,
     lcd: null,

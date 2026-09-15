@@ -190,13 +190,27 @@ export class ScannerSession {
         if (ac) active = safe(() => parseActiveChannel(ac.data)) ?? active;
       }
 
-      const unresponsive = link.stats.consecutiveTimeouts >= this.unresponsiveAfter;
+      const timeouts = link.stats.consecutiveTimeouts;
+      const unresponsive = timeouts >= this.unresponsiveAfter;
       const current = this.snapshot.link.status;
       const linkStatus: LinkStatus =
         current === 'error' || current === 'disconnected' ? current : unresponsive ? 'unresponsive' : 'connected';
+      // Two unanswered requests in a row is a stall; the first timeout happened
+      // roughly timeouts * timeoutMs ago. A menu as the last known mode means
+      // the scanner is most likely loading scanlists.
+      let stall = this.snapshot.link.stall;
+      if (timeouts >= 2) {
+        if (!stall) {
+          stall = { since: Date.now() - timeouts * (this.opts.timeoutMs ?? 750), loading: isMenuMode(this.snapshot.status?.mode) };
+          this.opts.log?.(`scanner stalled${stall.loading ? ' (loading scanlists?)' : ''}`);
+        }
+      } else if (stall) {
+        this.opts.log?.(`scanner back after ${((Date.now() - stall.since) / 1000).toFixed(1)} s`);
+        stall = null;
+      }
       this.snapshot = {
         ...this.snapshot,
-        link: { ...this.snapshot.link, status: linkStatus },
+        link: { ...this.snapshot.link, status: linkStatus, stall },
         lcd,
         status,
         active,
@@ -257,7 +271,7 @@ export class ScannerSession {
   }
 
   private setLink(status: LinkStatus, port: string | null, error: string | null): void {
-    this.snapshot = { ...this.snapshot, link: { status, port, error }, updatedAt: Date.now() };
+    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, updatedAt: Date.now() };
     this.publish();
   }
 
@@ -268,7 +282,7 @@ export class ScannerSession {
 
 export function emptySnapshot(): ScannerSnapshot {
   return {
-    link: { status: 'disconnected', port: null, error: null },
+    link: { status: 'disconnected', port: null, error: null, stall: null },
     version: null,
     status: null,
     lcd: null,
@@ -278,6 +292,11 @@ export function emptySnapshot(): ScannerSnapshot {
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
   };
+}
+
+/** `A` modes in which selecting an item can start a scanlist load (see MODES in rcip). */
+function isMenuMode(mode: number | undefined): boolean {
+  return mode === 0x00 || mode === 0x04 || mode === 0x05 || mode === 0x07 || mode === 0x08;
 }
 
 function safe<T>(fn: () => T): T | undefined {
