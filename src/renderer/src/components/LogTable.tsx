@@ -166,7 +166,9 @@ export default function LogTable() {
                   {r.tgid !== null ? r.tgid : ""}
                   {r.tgid !== null && r.radioId !== null ? "/" : ""}
                   {r.radioId !== null ? (
-                    r.radioCallsign ? (
+                    // The callsign goes in the Name column when the row has no channel name, so show the number here;
+                    // a row with a real channel name has nowhere else for the callsign.
+                    r.radioCallsign && r.name ? (
                       <span className="text-ink-2">{r.radioCallsign}</span>
                     ) : (
                       r.radioId
