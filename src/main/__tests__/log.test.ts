@@ -1,13 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { LogDb } from '../log/db';
 import { ReceptionLogger } from '../log/logger';
-import { ReceptionTracker, describe as describeSnapshot } from '../log/tracker';
+import { ReceptionTracker, describe as describeSnapshot, snapshotRadioId } from '../log/tracker';
 import type { ReceptionRow, ScannerSnapshot } from '../../shared/ipc';
+import type { RecordingHeader } from '@trxcontroller/rcip';
 import { emptySnapshot } from '../scanner/session';
 import { NO_ID, parseLcd, parseStatus } from '@trxcontroller/rcip';
 import { STATUS_DATA, lcdData } from './fakeTransport';
 
-function snap(over: { rf?: boolean; hz?: number; rssi?: number; lcd?: string[]; header?: boolean; mode?: number }): ScannerSnapshot {
+function snap(over: { rf?: boolean; hz?: number; rssi?: number; lcd?: string[]; header?: boolean | Partial<RecordingHeader>; mode?: number }): ScannerSnapshot {
   const s = emptySnapshot();
   s.link = { status: 'connected', port: 'COM7', error: null };
   const data = new Uint8Array(STATUS_DATA);
@@ -32,6 +33,7 @@ function snap(over: { rf?: boolean; hz?: number; rssi?: number; lcd?: string[]; 
         tsysFileIndex: 0, miscText: '', voiceFrequencyHz: hz, controlFrequencyHz: 0,
         squelchMode: 3, squelchModeName: 'NAC', squelchValue: 0x293, squelchText: 'NAC 293', tsysType: 3, tsysTypeName: 'P25',
         reserved: new Uint8Array(155),
+        ...(typeof over.header === 'object' ? over.header : {}),
       },
     };
   }
@@ -55,6 +57,17 @@ describe('describe()', () => {
   it('records a detected tone from the display', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Bucks A+D Rep', 'CONV        psDr', 'RBW18', 'Auto  433.225000', 'CTCSS 77.0  S'] }));
     expect(d).toMatchObject({ name: 'RBW18', tone: 'CTCSS 77.0' });
+  });
+
+  it('takes TGID, RadioID and the search name from the Tune Mode display, ignoring the mode+frequency tag', () => {
+    // Captured 15 Sep 2026: the `a` header in Tune Mode tags the call "DMRs 145.637500" and carries no IDs.
+    const tune = { objectTag: 'DMRs 145.637500', systemTag: '', infoTag: '', talkgroupId1: NO_ID, radioId1: NO_ID, siteName: '', miscText: 'Slot:1 Color:--' };
+    const rid = describeSnapshot(snap({ mode: 0x12, header: tune, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'] }));
+    expect(rid).toMatchObject({ name: '', scanlist: 'Tune Mode', objectType: 'Service Search', tgid: null, radioId: 2352157 });
+    const tg = describeSnapshot(snap({ mode: 0x12, header: tune, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', '   TGID:       9'] }));
+    expect(tg).toMatchObject({ name: '', tgid: 9, radioId: null });
+    expect(snapshotRadioId(snap({ mode: 0x12, lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'] }))).toBe(2352157);
+    expect(snapshotRadioId(snap({ header: true }))).toBe(7654321);
   });
 
   it('does not treat the sweeping screen as a channel', () => {

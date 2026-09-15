@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LCD_CURSOR_BYTE, describeIcons, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, isModeFrequencyText, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, parseSearchScreen, renderLcd } from '../lcd';
 import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
@@ -141,6 +141,38 @@ describe('parseScanScreen', () => {
   it('returns null for the sweeping screen and menus', () => {
     expect(parseScanScreen({ lines: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', '', ''] })).toBeNull();
     expect(parseScanScreen({ lines: ['  -Main Menu-   ', 'Scan           ◄', 'Scanlists', '', '', ''] })).toBeNull();
+  });
+});
+
+describe('parseSearchScreen', () => {
+  // Captured on a TRX-1e in Tune Mode on 145.6375 MHz, 15 Sep 2026.
+  const TUNE = ['', '-Service Search-', 'Tune Mode       ', 'DMRs  145.637500', '', ''];
+  const RID = ['', '-Service Search-', 'Tune Mode       ', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'];
+  const TG = ['', '-Service Search-', 'Tune Mode       ', 'DMR   145.637500', 'Slot:1  Color:15', '   TGID:       9'];
+
+  it('reads the idle Tune Mode screen', () => {
+    expect(parseSearchScreen({ lines: ['', '-Service Search-', 'Tune Mode', 'au     25.000000', '', ''] })).toMatchObject({
+      family: 'Service Search', name: 'Tune Mode', mode: 'au', frequencyText: '25.000000', tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null,
+    });
+    expect(parseSearchScreen({ lines: TUNE })).toMatchObject({ mode: 'DMRs', frequencyText: '145.637500', tgid: null, radioId: null, slot: null });
+  });
+
+  it('reads slot, colour code and the alternating RadioID / TGID lines of a DMR signal', () => {
+    expect(parseSearchScreen({ lines: RID })).toMatchObject({ mode: 'DMR', slot: 1, colorCode: 15, radioId: 2352157, tgid: null });
+    expect(parseSearchScreen({ lines: TG })).toMatchObject({ mode: 'DMR', slot: 1, colorCode: 15, radioId: null, tgid: 9 });
+  });
+
+  it('returns null for the scan channel screen, the sweeping screen and menus', () => {
+    expect(parseSearchScreen({ lines: ['', 'Civil Airband', 'CONV        psDr', 'TC NW Deps', 'AM    119.775000', ''] })).toBeNull();
+    expect(parseSearchScreen({ lines: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', '', ''] })).toBeNull();
+    expect(parseSearchScreen({ lines: ['  -Searches-    ', ' Main Menu', ' Spectrum Sweep', ' Service Search', ' Limit Search', ' Tune Mode'] })).toBeNull();
+  });
+
+  it('knows when a tag is only the mode and frequency', () => {
+    expect(isModeFrequencyText('DMRs 145.637500')).toBe(true);
+    expect(isModeFrequencyText('145.637500')).toBe(true);
+    expect(isModeFrequencyText('Fire Dispatch')).toBe(false);
+    expect(isModeFrequencyText('')).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
-import { formatId, parseScanObjectLine, parseScanScreen } from '@trxcontroller/rcip';
-import { identify, isChannelScreen, splitFrequency } from '../lib/format';
+import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
+import { identify, isChannelScreen, signalDetails, splitFrequency } from '../lib/format';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
@@ -31,11 +31,36 @@ export default function FrequencyHero() {
   const modeText = status?.rxModeName ?? '';
   const icons = lcd?.icons;
   const objectLine = isChannelScreen(lcd, status) && lcd ? parseScanObjectLine(lcd.lines[2] ?? '') : null;
-  const screen = isChannelScreen(lcd, status) && lcd ? parseScanScreen(lcd) : null;
-  const detected = screen?.detectedTone ?? null;
+  const details = signalDetails(lcd, status);
+  const detected = details?.detectedTone ?? null;
+  // The header carries the IDs on trunked / scanned objects; in Tune Mode and
+  // the searches they only appear on the display (TGID and RadioID alternate).
+  const tgid = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : (details?.tgid ?? null);
+  const radioId = h && h.radioId1 !== NO_ID ? h.radioId1 : (details?.radioId ?? null);
+  // The header's misc text repeats the slot line, with "--" where the display has the colour code.
+  const slotText = details?.slot !== null && details?.slot !== undefined ? `${details.slot} · CC ${details.colorCode}` : null;
+  const info = h?.miscText && !(slotText && /^Slot:/i.test(h.miscText)) ? h.miscText : null;
   // Header present but squelch closed: the scanner is holding on the channel
   // through its scan delay after a transmission.
   const rxState: 'rx' | 'hold' | 'idle' = receiving ? 'rx' : active?.header ? 'hold' : 'idle';
+
+  const ids = (
+    <>
+      {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
+      {radioId !== null && (
+        <Param
+          label="Radio ID"
+          value={radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(radioId)}
+          title={
+            radioUser
+              ? `${formatId(radioId)} · ${[radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ')}`
+              : 'Radio ID (import the radioid.net database to resolve callsigns)'
+          }
+        />
+      )}
+      {slotText && <Param label="Slot" value={slotText} title="DMR time slot and colour code" />}
+    </>
+  );
 
   return (
     <section className={`rounded-xl border border-edge bg-panel p-5 ${receiving ? 'shadow-[inset_0_0_0_1px_rgba(61,220,132,0.35)]' : ''}`}>
@@ -128,22 +153,11 @@ export default function FrequencyHero() {
         {h ? (
           <>
             <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />
-            {h.talkgroupId1 !== 0xffffffff && <Param label="TGID" value={formatId(h.talkgroupId1)} />}
-            {h.radioId1 !== 0xffffffff && (
-              <Param
-                label="Radio ID"
-                value={radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : formatId(h.radioId1)}
-                title={
-                  radioUser
-                    ? `${formatId(h.radioId1)} · ${[radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ')}`
-                    : 'Radio ID (import the radioid.net database to resolve callsigns)'
-                }
-              />
-            )}
+            {ids}
             {h.siteName && <Param label="Site" value={h.siteName} />}
             <Param label="Squelch" value={h.squelchText} title="Programmed on the object" />
             {detected && <Param label="Detected" value={detected} title="Tone found by the scanner's tone lookup" />}
-            {h.miscText && <Param label="Info" value={h.miscText} />}
+            {info && <Param label="Info" value={info} />}
             <Param label="Started" value={h.startTime.iso?.slice(11) ?? null} title={h.startTime.iso?.replace('T', ' ')} />
             {h.controlFrequencyHz > 0 && h.controlFrequencyHz !== h.voiceFrequencyHz && (
               <Param label="Control" value={(h.controlFrequencyHz / 1e6).toFixed(6)} />
@@ -154,6 +168,7 @@ export default function FrequencyHero() {
             <Param label="Squelch" value={status ? (status.squelch.rf ? 'Open' : 'Closed') : null} minCh={6} />
             <Param label="Audio" value={status ? (status.squelch.unmuted ? 'Unmuted' : 'Muted') : null} minCh={7} />
             <Param label="ZeroMatic" value={status ? String(status.zeromatic) : null} minCh={3} />
+            {ids}
             {detected && <Param label="Detected" value={detected} />}
           </>
         )}

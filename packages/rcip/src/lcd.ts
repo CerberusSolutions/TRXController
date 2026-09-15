@@ -172,7 +172,7 @@ export function parseScanObjectLine(line: string): ScanObjectLine | null {
  *            "CTCSS 77.0  S" / "DCS 023" / "NAC 293" when the tone lookup has found
  *            the transmitter's tone (the trailing letter is a status flag), blank otherwise
  */
-export interface ScanScreen {
+export interface ScanScreen extends SignalDetails {
   scanlist: string;
   type: string;
   flags: ObjectFlags;
@@ -180,6 +180,16 @@ export interface ScanScreen {
   name: string | null;
   mode: string;
   frequencyText: string;
+}
+
+const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
+const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
+const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
+const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
+const TONE_RE = /^(CTCSS|DCS|NAC)\s+(\S+)(?:\s+([A-Za-z]))?\s*$/i;
+
+/** What the DMR / tone detail lines carry, shared by the Scan and Search screens. */
+export interface SignalDetails {
   tgid: number | null;
   radioId: number | null;
   slot: number | null;
@@ -190,11 +200,28 @@ export interface ScanScreen {
   toneFlag: string | null;
 }
 
-const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
-const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
-const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
-const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
-const TONE_RE = /^(CTCSS|DCS|NAC)\s+(\S+)(?:\s+([A-Za-z]))?\s*$/i;
+/**
+ * Pick TGID / RadioID / Slot+Color / detected tone out of any of the given
+ * lines. The scanner alternates "TGID:" and "RadioID:" on the same line, so
+ * a single screen never shows both; callers merge over time.
+ */
+export function parseSignalDetails(lines: readonly string[]): SignalDetails {
+  const d: SignalDetails = { tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null };
+  for (const raw of lines) {
+    const line = raw.trim();
+    let m: RegExpExecArray | null;
+    if ((m = TGID_RE.exec(line))) d.tgid = Number(m[1]);
+    else if ((m = RADIO_ID_RE.exec(line))) d.radioId = Number(m[1]);
+    else if ((m = SLOT_RE.exec(line))) {
+      d.slot = Number(m[1]);
+      d.colorCode = Number(m[2]);
+    } else if ((m = TONE_RE.exec(line))) {
+      d.detectedTone = `${m[1]!.toUpperCase()} ${m[2]}`;
+      d.toneFlag = m[3]?.toUpperCase() ?? null;
+    }
+  }
+  return d;
+}
 
 /** Parse the Scan-mode channel screen; null if the LCD is showing something else. */
 export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
@@ -204,9 +231,6 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
   const l4 = (lcd.lines[4] ?? '').trim();
   const l5 = (lcd.lines[5] ?? '').trim();
   const tg = TGID_RE.exec(l3);
-  const rid = RADIO_ID_RE.exec(l5);
-  const slot = SLOT_RE.exec(l5);
-  const tone = TONE_RE.exec(l5);
   const mf = MODE_FREQ_RE.exec(l4);
   return {
     scanlist: (lcd.lines[1] ?? '').trim(),
@@ -215,13 +239,55 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
     name: tg ? null : l3 || null,
     mode: mf?.[1] ?? '',
     frequencyText: mf?.[2] ?? '',
-    tgid: tg ? Number(tg[1]) : null,
-    radioId: rid ? Number(rid[1]) : null,
-    slot: slot ? Number(slot[1]) : null,
-    colorCode: slot ? Number(slot[2]) : null,
-    detectedTone: tone ? `${tone[1]!.toUpperCase()} ${tone[2]}` : null,
-    toneFlag: tone?.[3]?.toUpperCase() ?? null,
+    ...parseSignalDetails([l3, l5]),
   };
+}
+
+/**
+ * The Search-mode screens (Tune Mode at least; Service and Limit Search are
+ * expected to match), as observed on a TRX-1e in Tune Mode on a DMR signal:
+ *
+ *   0: (blank)
+ *   1: "-Service Search-"              the search family, in dashes
+ *   2: "Tune Mode"                     the search name
+ *   3: "DMR   145.637500"              mode + frequency ("au" while idle/auto,
+ *                                      "DMRs" briefly before the slot line appears)
+ *   4: "Slot:1  Color:15"              DMR only
+ *   5: "RadioID: 2352157" / "   TGID:       9"   DMR only, alternating
+ *
+ * There is no object here, so what the `a` header calls the object tag is just
+ * line 3; TGID, radio ID, slot and colour code come only from these lines.
+ */
+export interface SearchScreen extends SignalDetails {
+  /** The search family without its dashes, e.g. "Service Search". */
+  family: string;
+  /** The search name from line 2, e.g. "Tune Mode". */
+  name: string;
+  /** Mode as displayed on line 3 ("au", "FM", "DMR", "DMRs"). */
+  mode: string;
+  frequencyText: string;
+}
+
+const SEARCH_TITLE_RE = /^-(.*Search.*)-$/i;
+
+/** Parse a Search-mode screen; null if the LCD is showing something else. */
+export function parseSearchScreen(lcd: Pick<Lcd, 'lines'>): SearchScreen | null {
+  const title = SEARCH_TITLE_RE.exec((lcd.lines[1] ?? '').trim());
+  const name = (lcd.lines[2] ?? '').trim();
+  const mf = MODE_FREQ_RE.exec((lcd.lines[3] ?? '').trim());
+  if (!title || !name || !mf) return null;
+  return {
+    family: title[1]!.trim(),
+    name,
+    mode: mf[1]!,
+    frequencyText: mf[2]!,
+    ...parseSignalDetails([lcd.lines[4] ?? '', lcd.lines[5] ?? '']),
+  };
+}
+
+/** True when the object tag / name is nothing more than the mode and frequency ("DMRs 145.637500"). */
+export function isModeFrequencyText(text: string): boolean {
+  return MODE_FREQ_RE.test(text.trim()) || /^\d{1,4}\.\d{3,6}$/.test(text.trim());
 }
 
 /** Render the LCD as a boxed multi-line string for terminals. */

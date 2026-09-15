@@ -15,7 +15,7 @@
  * - Channel details often arrive a poll or two after the squelch opens, so an
  *   open reception keeps absorbing better information until it closes.
  */
-import { NO_ID, parseScanScreen } from '@trxcontroller/rcip';
+import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 
@@ -179,20 +179,31 @@ export function describe(s: ScannerSnapshot): Description {
   const h = s.active?.header ?? null;
   const lcd = s.lcd;
   const screen = status.mode === 0x0a && lcd ? parseScanScreen(lcd) : null;
+  // Tune Mode / Service Search: no object, so the header's tag is just the
+  // mode and frequency; the search name stands in for the scanlist and the
+  // IDs come off the display.
+  const search = !screen && lcd ? parseSearchScreen(lcd) : null;
+  const details = screen ?? search;
   const idOr = (v: number | undefined): number | null => (v === undefined || v === NO_ID ? null : v);
+  const tag = h?.objectTag ?? '';
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
-    name: h?.objectTag || screen?.name || '',
+    name: (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '',
     system: h?.systemTag ?? '',
-    scanlist: screen?.scanlist ?? '',
-    objectType: screen?.type || (h ? h.recordingTypeName : ''),
-    tgid: idOr(h?.talkgroupId1) ?? screen?.tgid ?? null,
-    radioId: idOr(h?.radioId1) ?? screen?.radioId ?? null,
+    scanlist: screen?.scanlist ?? search?.name ?? '',
+    objectType: screen?.type || (search ? search.family : h ? h.recordingTypeName : ''),
+    tgid: idOr(h?.talkgroupId1) ?? details?.tgid ?? null,
+    radioId: idOr(h?.radioId1) ?? details?.radioId ?? null,
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
-    tone: screen?.detectedTone ?? '',
+    tone: details?.detectedTone ?? '',
     licensee: s.licences?.[0]?.licensee ?? '',
     rssiPeak: status.rssi,
   };
+}
+
+/** The radio ID currently on the display or in the `a` header, for the DMR user lookup; null if none. */
+export function snapshotRadioId(s: ScannerSnapshot): number | null {
+  return s.status ? describe(s).radioId : null;
 }

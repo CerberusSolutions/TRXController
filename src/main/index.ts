@@ -8,6 +8,7 @@ import { MIN_WINDOW, SettingsStore } from './settings';
 import { checkForUpdate } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
+import { snapshotRadioId } from './log/tracker';
 import { ScannerSession } from './scanner/session';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
 
@@ -50,8 +51,8 @@ function licencesFor(hz: number): WtrMatch[] {
 
 /** Attach the DMR user for the current radio ID and the nearest Ofcom licences for the frequency. */
 function enrich(s: ScannerSnapshot): ScannerSnapshot {
-  const rid = s.active?.header?.radioId1;
-  const radioUser = db && rid !== undefined && rid !== 0xffffffff ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
+  const rid = snapshotRadioId(s);
+  const radioUser = db && rid !== null ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
   const licences = s.status ? licencesFor(s.status.frequencyHz) : [];
   return { ...s, radioUser, licences };
 }
