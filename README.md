@@ -21,6 +21,8 @@ npm test                      # protocol library unit tests
 npm run probe -- --list       # list serial ports
 npm run probe -- COM7         # query the scanner on COM7
 npm run probe -- COM7 --identify   # walk the unlabelled key codes
+npm run probe -- COM7 --log        # timestamped log of display/status changes and silences
+npm run probe -- COM7 --listen     # send nothing; show anything the scanner volunteers
 npm run dev                   # run the Electron app with hot reload
 npm run build && npm start    # run the built app
 ```

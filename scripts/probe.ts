@@ -7,6 +7,10 @@
  *   npm run probe -- COM7 --identify --keys 8,10,16,2,12
  *   npm run probe -- COM7 --key 17           send one key code, then dump the LCD
  *   npm run probe -- COM7 --watch            poll A and L every 500 ms until Ctrl-C
+ *   npm run probe -- COM7 --log              timestamped change log: LCD / status / icon
+ *                                            differences, silences, queued replies, stray bytes
+ *   npm run probe -- COM7 --listen           send nothing; print anything the scanner
+ *                                            volunteers (does it ever push?)
  *   npm run probe -- COM7 --clock            set the scanner clock from the PC (unverified byte order)
  *
  * Runs under plain Node via tsx. serialport is N-API, so no Electron rebuild.
@@ -49,6 +53,9 @@ interface Args {
   keys: number[];
   key: number | undefined;
   watch: boolean;
+  log: boolean;
+  listen: boolean;
+  intervalMs: number;
   clock: boolean;
   quietMs: number;
   timeoutMs: number;
@@ -63,6 +70,9 @@ function parseArgs(argv: string[]): Args {
     keys: [8, 10, 16, 2],
     key: undefined,
     watch: false,
+    log: false,
+    listen: false,
+    intervalMs: 250,
     clock: false,
     quietMs: 150,
     timeoutMs: 1500,
@@ -81,6 +91,9 @@ function parseArgs(argv: string[]): Args {
       case '--keys': a.keys = next().split(',').map((s) => Number(s.trim())).filter((n) => Number.isInteger(n)); break;
       case '--key': a.key = Number(next()); break;
       case '--watch': a.watch = true; break;
+      case '--log': a.log = true; break;
+      case '--listen': a.listen = true; break;
+      case '--interval': a.intervalMs = Number(next()); break;
       case '--clock': a.clock = true; break;
       case '--quiet': a.quietMs = Number(next()); break;
       case '--timeout': a.timeoutMs = Number(next()); break;
@@ -97,8 +110,8 @@ function parseArgs(argv: string[]): Args {
 function usage(): void {
   console.log(`Usage:
   probe --list
-  probe <port> [--identify [--keys 8,10,16,2]] [--key N] [--watch] [--clock]
-        [--quiet ms] [--timeout ms] [--settle ms]`);
+  probe <port> [--identify [--keys 8,10,16,2]] [--key N] [--watch] [--log] [--listen] [--clock]
+        [--quiet ms] [--timeout ms] [--settle ms] [--interval ms]`);
 }
 
 // ---------------------------------------------------------------------------
@@ -123,7 +136,20 @@ class Link {
       this.chunks.push(new Uint8Array(d));
       this.received++;
       for (const w of this.waiters.splice(0)) w();
+      for (const t of this.taps) t(new Uint8Array(d));
     });
+  }
+
+  private taps: ((bytes: Uint8Array) => void)[] = [];
+
+  /** See every chunk as it arrives, whether or not a transaction is waiting for it. */
+  tap(cb: (bytes: Uint8Array) => void): void {
+    this.taps.push(cb);
+  }
+
+  /** Bytes that arrived since the last transaction ended (i.e. not in answer to anything). */
+  takeStray(): Uint8Array {
+    return this.drainChunks();
   }
 
   open(): Promise<void> {
@@ -162,9 +188,9 @@ class Link {
    * Send a command and collect everything that comes back until the line has
    * been quiet for `quietMs` (after the first byte) or `timeoutMs` in total.
    */
-  async transact(cmd: Uint8Array, quietMs: number, timeoutMs: number): Promise<{ raw: Uint8Array; events: DecoderEvent[]; ms: number }> {
+  async transact(cmd: Uint8Array, quietMs: number, timeoutMs: number, quietStale = false): Promise<{ raw: Uint8Array; events: DecoderEvent[]; ms: number }> {
     const stale = this.drainChunks();
-    if (stale.length) console.log(`  (discarded ${stale.length} unsolicited bytes: ${toHex(stale.subarray(0, 32))}${stale.length > 32 ? ' ...' : ''})`);
+    if (stale.length && !quietStale) console.log(`  (discarded ${stale.length} unsolicited bytes: ${toHex(stale.subarray(0, 32))}${stale.length > 32 ? ' ...' : ''})`);
     const t0 = Date.now();
     await this.write(cmd);
     let gotAny = false;
@@ -379,6 +405,117 @@ async function watch(link: Link, args: Args): Promise<void> {
   }
 }
 
+function stamp(): string {
+  const d = new Date();
+  return `${d.toTimeString().slice(0, 8)}.${String(d.getMilliseconds()).padStart(3, '0')}`;
+}
+
+function ascii(bytes: Uint8Array): string {
+  return [...bytes].map((b) => (b >= 0x20 && b < 0x7f ? String.fromCharCode(b) : '.')).join('');
+}
+
+function firstFrame<T extends string>(events: DecoderEvent[], code: T): ReturnType<typeof parseResponse> | undefined {
+  for (const e of events) if (e.type === 'frame' && e.frame.codeChar === code) return parseResponse(e.frame);
+  return undefined;
+}
+
+/**
+ * Timestamped change log. Polls A and L, prints only what changed, and makes the
+ * scanner's silences visible: when it stops answering (loading scanlists, mode
+ * change), when it resumes, how long that took and how many replies it had queued.
+ * Bytes that arrive outside any request are printed too, in hex and ASCII.
+ */
+async function logChanges(link: Link, args: Args): Promise<void> {
+  console.log(`\n== Change log every ${args.intervalMs} ms (Ctrl-C to stop). Only differences are printed.`);
+  console.log('   Do things on the scanner: volume, squelch, menus, load scanlists, key presses.\n');
+  let prevLcd: Lcd | undefined;
+  let prevStatus: Status | undefined;
+  let misses = 0;
+  let silentSince = 0;
+  let polls = 0;
+  for (;;) {
+    const stray = link.takeStray();
+    if (stray.length) console.log(`${stamp()} STRAY ${stray.length} bytes: ${toHex(stray.subarray(0, 48))}${stray.length > 48 ? ' ...' : ''}  "${ascii(stray.subarray(0, 48))}"`);
+    const a = await link.transact(getStatus(), args.quietMs, args.timeoutMs, true);
+    const l = await link.transact(getLcd(), args.quietMs, args.timeoutMs, true);
+    polls++;
+    const frames = [...a.events, ...l.events].filter((e) => e.type === 'frame');
+    const status = firstFrame(a.events, 'A');
+    const lcd = firstFrame(l.events, 'L');
+    if (!status && !lcd) {
+      misses++;
+      if (misses === 1) {
+        silentSince = Date.now();
+        console.log(`${stamp()} SILENT: no reply to A or L (poll ${polls})`);
+      } else if (misses % 10 === 0) {
+        console.log(`${stamp()}   still silent, ${((Date.now() - silentSince) / 1000).toFixed(1)} s, ${misses} unanswered polls`);
+      }
+      await sleep(args.intervalMs);
+      continue;
+    }
+    if (misses > 0) {
+      console.log(`${stamp()} RESUMED after ${((Date.now() - silentSince) / 1000).toFixed(1)} s and ${misses} unanswered polls; ${frames.length} frame(s) in this exchange`);
+      misses = 0;
+    }
+    if (frames.length > 2) console.log(`${stamp()} BACKLOG: ${frames.length} frames answered two requests (codes ${frames.map((e) => (e.type === 'frame' ? e.frame.codeChar : '?')).join('')})`);
+    if (status && 'status' in status) {
+      const st = status.status;
+      if (prevStatus) {
+        const ch: string[] = [];
+        if (st.mode !== prevStatus.mode) ch.push(`mode ${prevStatus.mode} (${prevStatus.modeName}) -> ${st.mode} (${st.modeName})`);
+        if (st.frequencyHz !== prevStatus.frequencyHz) ch.push(`freq ${formatFrequency(prevStatus.frequencyHz)} -> ${formatFrequency(st.frequencyHz)}`);
+        if (st.rxMode !== prevStatus.rxMode) ch.push(`rxmode ${prevStatus.rxModeName} -> ${st.rxModeName}`);
+        if (st.squelch.raw !== prevStatus.squelch.raw) ch.push(`squelch 0x${prevStatus.squelch.raw.toString(16)} -> 0x${st.squelch.raw.toString(16)} (rf=${st.squelch.rf} unmuted=${st.squelch.unmuted})`);
+        if (st.battery.level !== prevStatus.battery.level || st.battery.usb !== prevStatus.battery.usb) ch.push(`battery ${st.battery.level} usb=${st.battery.usb}`);
+        if (st.led.r !== prevStatus.led.r || st.led.g !== prevStatus.led.g || st.led.b !== prevStatus.led.b) ch.push(`led ${st.led.r},${st.led.g},${st.led.b}`);
+        if (Math.abs(st.rssi - prevStatus.rssi) >= 40) ch.push(`rssi ${prevStatus.rssi} -> ${st.rssi}`);
+        for (const c of ch) console.log(`${stamp()} A  ${c}`);
+      } else {
+        console.log(`${stamp()} A  mode ${st.mode} (${st.modeName}) freq ${formatFrequency(st.frequencyHz)} rxmode ${st.rxModeName} squelch 0x${st.squelch.raw.toString(16)} rssi ${st.rssi}`);
+      }
+      prevStatus = st;
+    }
+    if (lcd && 'lcd' in lcd) {
+      const cur = lcd.lcd;
+      if (prevLcd) {
+        for (let i = 0; i < 6; i++) {
+          if (cur.lines[i] !== prevLcd.lines[i]) {
+            const rawLine = cur.raw.subarray(i * 16, (i + 1) * 16);
+            const nonAscii = [...rawLine].some((b) => b >= 0x80 || (b < 0x20 && b !== 0));
+            console.log(`${stamp()} L${i} |${cur.lines[i]}|${nonAscii ? '  bytes ' + toHex(rawLine) : ''}`);
+          }
+        }
+        if (toHex(cur.icons.raw) !== toHex(prevLcd.icons.raw)) console.log(`${stamp()} I  icons ${toHex(prevLcd.icons.raw)} -> ${toHex(cur.icons.raw)}  ${describeIcons(cur.icons)}`);
+        if (cur.cursorLine !== prevLcd.cursorLine) console.log(`${stamp()} C  cursor line ${prevLcd.cursorLine} -> ${cur.cursorLine}`);
+      } else {
+        console.log(`${stamp()} L  ${cur.lines.map((x) => `|${x}|`).join(' ')}`);
+        console.log(`${stamp()} I  icons ${toHex(cur.icons.raw)}  ${describeIcons(cur.icons)}`);
+      }
+      prevLcd = cur;
+    }
+    await sleep(args.intervalMs);
+  }
+}
+
+/** Send nothing at all; report whatever arrives, with timestamps and the gap since the previous chunk. */
+async function listen(link: Link): Promise<void> {
+  console.log('\n== Listening, sending nothing (Ctrl-C to stop). Use the scanner normally.');
+  console.log('   If nothing ever prints, the scanner only speaks when spoken to.\n');
+  let last = Date.now();
+  let total = 0;
+  link.tap((bytes) => {
+    const now = Date.now();
+    total += bytes.length;
+    console.log(`${stamp()} +${now - last} ms  ${bytes.length} bytes  ${toHex(bytes.subarray(0, 48))}${bytes.length > 48 ? ' ...' : ''}  "${ascii(bytes.subarray(0, 48))}"`);
+    last = now;
+  });
+  process.on('SIGINT', () => {
+    console.log(`\n${total} bytes received in total.`);
+    process.exit(0);
+  });
+  for (;;) await sleep(1000);
+}
+
 /** rl.question that survives stdin closing (e.g. when input is piped). */
 async function ask(rl: ReturnType<typeof createInterface>, prompt: string): Promise<string> {
   try {
@@ -422,6 +559,10 @@ async function main(): Promise<void> {
       await identify(link, args);
     } else if (args.watch) {
       await watch(link, args);
+    } else if (args.log) {
+      await logChanges(link, args);
+    } else if (args.listen) {
+      await listen(link);
     } else {
       await runQueries(link, args);
       if (args.clock) {

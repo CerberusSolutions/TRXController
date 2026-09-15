@@ -82,7 +82,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `npm install`
 - `npm test` runs the rcip unit tests
 - `npm run typecheck`
-- `npm run probe -- --list` / `npm run probe -- COM7` / `npm run probe -- COM7 --identify`
+- `npm run probe -- --list` / `npm run probe -- COM7` / `npm run probe -- COM7 --identify`;
+  `--log` prints a timestamped change log (LCD lines with raw bytes when non-ASCII, icon
+  bytes, status fields, silences and how many replies were queued, stray bytes) while you
+  use the scanner; `--listen` sends nothing and prints anything that arrives unprompted.
 - `npm run dev` starts Electron with hot reload
 - `npm run build` then `npm start` runs the built app
 - `npm run dist` builds the Windows installer into `release/` (electron-builder, NSIS,
