@@ -56,11 +56,13 @@ Pushing a version tag builds the installer on a Windows runner and attaches it t
 Release (`.github/workflows/release.yml`), so users download it from the Releases page:
 
 ```
-npm version patch          # bumps package.json (0.2.0 -> 0.2.1), commits, tags v0.2.1
-git push --follow-tags     # the tag starts the Release workflow
+.\scripts\release.ps1            # patch: 0.2.1 -> 0.2.2
+.\scripts\release.ps1 minor      # 0.2.1 -> 0.3.0
 ```
 
-Use `minor` or `major` instead of `patch` as appropriate. The workflow checks the tag against
+The script refuses a dirty tree, then runs `git checkout main`, `git pull`,
+`npm version <bump>` (commits and tags `v<version>`) and `git push --follow-tags`, stopping at
+the first failure; the pushed tag starts the Release workflow. The workflow checks the tag against
 `package.json`, runs the tests, builds `TRXController-Setup-<version>.exe` and publishes the
 release with generated notes. Progress is under the repository's Actions tab; the installer is
 also kept as a workflow artifact for manual runs (Actions > Release > Run workflow).
