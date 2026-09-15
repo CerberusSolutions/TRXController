@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ReceptionRow } from "../../../shared/ipc";
 import { rowMatches, useLog } from "../store/log";
+import { useScanner } from "../store/scanner";
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -41,6 +42,13 @@ export default function LogTable() {
   const clear = useLog((s) => s.clear);
   const [now, setNow] = useState(Date.now());
   const hasOpen = rows.some((r) => r.endedAt === null);
+  // Click a frequency to tune to it, the same Searches › Tune Mode macro as the Band tab.
+  const tune = useScanner((s) => s.tune);
+  const tuneState = useScanner((s) => s.tuneState);
+  const canTune = useScanner(
+    (s) => (s.snapshot.link.status === "connected" || s.snapshot.link.status === "unresponsive") && !s.snapshot.link.stall,
+  );
+  const tuning = tuneState?.phase === "tuning";
 
   // Tick once a second only while a reception is open, to grow its duration.
   useEffect(() => {
@@ -68,6 +76,15 @@ export default function LogTable() {
             ? `${rows.length} log ${rows.length === 1 ? "entry" : "entries"}`
             : `${visible.length} of ${rows.length} log entries`}
         </span>
+        {tuneState && (
+          <span className={`text-[11px] ${tuneState.phase === "error" ? "text-red" : tuneState.phase === "done" ? "text-green" : "text-amber"}`}>
+            {tuneState.phase === "tuning"
+              ? `Tuning ${(tuneState.hz / 1e6).toFixed(4)} MHz…`
+              : tuneState.phase === "done"
+                ? `Tuned to ${(tuneState.hz / 1e6).toFixed(4)} MHz`
+                : `Tune failed: ${tuneState.message ?? ""}`}
+          </span>
+        )}
         <button
           className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
           disabled={rows.length === 0}
@@ -132,9 +149,17 @@ export default function LogTable() {
                     <span className="ml-1 text-ink-2">×{r.calls}</span>
                   )}
                 </span>
-                <span className="text-amber-2">
+                <button
+                  type="button"
+                  className={`text-left text-amber-2 ${canTune && !tuning ? "cursor-pointer hover:underline hover:decoration-amber-2/60 hover:underline-offset-2" : "cursor-default"}`}
+                  disabled={!canTune || tuning}
+                  title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode)` : undefined}
+                  onClick={() => {
+                    if (canTune && !tuning) void tune(r.frequencyHz);
+                  }}
+                >
                   {(r.frequencyHz / 1e6).toFixed(6)}
-                </span>
+                </button>
                 <span className="text-cyan">{r.signalType || r.mode}</span>
                 <span
                   className="truncate font-sans text-[13px] text-ink"

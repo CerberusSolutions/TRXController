@@ -174,11 +174,15 @@ export default function HelpDialog() {
             </p>
           </Section>
 
-          <Section title="Keyboard">
+          <Section title="Keyboard and tuning">
             <p>
               The keypad follows the keyboard while the scanner is connected: arrow keys, <kbd className="font-mono text-ink">Enter</kbd> for SEL,{' '}
               <kbd className="font-mono text-ink">Esc</kbd> for MENU, <kbd className="font-mono text-ink">0-9</kbd> and{' '}
               <kbd className="font-mono text-ink">.</kbd>. Hover a key for its shortcut.
+            </p>
+            <p className="mt-2">
+              Click a bar on the Band tab, a frequency in the log, or type one into the Tune box under the keypad, and the app walks the
+              scanner's own menus (Searches › Tune Mode) to tune there. <b className="text-ink">Scan</b> takes it back to scanning.
             </p>
           </Section>
 
