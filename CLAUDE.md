@@ -34,7 +34,8 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   `src/main/scanner/macros.ts` is where those live: each step is verified against the
   LCD (menu title, cursor line, Tune Mode screen) before the next key, and the menu
   navigator finds items by label so menu order and scrolling do not matter. Click-to-tune
-  on the Band tab and the Tune box under the keypad are Main Menu > Searches > Tune Mode,
+  on the Band tab, on a frequency in the log table, and the Tune box under the keypad are
+  Main Menu > Searches > Tune Mode,
   the digits with the decimal point, then SEL (the scanner's ENTER); "Scan" is
   Main Menu > Scan. One macro runs at a time (`ScannerSession.runMacro`).
 - Serial: 115200 baud, 8N1, no flow control. Remote control mode is always active;
