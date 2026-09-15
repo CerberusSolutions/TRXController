@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppInfo } from '../../../shared/ipc';
+import type { AppInfo, UpdateInfo } from '../../../shared/ipc';
 
 const HELP_SEEN_KEY = 'trx.helpSeen';
 const DIAG_KEY = 'trx.diagnostics';
@@ -17,6 +17,9 @@ interface UiState {
   app: AppInfo | null;
   /** Ctrl+Shift+D: shows the raw display bytes and other testing aids. */
   diagnostics: boolean;
+  /** Latest release check from main; null until one has completed. */
+  update: UpdateInfo | null;
+  setUpdate: (u: UpdateInfo | null) => void;
   openHelp: () => void;
   closeHelp: () => void;
   toggleDiagnostics: () => void;
@@ -28,6 +31,8 @@ export const useUi = create<UiState>((set) => ({
   helpOpen: false,
   app: null,
   diagnostics: loadDiagnostics(),
+  update: null,
+  setUpdate: (update) => set({ update }),
   openHelp: () => set({ helpOpen: true }),
   toggleDiagnostics: () =>
     set((s) => {
@@ -50,6 +55,7 @@ export const useUi = create<UiState>((set) => ({
   loadAppInfo: async () => {
     if (!window.trx?.appInfo) return;
     set({ app: await window.trx.appInfo() });
+    if (window.trx.updateCheck) set({ update: await window.trx.updateCheck() });
   },
 }));
 

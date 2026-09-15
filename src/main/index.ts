@@ -1,10 +1,11 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, screen, shell, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, screen, shell, type Rectangle } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { MIN_WINDOW, SettingsStore } from './settings';
+import { checkForUpdate } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
 import { ScannerSession } from './scanner/session';
@@ -65,6 +66,23 @@ const session = new ScannerSession(serialTransportFactory, {
   log: (msg) => console.log(`[scanner] ${msg}`),
 });
 
+/** Release check: shortly after launch, then every six hours while the app runs. */
+const UPDATE_FIRST_CHECK_MS = 5000;
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+let latestUpdate: UpdateInfo | null = null;
+let updateTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function runUpdateCheck(): Promise<void> {
+  // Chromium's network stack (net.fetch) follows the system proxy; Node's fetch does not.
+  const info = await checkForUpdate(app.getVersion(), net.fetch);
+  if (info) {
+    latestUpdate = info;
+    if (info.newer) console.log(`[update] v${info.latest} is available (running v${info.current})`);
+    broadcast(IPC.update, info);
+  }
+  updateTimer = setTimeout(() => void runUpdateCheck(), UPDATE_INTERVAL_MS);
+}
+
 const AUTO_CONNECT_INTERVAL_MS = 5000;
 let autoConnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -116,6 +134,7 @@ function registerIpc(): void {
     IPC.appInfo,
     (): AppInfo => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron ?? '' }),
   );
+  ipcMain.handle(IPC.updateCheck, () => latestUpdate);
   ipcMain.handle(IPC.sendKey, async (_e, code: unknown) => {
     if (typeof code !== 'number' || !isKeyCode(code)) throw new Error(`Unknown key code ${String(code)}`);
     await session.pressKey(code);
@@ -283,6 +302,7 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   scheduleAutoConnect(500);
+  updateTimer = setTimeout(() => void runUpdateCheck(), UPDATE_FIRST_CHECK_MS);
   nativeTheme.on('updated', applyChrome);
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -296,6 +316,8 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   if (autoConnectTimer) clearTimeout(autoConnectTimer);
   autoConnectTimer = null;
+  if (updateTimer) clearTimeout(updateTimer);
+  updateTimer = null;
   void session.disconnect(false);
   logger?.flush();
   db?.close();

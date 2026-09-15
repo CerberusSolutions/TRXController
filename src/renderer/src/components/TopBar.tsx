@@ -19,6 +19,7 @@ export default function TopBar() {
   const connected = link.status === 'connected' || link.status === 'unresponsive' || link.status === 'connecting';
   const v = snapshot.version;
   const app = useUi((s) => s.app);
+  const update = useUi((s) => s.update);
   const openHelp = useUi((s) => s.openHelp);
 
   return (
@@ -34,6 +35,17 @@ export default function TopBar() {
           BETA
         </span>
         {app && <span className="font-mono text-[11px] text-ink-3">v{app.version}</span>}
+        {update?.newer && (
+          <a
+            className="no-drag rounded border border-green/60 px-1.5 py-px text-[10px] font-bold tracking-wider text-green hover:bg-green/10"
+            href={update.url}
+            target="_blank"
+            rel="noreferrer"
+            title={`v${update.latest} is on GitHub. Opens the release page in your browser.`}
+          >
+            v{update.latest} available
+          </a>
+        )}
       </div>
 
       <div className="no-drag ml-auto flex items-center gap-2">

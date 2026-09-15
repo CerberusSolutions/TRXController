@@ -10,6 +10,7 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type UpdateInfo,
   type WtrMatch,
 } from '../shared/ipc';
 
@@ -55,6 +56,13 @@ const api = {
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),
+  /** Latest known release check (null until the first check completes or if GitHub was unreachable). */
+  updateCheck: (): Promise<UpdateInfo | null> => ipcRenderer.invoke(IPC.updateCheck),
+  onUpdate: (cb: (u: UpdateInfo) => void): (() => void) => {
+    const listener = (_e: unknown, u: UpdateInfo): void => cb(u);
+    ipcRenderer.on(IPC.update, listener);
+    return () => ipcRenderer.removeListener(IPC.update, listener);
+  },
 };
 
 export type TrxApi = typeof api;
