@@ -12,6 +12,7 @@ import {
   type ThemeMode,
   type UpdateInfo,
   type WtrMatch,
+  type RepeaterMatch,
 } from '../shared/ipc';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -53,6 +54,8 @@ const api = {
   setTheme: (mode: ThemeMode): Promise<void> => ipcRenderer.invoke(IPC.setTheme, mode),
   wtrImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.wtrImport),
   wtrLookup: (hz: number): Promise<WtrMatch[]> => ipcRenderer.invoke(IPC.wtrLookup, hz),
+  repeatersImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.repeatersImport),
+  repeatersLookup: (hz: number): Promise<RepeaterMatch[]> => ipcRenderer.invoke(IPC.repeatersLookup, hz),
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),

@@ -8,20 +8,25 @@ interface IdentityState {
   error: string | null;
   wtrImporting: boolean;
   wtrResult: ImportResult | null;
+  repeatersImporting: boolean;
+  repeatersResult: ImportResult | null;
   settings: Settings;
   refresh: () => Promise<void>;
   importFile: () => Promise<void>;
   importWtr: () => Promise<void>;
+  importRepeaters: () => Promise<void>;
   saveSettings: (patch: Partial<Settings>) => Promise<void>;
 }
 
 export const useIdentities = create<IdentityState>((set) => ({
-  stats: { dmrUsers: 0, importedAt: null, source: null, wtrLicences: 0, wtrImportedAt: null, wtrSource: null },
+  stats: { dmrUsers: 0, importedAt: null, source: null, wtrLicences: 0, wtrImportedAt: null, wtrSource: null, repeaters: 0, repeatersImportedAt: null, repeatersSource: null },
   importing: false,
   lastResult: null,
   error: null,
   wtrImporting: false,
   wtrResult: null,
+  repeatersImporting: false,
+  repeatersResult: null,
   settings: { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null },
 
   refresh: async () => {
@@ -41,6 +46,20 @@ export const useIdentities = create<IdentityState>((set) => ({
       set({ error: (e as Error).message.replace(/^Error invoking remote method '[^']+': Error: /, '') });
     } finally {
       set({ wtrImporting: false });
+    }
+  },
+
+  importRepeaters: async () => {
+    if (!window.trx) return;
+    set({ repeatersImporting: true, error: null });
+    try {
+      const result = await window.trx.repeatersImport();
+      if (result) set({ repeatersResult: result });
+      set({ stats: await window.trx.identityStats() });
+    } catch (e) {
+      set({ error: (e as Error).message.replace(/^Error invoking remote method '[^']+': Error: /, '') });
+    } finally {
+      set({ repeatersImporting: false });
     }
   },
 

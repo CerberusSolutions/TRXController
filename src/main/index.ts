@@ -1,9 +1,10 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, screen, shell, type Rectangle } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
+import { readRepeaterCsv } from './identities/repeaters';
 import { MIN_WINDOW, SettingsStore } from './settings';
 import { checkForUpdate } from './updates';
 import { LogDb } from './log/db';
@@ -49,12 +50,24 @@ function licencesFor(hz: number): WtrMatch[] {
   return matches;
 }
 
-/** Attach the DMR user for the current radio ID and the nearest Ofcom licences for the frequency. */
+let repeaterCache: { hz: number; matches: RepeaterMatch[] } | null = null;
+
+function repeatersFor(hz: number): RepeaterMatch[] {
+  if (!db) return [];
+  if (repeaterCache && repeaterCache.hz === hz) return repeaterCache.matches;
+  const s = settings?.get();
+  const matches = db.lookupRepeaters(hz, { lat: s?.lat, lon: s?.lon, limit: 5 });
+  repeaterCache = { hz, matches };
+  return matches;
+}
+
+/** Attach the DMR user for the current radio ID, and the nearest Ofcom licences and amateur repeaters for the frequency. */
 function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const rid = snapshotRadioId(s);
   const radioUser = db && rid !== null ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
   const licences = s.status ? licencesFor(s.status.frequencyHz) : [];
-  return { ...s, radioUser, licences };
+  const repeaters = s.status ? repeatersFor(s.status.frequencyHz) : [];
+  return { ...s, radioUser, licences, repeaters };
 }
 
 const session = new ScannerSession(serialTransportFactory, {
@@ -182,11 +195,33 @@ function registerIpc(): void {
     return { imported, skipped: parsed.skipped, file: name };
   });
   ipcMain.handle(IPC.wtrLookup, (_e, hz: unknown) => (typeof hz === 'number' ? licencesFor(hz) : []));
+  ipcMain.handle(IPC.repeatersImport, async (): Promise<ImportResult | null> => {
+    if (!db) throw new Error('Database not open');
+    const res = await dialog.showOpenDialog({
+      title: 'Import UK repeater list (ETCC CSV from ukrepeater.net)',
+      filters: [
+        { name: 'ETCC repeater list', extensions: ['csv'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    });
+    const file = res.filePaths[0];
+    if (res.canceled || !file) return null;
+    const parsed = await readRepeaterCsv(file);
+    if (parsed.rows.length === 0) throw new Error('No repeaters found in that file');
+    const name = file.split(/[\\/]/).pop() ?? file;
+    const imported = db.replaceRepeaters(parsed.rows, name);
+    repeaterCache = null;
+    console.log(`[repeaters] imported ${imported} repeaters from ${file} (${parsed.read} rows read, ${parsed.skipped} skipped)`);
+    return { imported, skipped: parsed.skipped, file: name };
+  });
+  ipcMain.handle(IPC.repeatersLookup, (_e, hz: unknown) => (typeof hz === 'number' ? repeatersFor(hz) : []));
   ipcMain.handle(IPC.settingsGet, () => settings?.get() ?? null);
   ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) => {
     if (!settings || typeof patch !== 'object' || patch === null) throw new Error('Bad settings');
     const next = settings.set(patch as Partial<Settings>);
     licenceCache = null;
+    repeaterCache = null;
     return next;
   });
   ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {

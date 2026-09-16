@@ -14,6 +14,14 @@ export const DATA_SOURCES = [
     gives: 'Names the business-radio licensee on a heard frequency (hero, log and Band tab).',
   },
   {
+    title: 'UK amateur repeater list (RSGB ETCC)',
+    file: 'repeaterlist_all.csv',
+    size: 'about 60 KB',
+    url: 'https://ukrepeater.net/csvfiles.html',
+    then: 'On that page pick the "all" repeater list, save it, then Data › Import repeater list CSV….',
+    gives: 'Names the amateur repeater on 10 m, 6 m, 2 m, 70 cm and 23 cm, with its CTCSS tone and mode capabilities (FM, DMR, D-STAR, Fusion).',
+  },
+  {
     title: 'RadioID DMR user database',
     file: 'user.csv',
     size: 'about 20 MB',
@@ -92,7 +100,7 @@ export default function HelpDialog() {
             </p>
             <p className="mt-2 text-ink-3">
               Provided as is, with no warranty or guarantee of any kind, express or implied. Use at your own risk. Not affiliated with Whistler,
-              Ofcom or RadioID.
+              Ofcom, RadioID or the RSGB. Repeater data is published by the RSGB Emerging Technology Coordination Committee at ukrepeater.net.
             </p>
           </Section>
 
@@ -112,7 +120,7 @@ export default function HelpDialog() {
 
           <Section title="Optional data files">
             <p className="mb-3">
-              Two free downloads make the log far more useful. Save each file anywhere, then load it with the{' '}
+              Three free downloads make the log far more useful. Save each file anywhere, then load it with the{' '}
               <b className="rounded border border-edge px-1 py-px text-ink">Data</b> button in the top bar. Importing replaces the previous copy, so
               repeat it whenever you fetch a fresh file.
             </p>
