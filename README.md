@@ -34,6 +34,10 @@ npm run build && npm start    # run the built app
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom
   (<https://static.ofcom.org.uk/static/radiolicensing/html/register/WTR.csv>), set your
   location in Data, then Data > Import WTR CSV. Heard frequencies then show the nearest licensees.
+- **UK amateur repeaters**: download the "all" repeater list from the RSGB ETCC
+  (<https://ukrepeater.net/csvfiles.html>), then Data > Import repeater list CSV. Amateur
+  repeater outputs then show the callsign, place, distance, CTCSS tone and FM / DMR / D-STAR /
+  Fusion capabilities, with the repeater whose tone matches the one the scanner detects first.
 
 The same links and steps are on the app's help screen (the `?` button; shown on first run).
 Put downloads in `data/` (git-ignored).

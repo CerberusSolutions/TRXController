@@ -142,6 +142,17 @@ captured on 14 Sep 2026.
   nearest five as `licences`; the hero shows three; receptions store the nearest as
   `licensee`; the Band tab looks it up on hover. Not in the WTR: PMR446, Simple UK/Site
   business radio, amateur, MoD/Home Office (so the P25 system stays unnamed).
+- UK amateur repeaters: `Data > Import repeater list CSV` loads the RSGB ETCC list from
+  https://ukrepeater.net/csvfiles.html (`repeaterlist_all.csv`, ~800 rows: callsign, band,
+  channel, txMHz = repeater output, rxMHz = input, CTCSS, locator, place, lat/lon, Y flags for
+  ANALOG/DMR/DSTAR/FUSION) into the `repeaters` table (`src/main/identities/repeaters.ts`).
+  Lookup is ±3.125 kHz on the output or the input (`side`), nearest first, no radius cap.
+  Snapshots carry the nearest five as `repeaters`; the hero shows a "Repeater" block when there
+  is no WTR licence (amateur bands never have one), with colour-coded FM / DMR / D-STAR / Fusion
+  pills (`--t-mode-*` tokens) and the repeater whose CTCSS matches the detected tone first
+  (`rankRepeaters` in `src/shared/repeaters.ts`, since several share each channel); receptions
+  store that one as `licensee` ("GB3AA · BRISTOL"). Not in the list: repeaters awaiting
+  licence. The beta RSGB API (https://api-beta.rsgb.online/) may replace the CSV later.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

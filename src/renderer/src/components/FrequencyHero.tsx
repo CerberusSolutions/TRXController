@@ -1,10 +1,33 @@
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
+import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
 const BADGE = 'inline-flex min-w-[4.25rem] justify-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-widest';
+
+/** Colour-coded capability pills for a repeater: FM, DMR, D-STAR, Fusion. */
+const MODE_PILL: Readonly<Record<string, string>> = {
+  FM: 'bg-mode-fm/15 text-mode-fm',
+  DMR: 'bg-mode-dmr/15 text-mode-dmr',
+  'D-STAR': 'bg-mode-dstar/15 text-mode-dstar',
+  Fusion: 'bg-mode-fusion/15 text-mode-fusion',
+};
+
+function ModePills({ modes }: { modes: string }) {
+  const list = modes.split(' · ').filter(Boolean);
+  if (list.length === 0) return null;
+  return (
+    <span className="inline-flex shrink-0 gap-1 align-middle">
+      {list.map((m) => (
+        <span key={m} className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${MODE_PILL[m] ?? 'bg-panel-2 text-ink-3'}`}>
+          {m}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 /**
  * `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted
@@ -24,7 +47,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, licences } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences, repeaters } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
 
@@ -56,6 +79,10 @@ export default function FrequencyHero() {
   // name on screen on the polls where the display shows the TGID line instead.
   const radioUser = snapshotUser && snapshotUser.id === radioId ? snapshotUser : held?.radioUser && held.radioUser.id === radioId ? held.radioUser : null;
   const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
+  // Amateur bands are not in the WTR, so the repeater list stands in: the one whose CTCSS
+  // matches the detected tone first (several share a channel), then nearest.
+  const detectedHz = ctcssHz(detected);
+  const rankedRepeaters = licences.length === 0 && repeaters.length > 0 ? rankRepeaters(repeaters, detected) : [];
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -152,9 +179,37 @@ export default function FrequencyHero() {
               ))}
             </ul>
           </div>
+        ) : rankedRepeaters.length > 0 ? (
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Repeater</span>
+            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
+              {rankedRepeaters.slice(0, 3).map((r, i) => {
+                const match = toneMatches(r, detectedHz);
+                return (
+                  <li
+                    key={r.id}
+                    className="flex min-w-0 items-center gap-2"
+                    title={`${r.channel || r.band}${r.inputHz ? ` · input ${(r.inputHz / 1e6).toFixed(4)}` : ''} · ${r.locator || 'no locator'}${
+                      r.side === 'input' ? ' · you are hearing its input (a mobile)' : ''
+                    }${match ? ' · CTCSS matches the detected tone' : detectedHz !== null && r.ctcss !== null ? ' · CTCSS differs from the detected tone' : ''}`}
+                  >
+                    <span className={`shrink-0 ${i === 0 ? 'font-bold text-ink' : 'text-ink'}`}>{r.callsign}</span>
+                    <ModePills modes={r.modes} />
+                    <span className="min-w-0 truncate text-ink-3">
+                      {r.where ? `${r.where.charAt(0) + r.where.slice(1).toLowerCase()}` : ''}
+                      {r.distanceKm !== null ? ` · ${r.distanceKm < 10 ? r.distanceKm.toFixed(1) : Math.round(r.distanceKm)} km` : ''}
+                      {r.ctcss !== null ? ` · ${r.ctcss.toFixed(1)} Hz` : ''}
+                      {match ? ' ✓' : ''}
+                      {r.side === 'input' ? ' · input' : ''}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         ) : (
           <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
-            {online ? 'No Ofcom licence on this frequency' : ''}
+            {online ? 'No Ofcom licence or repeater on this frequency' : ''}
           </p>
         )}
       </div>

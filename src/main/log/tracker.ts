@@ -18,6 +18,7 @@
 import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
+import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
 
 export interface OpenReception extends NewReception {
   endedAt: null;
@@ -198,7 +199,8 @@ export function describe(s: ScannerSnapshot): Description {
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
     tone: details?.detectedTone ?? '',
-    licensee: s.licences?.[0]?.licensee ?? '',
+    // Amateur bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in for the licensee.
+    licensee: s.licences?.[0]?.licensee || (s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : ''),
     rssiPeak: status.rssi,
   };
 }

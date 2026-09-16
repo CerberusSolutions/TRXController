@@ -50,7 +50,8 @@ function LocationForm() {
 export default function DataMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const { stats, importing, lastResult, wtrImporting, wtrResult, error, refresh, importFile, importWtr } = useIdentities();
+  const { stats, importing, lastResult, wtrImporting, wtrResult, repeatersImporting, repeatersResult, error, refresh, importFile, importWtr, importRepeaters } =
+    useIdentities();
 
   useEffect(() => {
     void refresh();
@@ -104,7 +105,33 @@ export default function DataMenu() {
             )}
           </Section>
 
-          <Section title="Your location (for nearest licensee)">
+          <Section title="UK amateur repeaters (RSGB ETCC)">
+            <p className="mt-1 text-ink-2">
+              {stats.repeaters > 0 ? (
+                <>
+                  <span className="font-mono text-ink">{stats.repeaters.toLocaleString()}</span> repeaters
+                  <span className="text-ink-3"> · {when(stats.repeatersImportedAt, stats.repeatersSource)}</span>
+                </>
+              ) : (
+                'Not imported. Amateur repeater outputs will not be named.'
+              )}
+            </p>
+            <button
+              className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
+              disabled={repeatersImporting}
+              onClick={() => void importRepeaters()}
+            >
+              {repeatersImporting ? 'Importing…' : 'Import repeater list CSV…'}
+            </button>
+            {repeatersResult && !repeatersImporting && (
+              <p className="mt-1 text-xs text-green">
+                Loaded {repeatersResult.imported.toLocaleString()} repeaters from {repeatersResult.file}
+                {repeatersResult.skipped > 0 ? ` (${repeatersResult.skipped} rows skipped)` : ''}.
+              </p>
+            )}
+          </Section>
+
+          <Section title="Your location (for nearest licensee and repeater)">
             <LocationForm />
             <p className="mt-1 text-[11px] text-ink-3">Decimal degrees. Leave blank to sort by name only.</p>
           </Section>

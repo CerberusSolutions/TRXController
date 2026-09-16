@@ -48,6 +48,8 @@ export interface ScannerSnapshot {
   radioUser: DmrUser | null;
   /** Nearest Ofcom licences for status.frequencyHz (empty when none imported/matched). */
   licences: WtrMatch[];
+  /** Amateur repeaters whose output (or input) is status.frequencyHz, nearest first. */
+  repeaters: RepeaterMatch[];
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
@@ -110,6 +112,41 @@ export interface IdentityStats {
   wtrLicences: number;
   wtrImportedAt: number | null;
   wtrSource: string | null;
+  /** ETCC repeater rows, and when/from what they were imported. */
+  repeaters: number;
+  repeatersImportedAt: number | null;
+  repeatersSource: string | null;
+}
+
+/** One UK amateur repeater or gateway from the ETCC list (ukrepeater.net). */
+export interface Repeater {
+  id: number;
+  callsign: string;
+  /** "2M", "70CM", "6M", "23CM", "10M" as the list has it. */
+  band: string;
+  /** Channel designation, e.g. "RV53", "RU76", "DVU46"; may be blank for gateways. */
+  channel: string;
+  /** What the repeater transmits, i.e. what a scanner hears. */
+  outputHz: number;
+  /** The repeater's input, or null if the list has none. */
+  inputHz: number | null;
+  /** CTCSS access tone in Hz, or null (digital-only, toneburst, unknown). */
+  ctcss: number | null;
+  /** Maidenhead locator, 4 or 6 characters. */
+  locator: string;
+  /** Place name as the list has it, e.g. "BRISTOL". */
+  where: string;
+  lat: number | null;
+  lon: number | null;
+  /** "FM · DMR · D-STAR · Fusion", whichever apply. */
+  modes: string;
+}
+
+/** A repeater matched to a heard frequency. */
+export interface RepeaterMatch extends Repeater {
+  distanceKm: number | null;
+  /** Which of the repeater's frequencies the scanner is on. */
+  side: 'output' | 'input';
 }
 
 /** One Ofcom Wireless Telegraphy Register assignment kept by the importer. */
@@ -203,6 +240,8 @@ export const IPC = {
   identityLookup: 'identities:lookup',
   wtrImport: 'wtr:import',
   wtrLookup: 'wtr:lookup',
+  repeatersImport: 'repeaters:import',
+  repeatersLookup: 'repeaters:lookup',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   setTheme: 'theme:set',

@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
 import { distanceKm } from '../identities/wtr';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
@@ -71,6 +71,22 @@ export class LogDb {
         licence_no   TEXT NOT NULL DEFAULT ''
       );
       CREATE INDEX IF NOT EXISTS wtr_freq ON wtr_licences(frequency_hz);
+      CREATE TABLE IF NOT EXISTS repeaters (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        callsign  TEXT NOT NULL,
+        band      TEXT NOT NULL DEFAULT '',
+        channel   TEXT NOT NULL DEFAULT '',
+        output_hz INTEGER NOT NULL,
+        input_hz  INTEGER,
+        ctcss     REAL,
+        locator   TEXT NOT NULL DEFAULT '',
+        place     TEXT NOT NULL DEFAULT '',
+        lat       REAL,
+        lon       REAL,
+        modes     TEXT NOT NULL DEFAULT ''
+      );
+      CREATE INDEX IF NOT EXISTS repeaters_output ON repeaters(output_hz);
+      CREATE INDEX IF NOT EXISTS repeaters_input ON repeaters(input_hz);
     `);
     this.migrate();
     // A reception left open by a crash has no end time; close it at its start.
@@ -164,6 +180,8 @@ export class LogDb {
     const at = this.getMeta('dmr_users.imported_at');
     const w = Number((this.db.prepare('SELECT COUNT(*) AS n FROM wtr_licences').get() as { n: number }).n);
     const wat = this.getMeta('wtr.imported_at');
+    const rp = Number((this.db.prepare('SELECT COUNT(*) AS n FROM repeaters').get() as { n: number }).n);
+    const rat = this.getMeta('repeaters.imported_at');
     return {
       dmrUsers: n,
       importedAt: at ? Number(at) : null,
@@ -171,7 +189,58 @@ export class LogDb {
       wtrLicences: w,
       wtrImportedAt: wat ? Number(wat) : null,
       wtrSource: this.getMeta('wtr.source'),
+      repeaters: rp,
+      repeatersImportedAt: rat ? Number(rat) : null,
+      repeatersSource: this.getMeta('repeaters.source'),
     };
+  }
+
+  // --- ETCC repeaters ------------------------------------------------------
+
+  replaceRepeaters(rows: Iterable<Omit<Repeater, 'id'>>, source: string, now = Date.now()): number {
+    const ins = this.db.prepare(
+      'INSERT INTO repeaters (callsign, band, channel, output_hz, input_hz, ctcss, locator, place, lat, lon, modes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.exec('DELETE FROM repeaters');
+      for (const r of rows) {
+        ins.run(r.callsign, r.band, r.channel, r.outputHz, r.inputHz, r.ctcss, r.locator, r.where, r.lat, r.lon, r.modes);
+        n++;
+      }
+      this.setMeta('repeaters.imported_at', String(now));
+      this.setMeta('repeaters.source', source);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  /**
+   * Repeaters whose output (or, failing that, input) is `hz` within
+   * ±WTR_TOLERANCE_HZ, nearest first when a location is given. No radius
+   * limit: repeaters are sparse and a distant one on the channel is still
+   * the likely answer.
+   */
+  lookupRepeaters(hz: number, opts: { lat?: number | null; lon?: number | null; limit?: number } = {}): RepeaterMatch[] {
+    const lo = hz - WTR_TOLERANCE_HZ;
+    const hi = hz + WTR_TOLERANCE_HZ;
+    const rows = this.db
+      .prepare('SELECT * FROM repeaters WHERE output_hz BETWEEN ? AND ? OR input_hz BETWEEN ? AND ?')
+      .all(lo, hi, lo, hi) as unknown as RawRepeater[];
+    const out: RepeaterMatch[] = [];
+    for (const r of rows) {
+      const rep = toRepeater(r);
+      const distance =
+        opts.lat != null && opts.lon != null && rep.lat !== null && rep.lon !== null ? distanceKm(opts.lat, opts.lon, rep.lat, rep.lon) : null;
+      const side: RepeaterMatch['side'] = Math.abs(rep.outputHz - hz) <= WTR_TOLERANCE_HZ ? 'output' : 'input';
+      out.push({ ...rep, distanceKm: distance, side });
+    }
+    out.sort((a, b) => (a.side === b.side ? 0 : a.side === 'output' ? -1 : 1) || (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9) || a.callsign.localeCompare(b.callsign));
+    return out.slice(0, opts.limit ?? 5);
   }
 
   // --- Ofcom WTR -----------------------------------------------------------
@@ -271,6 +340,38 @@ function toWtr(r: RawWtr): WtrLicence {
     lon: r.lon === null ? null : Number(r.lon),
     ngr: r.ngr,
     licenceNo: r.licence_no,
+  };
+}
+
+interface RawRepeater {
+  id: number;
+  callsign: string;
+  band: string;
+  channel: string;
+  output_hz: number;
+  input_hz: number | null;
+  ctcss: number | null;
+  locator: string;
+  place: string;
+  lat: number | null;
+  lon: number | null;
+  modes: string;
+}
+
+function toRepeater(r: RawRepeater): Repeater {
+  return {
+    id: Number(r.id),
+    callsign: r.callsign,
+    band: r.band,
+    channel: r.channel,
+    outputHz: Number(r.output_hz),
+    inputHz: r.input_hz === null ? null : Number(r.input_hz),
+    ctcss: r.ctcss === null ? null : Number(r.ctcss),
+    locator: r.locator,
+    where: r.place,
+    lat: r.lat === null ? null : Number(r.lat),
+    lon: r.lon === null ? null : Number(r.lon),
+    modes: r.modes,
   };
 }
 
