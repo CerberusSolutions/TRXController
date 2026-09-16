@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, screen, shell, type Rectangle } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
 import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
@@ -6,10 +6,11 @@ import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
 import { MIN_WINDOW, SettingsStore } from './settings';
-import { checkForUpdate } from './updates';
+import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
-import { snapshotRadioId } from './log/tracker';
+import { describe as describeSnapshot, snapshotRadioId } from './log/tracker';
+import { RrService } from './identities/rrService';
 import { ScannerSession } from './scanner/session';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
 
@@ -38,6 +39,7 @@ function broadcast(channel: string, payload: unknown): void {
 
 let db: LogDb | null = null;
 let logger: ReceptionLogger | null = null;
+let rr: RrService | null = null;
 let settings: SettingsStore | null = null;
 let licenceCache: { hz: number; matches: WtrMatch[] } | null = null;
 
@@ -61,17 +63,32 @@ function repeatersFor(hz: number): RepeaterMatch[] {
   return matches;
 }
 
-/** Attach the DMR user for the current radio ID, and the nearest Ofcom licences and amateur repeaters for the frequency. */
+/** RadioReference's cached view of the current frequency, resolved for the talkgroup and NAC in hand. */
+function rrFor(s: ScannerSnapshot): ScannerSnapshot['rr'] {
+  if (!rr || !s.status) return null;
+  const d = describeSnapshot(s);
+  const nac = /^NAC\s+(\S+)/i.exec(d.tone)?.[1] ?? null;
+  return rr.info(s.status.frequencyHz, { tgid: d.tgid, nac });
+}
+
+/** Attach the DMR user for the current radio ID, and the nearest Ofcom licences, amateur repeaters and RadioReference data for the frequency. */
 function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const rid = snapshotRadioId(s);
   const radioUser = db && rid !== null ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
   const licences = s.status ? licencesFor(s.status.frequencyHz) : [];
   const repeaters = s.status ? repeatersFor(s.status.frequencyHz) : [];
-  return { ...s, radioUser, licences, repeaters };
+  return { ...s, radioUser, licences, repeaters, rr: rrFor(s) };
+}
+
+/** Settings as the renderer may see them: the RadioReference password stays in main. */
+function publicSettings(s: Settings): Settings {
+  return { ...s, rr: { ...s.rr, password: '' } };
 }
 
 const session = new ScannerSession(serialTransportFactory, {
   onSnapshot: (raw: ScannerSnapshot) => {
+    // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
+    if (rr && raw.status?.squelch.rf) rr.request(raw.status.frequencyHz);
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
@@ -216,13 +233,68 @@ function registerIpc(): void {
     return { imported, skipped: parsed.skipped, file: name };
   });
   ipcMain.handle(IPC.repeatersLookup, (_e, hz: unknown) => (typeof hz === 'number' ? repeatersFor(hz) : []));
-  ipcMain.handle(IPC.settingsGet, () => settings?.get() ?? null);
+  ipcMain.handle(IPC.settingsGet, () => (settings ? publicSettings(settings.get()) : null));
   ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) => {
     if (!settings || typeof patch !== 'object' || patch === null) throw new Error('Bad settings');
-    const next = settings.set(patch as Partial<Settings>);
+    const p = { ...(patch as Partial<Settings>) };
+    // The renderer never carries the password; only rr:account-set changes it.
+    if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
+    const next = settings.set(p);
     licenceCache = null;
     repeaterCache = null;
-    return next;
+    return publicSettings(next);
+  });
+  ipcMain.handle(IPC.rrStatus, () => rr?.status() ?? null);
+  ipcMain.handle(IPC.rrAccountSet, (_e, username: unknown, password: unknown) => {
+    if (!rr || !settings || typeof username !== 'string' || typeof password !== 'string') throw new Error('Bad account');
+    const cur = settings.get().rr;
+    let stored = cur.password;
+    if (password !== '') {
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('This Windows account cannot encrypt the password (safeStorage unavailable)');
+      stored = safeStorage.encryptString(password).toString('base64');
+    }
+    settings.set({ rr: { ...cur, username: username.trim(), password: username.trim() ? stored : '' } });
+    rr.resetFailures();
+    return rr.status();
+  });
+  ipcMain.handle(IPC.rrTest, async () => {
+    const client = rr?.client();
+    if (!client) throw new Error(rr?.status().appKey ? 'Enter your RadioReference username and password first' : 'This build has no RadioReference key');
+    return client.getUserData();
+  });
+  ipcMain.handle(IPC.rrCountries, async () => {
+    const client = rr?.client();
+    if (!client) throw new Error('Enter your RadioReference username and password first');
+    return (await client.getCountryList()).map((c) => ({ id: c.coid, name: c.name, code: c.code }));
+  });
+  ipcMain.handle(IPC.rrStates, async (_e, coid: unknown) => {
+    const client = rr?.client();
+    if (!client || typeof coid !== 'number') throw new Error('Enter your RadioReference username and password first');
+    return (await client.getStates(coid)).map((r) => ({ id: r.stid, name: r.name, code: r.code }));
+  });
+  ipcMain.handle(IPC.rrRegionSet, (_e, region: unknown) => {
+    if (!rr || !settings || typeof region !== 'object' || region === null) throw new Error('Bad region');
+    const r = region as { coid?: unknown; stid?: unknown; countryName?: unknown; stateName?: unknown };
+    settings.set({
+      rr: {
+        ...settings.get().rr,
+        coid: typeof r.coid === 'number' ? r.coid : null,
+        stid: typeof r.stid === 'number' ? r.stid : null,
+        countryName: typeof r.countryName === 'string' ? r.countryName : '',
+        stateName: typeof r.stateName === 'string' ? r.stateName : '',
+      },
+    });
+    rr.resetFailures();
+    return rr.status();
+  });
+  ipcMain.handle(IPC.rrClearCache, () => {
+    rr?.clearCache();
+    return rr?.status() ?? null;
+  });
+  ipcMain.handle(IPC.rrLookup, (_e, hz: unknown) => {
+    if (!rr || typeof hz !== 'number') return null;
+    rr.request(hz, true);
+    return rr.info(hz);
   });
   ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {
     if (mode !== 'light' && mode !== 'dark' && mode !== 'system') throw new Error('Bad theme mode');
@@ -257,6 +329,17 @@ function openLog(): void {
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
   console.log(`[log] ${path} (${db.count()} receptions)`);
+  rr = new RrService({
+    db,
+    appKey: __RR_APP_KEY__,
+    getSettings: () => settings!.get().rr,
+    decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+    fetchImpl: net.fetch as unknown as FetchLike,
+    // A lookup landed: show it on the current frequency and let the log absorb the names.
+    onChange: () => broadcast(IPC.snapshot, enrich(session.getSnapshot())),
+    log: (msg) => console.log(`[rr] ${msg}`),
+  });
+  console.log(`[rr] ${rr.status().appKey ? 'app key present' : 'no app key in this build'}; ${rr.enabled ? 'enabled' : 'not configured'}`);
 }
 
 // Wide enough for the log table without truncating the system column.
@@ -359,4 +442,6 @@ app.on('before-quit', () => {
   db?.close();
   db = null;
   logger = null;
+  rr?.dispose();
+  rr = null;
 });

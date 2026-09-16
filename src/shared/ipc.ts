@@ -50,6 +50,8 @@ export interface ScannerSnapshot {
   licences: WtrMatch[];
   /** Amateur repeaters whose output (or input) is status.frequencyHz, nearest first. */
   repeaters: RepeaterMatch[];
+  /** What RadioReference knows about status.frequencyHz, from the local cache; null when RadioReference is not set up. */
+  rr: RrInfo | null;
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
@@ -173,8 +175,79 @@ export interface WtrMatch extends WtrLicence {
   distanceKm: number | null;
 }
 
+/** A conventional channel RadioReference lists on a frequency. */
+export interface RrConventional {
+  descr: string;
+  alpha: string;
+  /** Tone / code as RadioReference writes it, e.g. "94.8 PL", "023 DPL", "167 NAC", "CC 1". */
+  tone: string;
+  mode: string;
+  callsign: string;
+  tags: string[];
+}
+
+/** A trunked system RadioReference lists as using the frequency, with the site and talkgroup resolved for the current reception. */
+export interface RrSystemInfo {
+  sid: number;
+  name: string;
+  city: string;
+  /** Site whose frequency list contains the heard frequency (and whose NAC matches when one was detected). */
+  site: { descr: string; location: string; nac: string } | null;
+  /** The talkgroup the scanner reported, if the system's list has it. */
+  talkgroup: { tgDec: number; alpha: string; descr: string; mode: string; enc: number; category: string } | null;
+}
+
+/** RadioReference's view of one frequency, from the local cache. */
+export interface RrInfo {
+  frequencyHz: number;
+  conventional: RrConventional[];
+  systems: RrSystemInfo[];
+  /** When the cache row was fetched; null while nothing is cached yet. */
+  fetchedAt: number | null;
+  /** A lookup is queued or in flight. */
+  pending: boolean;
+  /** Why the last lookup for this frequency failed, if it did. */
+  error: string | null;
+}
+
+export interface RrRegion {
+  id: number;
+  name: string;
+  code: string;
+}
+
+/** RadioReference account and cache state for the Data menu. */
+export interface RrStatus {
+  /** This build carries an app key (RR_KEY at build time). */
+  appKey: boolean;
+  username: string;
+  hasPassword: boolean;
+  coid: number | null;
+  stid: number | null;
+  countryName: string;
+  stateName: string;
+  /** Account, region and key are all present, so lookups run. */
+  enabled: boolean;
+  cachedFreqs: number;
+  cachedSystems: number;
+  cachedTalkgroups: number;
+  lastError: string | null;
+}
+
+/** RadioReference settings. The password is stored encrypted by Electron's safeStorage and blanked when sent to the renderer. */
+export interface RrSettings {
+  username: string;
+  password: string;
+  coid: number | null;
+  stid: number | null;
+  countryName: string;
+  stateName: string;
+}
+
 /** User settings kept by the main process (userData/settings.json). */
 export interface Settings {
+  /** RadioReference account and region. */
+  rr: RrSettings;
   /** Observer location for distance sorting, decimal degrees. */
   lat: number | null;
   lon: number | null;
@@ -242,6 +315,14 @@ export const IPC = {
   wtrLookup: 'wtr:lookup',
   repeatersImport: 'repeaters:import',
   repeatersLookup: 'repeaters:lookup',
+  rrStatus: 'rr:status',
+  rrAccountSet: 'rr:account-set',
+  rrTest: 'rr:test',
+  rrCountries: 'rr:countries',
+  rrStates: 'rr:states',
+  rrRegionSet: 'rr:region-set',
+  rrClearCache: 'rr:clear-cache',
+  rrLookup: 'rr:lookup',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   setTheme: 'theme:set',

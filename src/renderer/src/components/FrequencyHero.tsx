@@ -1,6 +1,7 @@
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
+import { conventionalLabel, rrToneMatches } from '../../../shared/rr';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
 
@@ -47,7 +48,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, licences, repeaters } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences, repeaters, rr } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
 
@@ -83,6 +84,8 @@ export default function FrequencyHero() {
   // matches the detected tone first (several share a channel), then nearest.
   const detectedHz = ctcssHz(detected);
   const rankedRepeaters = licences.length === 0 && repeaters.length > 0 ? rankRepeaters(repeaters, detected) : [];
+  // RadioReference knows this frequency: its names come first, since they are the most specific.
+  const rrRows = rr ? [...rr.systems.map((sys) => ({ kind: 'system' as const, sys })), ...rr.conventional.map((c) => ({ kind: 'conv' as const, c }))] : [];
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -163,7 +166,38 @@ export default function FrequencyHero() {
       </div>
 
       <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
-        {licences.length > 0 ? (
+        {rrRows.length > 0 ? (
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="From the RadioReference database">
+              RadioRef
+            </span>
+            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
+              {rrRows.slice(0, 3).map((row, i) =>
+                row.kind === 'system' ? (
+                  <li key={`s${row.sys.sid}`} className="flex min-w-0 gap-2" title={`RadioReference system ${row.sys.sid}${row.sys.city ? ` · ${row.sys.city}` : ''}${row.sys.site ? ` · site ${row.sys.site.descr} (${row.sys.site.location}) NAC ${row.sys.site.nac}` : ''}${row.sys.talkgroup ? ` · TG ${row.sys.talkgroup.tgDec} ${row.sys.talkgroup.descr}${row.sys.talkgroup.category ? ` [${row.sys.talkgroup.category}]` : ''}` : ''}`}>
+                    <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.sys.name}</span>
+                    <span className="min-w-0 truncate text-ink-3">
+                      {row.sys.site ? row.sys.site.descr : ''}
+                      {row.sys.talkgroup ? ` · ${row.sys.talkgroup.alpha || row.sys.talkgroup.descr}` : ''}
+                      {row.sys.talkgroup?.category ? ` (${row.sys.talkgroup.category})` : ''}
+                      {row.sys.talkgroup?.enc ? ' · enc' : ''}
+                    </span>
+                  </li>
+                ) : (
+                  <li key={`c${i}`} className="flex min-w-0 gap-2" title={`${conventionalLabel(row.c)}${row.c.callsign ? ` · ${row.c.callsign}` : ''}${row.c.tags.length ? ` · ${row.c.tags.join(', ')}` : ''}`}>
+                    <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.c.alpha || row.c.descr}</span>
+                    <span className="min-w-0 truncate text-ink-3">
+                      {row.c.alpha && row.c.descr && row.c.alpha !== row.c.descr ? row.c.descr : ''}
+                      {row.c.tone ? ` · ${row.c.tone}${rrToneMatches(row.c.tone, detected) === true ? ' ✓' : ''}` : ''}
+                      {row.c.mode ? ` · ${row.c.mode}` : ''}
+                      {row.c.tags.length ? ` · ${row.c.tags[0]}` : ''}
+                    </span>
+                  </li>
+                ),
+              )}
+            </ul>
+          </div>
+        ) : licences.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
@@ -209,7 +243,7 @@ export default function FrequencyHero() {
           </div>
         ) : (
           <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
-            {online ? 'No Ofcom licence or repeater on this frequency' : ''}
+            {!online ? '' : rr?.pending ? 'Asking RadioReference…' : rr?.error ? `RadioReference: ${rr.error}` : 'No Ofcom licence or repeater on this frequency'}
           </p>
         )}
       </div>

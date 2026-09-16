@@ -13,6 +13,9 @@ import {
   type UpdateInfo,
   type WtrMatch,
   type RepeaterMatch,
+  type RrInfo,
+  type RrRegion,
+  type RrStatus,
 } from '../shared/ipc';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -56,6 +59,16 @@ const api = {
   wtrLookup: (hz: number): Promise<WtrMatch[]> => ipcRenderer.invoke(IPC.wtrLookup, hz),
   repeatersImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.repeatersImport),
   repeatersLookup: (hz: number): Promise<RepeaterMatch[]> => ipcRenderer.invoke(IPC.repeatersLookup, hz),
+  rrStatus: (): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrStatus),
+  /** Store the RadioReference login; an empty password keeps the one already stored. */
+  rrAccountSet: (username: string, password: string): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrAccountSet, username, password),
+  rrTest: (): Promise<{ username: string; subExpireDate: string }> => ipcRenderer.invoke(IPC.rrTest),
+  rrCountries: (): Promise<RrRegion[]> => ipcRenderer.invoke(IPC.rrCountries),
+  rrStates: (coid: number): Promise<RrRegion[]> => ipcRenderer.invoke(IPC.rrStates, coid),
+  rrRegionSet: (region: { coid: number; stid: number; countryName: string; stateName: string }): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrRegionSet, region),
+  rrClearCache: (): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrClearCache),
+  /** Force a fresh lookup of a frequency. */
+  rrLookup: (hz: number): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz),
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),

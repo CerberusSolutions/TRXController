@@ -153,6 +153,19 @@ captured on 14 Sep 2026.
   (`rankRepeaters` in `src/shared/repeaters.ts`, since several share each channel); receptions
   store that one as `licensee` ("GB3AA · BRISTOL"). Not in the list: repeaters awaiting
   licence. The beta RSGB API (https://api-beta.rsgb.online/) may replace the CSV later.
+- RadioReference (online, optional): `src/main/identities/radioreference.ts` is a SOAP 1.1
+  rpc/encoded client with its own small XML parser (no dependency); `rrService.ts` caches
+  results in `rr_freqs` / `rr_systems` / `rr_talkgroups` and asks the web service only when
+  the squelch opens on an uncached frequency (`searchStateFreq`, then `getTrsDetails` /
+  `getTrsSites` / `getTrsTalkgroups` once per trunked system), one call in flight, 1.2 s
+  apart, 10-minute backoff per failed frequency. Needs the user's own premium login (Data
+  menu; password encrypted with `safeStorage`, blanked in `settingsGet`) and a region
+  (`stid`), plus the app key `__RR_APP_KEY__` injected at build time from `RR_KEY`
+  (`electron.vite.config.ts`; `secrets.RR_KEY` in release.yml). Never commit or print the key.
+  Snapshots carry `rr: RrInfo` (conventional entries; systems with the site matched by
+  frequency then NAC, and the talkgroup for the current TGID); the hero shows a
+  "RadioRef" block; `describe()` fills a blank log name / system from it. Details in
+  `docs/radioreference-api.md`.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

@@ -187,11 +187,14 @@ export function describe(s: ScannerSnapshot): Description {
   const details = screen ?? search;
   const idOr = (v: number | undefined): number | null => (v === undefined || v === NO_ID ? null : v);
   const tag = h?.objectTag ?? '';
+  // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
+  const rrSys = s.rr?.systems[0];
+  const rrName = rrSys?.talkgroup?.alpha || rrSys?.talkgroup?.descr || s.rr?.conventional[0]?.alpha || s.rr?.conventional[0]?.descr || '';
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
-    name: (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '',
-    system: h?.systemTag ?? '',
+    name: (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || rrName,
+    system: h?.systemTag || rrSys?.name || '',
     scanlist: screen?.scanlist ?? search?.name ?? '',
     objectType: screen?.type || (h ? h.recordingTypeName : search ? 'Search' : ''),
     tgid: idOr(h?.talkgroupId1) ?? details?.tgid ?? null,
