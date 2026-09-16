@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -42,6 +43,130 @@ function LocationForm() {
       <button className="rounded-md border border-edge px-2 py-1 text-xs text-ink-2 hover:text-ink" onClick={save}>
         Save
       </button>
+    </div>
+  );
+}
+
+/** RadioReference login, region and cache state. */
+function RadioReferenceForm() {
+  const { rr, rrBusy, rrMessage, setRrAccount, testRr, rrCountries, rrStates, setRrRegion, clearRrCache } = useIdentities();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [countries, setCountries] = useState<RrRegion[] | null>(null);
+  const [states, setStates] = useState<RrRegion[]>([]);
+  const [coid, setCoid] = useState<number | null>(null);
+  const [stid, setStid] = useState<number | null>(null);
+  useEffect(() => {
+    setUsername(rr?.username ?? '');
+  }, [rr?.username]);
+  const inp = 'w-full rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-xs text-ink outline-none focus:border-cyan';
+  const btn = 'rounded-md border border-edge px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50';
+  if (!rr) return <p className="mt-1 text-ink-3">Not available.</p>;
+  if (!rr.appKey) return <p className="mt-1 text-ink-3">This build was made without a RadioReference application key, so lookups are off.</p>;
+
+  const chooseRegion = async (): Promise<void> => {
+    const list = await rrCountries();
+    setCountries(list);
+    const uk = list.find((c) => /united kingdom/i.test(c.name)) ?? list[0];
+    if (uk) {
+      setCoid(uk.id);
+      setStates(await rrStates(uk.id));
+    }
+  };
+  const pickCountry = async (id: number): Promise<void> => {
+    setCoid(id);
+    setStid(null);
+    setStates(await rrStates(id));
+  };
+  const saveRegion = async (): Promise<void> => {
+    const c = countries?.find((x) => x.id === coid);
+    const st = states.find((x) => x.id === stid);
+    if (!c || !st) return;
+    await setRrRegion({ coid: c.id, stid: st.id, countryName: c.name, stateName: st.name });
+    setCountries(null);
+  };
+
+  return (
+    <div className="mt-1 space-y-2">
+      <div className="grid grid-cols-[1fr_1fr_auto_auto] items-end gap-2">
+        <label className="text-[10px] text-ink-3">
+          Username
+          <input className={inp} value={username} placeholder="radioreference.com" onChange={(e) => setUsername(e.target.value)} />
+        </label>
+        <label className="text-[10px] text-ink-3">
+          Password
+          <input className={inp} type="password" value={password} placeholder={rr.hasPassword ? '(unchanged)' : ''} onChange={(e) => setPassword(e.target.value)} />
+        </label>
+        <button
+          className={btn}
+          disabled={rrBusy}
+          onClick={() => {
+            void setRrAccount(username, password).then(() => setPassword(''));
+          }}
+        >
+          Save
+        </button>
+        <button className={btn} disabled={rrBusy || !rr.hasPassword} onClick={() => void testRr()} title="Ask RadioReference who you are">
+          Test
+        </button>
+      </div>
+      {countries ? (
+        <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-2">
+          <label className="text-[10px] text-ink-3">
+            Country
+            <select className={inp} value={coid ?? ''} onChange={(e) => void pickCountry(Number(e.target.value))}>
+              {countries.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-[10px] text-ink-3">
+            Region
+            <select className={inp} value={stid ?? ''} onChange={(e) => setStid(Number(e.target.value))}>
+              <option value="">Choose…</option>
+              {states.map((st) => (
+                <option key={st.id} value={st.id}>
+                  {st.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className={btn} disabled={stid === null} onClick={() => void saveRegion()}>
+            Set
+          </button>
+        </div>
+      ) : (
+        <p className="text-ink-2">
+          Region:{' '}
+          {rr.stid !== null ? (
+            <span className="text-ink">
+              {rr.stateName}, {rr.countryName}
+            </span>
+          ) : (
+            <span className="text-ink-3">not set</span>
+          )}{' '}
+          <button className="text-cyan underline decoration-cyan/40 underline-offset-2 disabled:opacity-50" disabled={!rr.hasPassword} onClick={() => void chooseRegion()}>
+            {rr.stid !== null ? 'change' : 'choose'}
+          </button>
+        </p>
+      )}
+      <p className="text-[11px] text-ink-3">
+        {rr.enabled ? (
+          <>
+            Lookups on. Cached: <span className="font-mono text-ink-2">{rr.cachedFreqs}</span> frequencies,{' '}
+            <span className="font-mono text-ink-2">{rr.cachedSystems}</span> systems, <span className="font-mono text-ink-2">{rr.cachedTalkgroups.toLocaleString()}</span> talkgroups.{' '}
+            <button className="underline decoration-ink-3/40 underline-offset-2" onClick={() => void clearRrCache()}>
+              clear
+            </button>
+          </>
+        ) : (
+          'Lookups run once the login is saved and a region is set. A premium subscription is required for API access.'
+        )}
+      </p>
+      {rr.lastError && <p className="text-xs text-red">Last lookup failed: {rr.lastError}</p>}
+      {rrMessage && <p className={`text-xs ${rrMessage.ok ? 'text-green' : 'text-red'}`}>{rrMessage.text}</p>}
     </div>
   );
 }
@@ -131,6 +256,10 @@ export default function DataMenu() {
             )}
           </Section>
 
+          <Section title="RadioReference (online)">
+            <RadioReferenceForm />
+          </Section>
+
           <Section title="Your location (for nearest licensee and repeater)">
             <LocationForm />
             <p className="mt-1 text-[11px] text-ink-3">Decimal degrees. Leave blank to sort by name only.</p>
@@ -160,10 +289,6 @@ export default function DataMenu() {
                 {lastResult.skipped ? `, ${lastResult.skipped} rows skipped` : ''}.
               </p>
             )}
-          </Section>
-
-          <Section title="RadioReference">
-            <p className="mt-1 text-ink-3">Coming soon.</p>
           </Section>
 
           <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>

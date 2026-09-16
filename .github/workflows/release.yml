@@ -43,6 +43,9 @@ jobs:
       # the release step below does that instead.
       - name: Build the installer
         run: npm run dist -- --publish never
+        env:
+          # RadioReference application key (repository secret). Builds without it work, minus RadioReference.
+          RR_KEY: ${{ secrets.RR_KEY }}
 
       - name: Keep the installer as a workflow artifact
         uses: actions/upload-artifact@v4

@@ -120,7 +120,7 @@ export default function HelpDialog() {
 
           <Section title="Optional data files">
             <p className="mb-3">
-              Three free downloads make the log far more useful. Save each file anywhere, then load it with the{' '}
+              Three free downloads make the log far more useful, and a RadioReference account adds names from its database. Save each file anywhere, then load it with the{' '}
               <b className="rounded border border-edge px-1 py-px text-ink">Data</b> button in the top bar. Importing replaces the previous copy, so
               repeat it whenever you fetch a fresh file.
             </p>
@@ -149,8 +149,20 @@ export default function HelpDialog() {
                   </p>
                 </li>
               ))}
-              <li className="rounded-lg border border-dashed border-edge p-3 text-ink-3">
-                <span className="font-semibold text-ink-2">RadioReference</span> · coming soon.
+              <li className="rounded-lg border border-edge bg-panel-2 p-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-semibold text-ink">RadioReference (online)</span>
+                  <span className="shrink-0 font-mono text-[11px] text-ink-3">premium account</span>
+                </div>
+                <p className="mt-1 text-ink-3">
+                  Names trunked systems, sites and talkgroups, and conventional channels, from the RadioReference database as frequencies are
+                  heard. Results are cached, so each frequency is asked about once a month.
+                </p>
+                <p className="mt-2">
+                  <span className="text-ink-3">Then: </span>
+                  Data › RadioReference: enter your radioreference.com username and password (a premium subscription is required for API access)
+                  and pick your country and region. The password is stored encrypted by Windows for your account only.
+                </p>
               </li>
             </ul>
           </Section>

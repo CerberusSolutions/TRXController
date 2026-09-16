@@ -4,6 +4,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 import { distanceKm } from '../identities/wtr';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
@@ -87,6 +88,31 @@ export class LogDb {
       );
       CREATE INDEX IF NOT EXISTS repeaters_output ON repeaters(output_hz);
       CREATE INDEX IF NOT EXISTS repeaters_input ON repeaters(input_hz);
+      CREATE TABLE IF NOT EXISTS rr_freqs (
+        frequency_hz INTEGER NOT NULL,
+        stid         INTEGER NOT NULL,
+        fetched_at   INTEGER NOT NULL,
+        hits         TEXT NOT NULL,
+        PRIMARY KEY (frequency_hz, stid)
+      );
+      CREATE TABLE IF NOT EXISTS rr_systems (
+        sid        INTEGER PRIMARY KEY,
+        fetched_at INTEGER NOT NULL,
+        system     TEXT NOT NULL,
+        sites      TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS rr_talkgroups (
+        sid      INTEGER NOT NULL,
+        tg_dec   INTEGER NOT NULL,
+        alpha    TEXT NOT NULL DEFAULT '',
+        descr    TEXT NOT NULL DEFAULT '',
+        mode     TEXT NOT NULL DEFAULT '',
+        enc      INTEGER NOT NULL DEFAULT 0,
+        slot     TEXT NOT NULL DEFAULT '',
+        category TEXT NOT NULL DEFAULT '',
+        tags     TEXT NOT NULL DEFAULT '',
+        PRIMARY KEY (sid, tg_dec)
+      );
     `);
     this.migrate();
     // A reception left open by a crash has no end time; close it at its start.
@@ -304,6 +330,69 @@ export class LogDb {
 
   clear(): void {
     this.db.exec('DELETE FROM receptions');
+  }
+
+  // --- RadioReference cache -------------------------------------------------
+
+  rrGetFreq(hz: number, stid: number): { fetchedAt: number; hits: RrFreqHit[] } | null {
+    const r = this.db.prepare('SELECT fetched_at, hits FROM rr_freqs WHERE frequency_hz = ? AND stid = ?').get(hz, stid) as
+      | { fetched_at: number; hits: string }
+      | undefined;
+    if (!r) return null;
+    try {
+      return { fetchedAt: Number(r.fetched_at), hits: JSON.parse(r.hits) as RrFreqHit[] };
+    } catch {
+      return null;
+    }
+  }
+
+  rrPutFreq(hz: number, stid: number, hits: RrFreqHit[], now = Date.now()): void {
+    this.db.prepare('INSERT OR REPLACE INTO rr_freqs (frequency_hz, stid, fetched_at, hits) VALUES (?, ?, ?, ?)').run(hz, stid, now, JSON.stringify(hits));
+  }
+
+  rrGetSystem(sid: number): { fetchedAt: number; system: RrSystemSummary; sites: RrSite[] } | null {
+    const r = this.db.prepare('SELECT fetched_at, system, sites FROM rr_systems WHERE sid = ?').get(sid) as
+      | { fetched_at: number; system: string; sites: string }
+      | undefined;
+    if (!r) return null;
+    try {
+      return { fetchedAt: Number(r.fetched_at), system: JSON.parse(r.system) as RrSystemSummary, sites: JSON.parse(r.sites) as RrSite[] };
+    } catch {
+      return null;
+    }
+  }
+
+  rrPutSystem(system: RrSystemSummary, sites: RrSite[], talkgroups: RrTalkgroup[], now = Date.now()): void {
+    const ins = this.db.prepare(
+      'INSERT OR REPLACE INTO rr_talkgroups (sid, tg_dec, alpha, descr, mode, enc, slot, category, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    );
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('INSERT OR REPLACE INTO rr_systems (sid, fetched_at, system, sites) VALUES (?, ?, ?, ?)').run(system.sid, now, JSON.stringify(system), JSON.stringify(sites));
+      this.db.prepare('DELETE FROM rr_talkgroups WHERE sid = ?').run(system.sid);
+      for (const t of talkgroups) ins.run(system.sid, t.tgDec, t.alpha, t.descr, t.mode, t.enc, t.slot, t.category, t.tags.join(' · '));
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  rrGetTalkgroup(sid: number, tgDec: number): RrTalkgroup | null {
+    const r = this.db.prepare('SELECT * FROM rr_talkgroups WHERE sid = ? AND tg_dec = ?').get(sid, tgDec) as
+      | { tg_dec: number; alpha: string; descr: string; mode: string; enc: number; slot: string; category: string; tags: string }
+      | undefined;
+    if (!r) return null;
+    return { tgDec: Number(r.tg_dec), alpha: r.alpha, descr: r.descr, mode: r.mode, enc: Number(r.enc), slot: r.slot, category: r.category, tags: r.tags ? r.tags.split(' · ') : [] };
+  }
+
+  rrStats(): { freqs: number; systems: number; talkgroups: number } {
+    const n = (sql: string): number => Number((this.db.prepare(sql).get() as { n: number }).n);
+    return { freqs: n('SELECT COUNT(*) AS n FROM rr_freqs'), systems: n('SELECT COUNT(*) AS n FROM rr_systems'), talkgroups: n('SELECT COUNT(*) AS n FROM rr_talkgroups') };
+  }
+
+  rrClear(): void {
+    this.db.exec('DELETE FROM rr_freqs; DELETE FROM rr_systems; DELETE FROM rr_talkgroups');
   }
 
   close(): void {

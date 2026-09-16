@@ -1,9 +1,10 @@
 /** Small JSON settings file in userData, owned by the main process. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { Settings, WindowState } from '../shared/ipc';
+import type { RrSettings, Settings, WindowState } from '../shared/ipc';
 
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null };
+export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR } };
 
 export class SettingsStore {
   private value: Settings;
@@ -42,6 +43,22 @@ export function sanitize(s: Settings): Settings {
     port: typeof s.port === 'string' && s.port.trim() !== '' ? s.port.trim() : null,
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),
+    rr: sanitizeRr(s.rr),
+  };
+}
+
+function sanitizeRr(r: unknown): RrSettings {
+  if (typeof r !== 'object' || r === null) return { ...DEFAULT_RR };
+  const o = r as Record<string, unknown>;
+  const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+  const id = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v > 0 ? v : null);
+  return {
+    username: text(o['username']),
+    password: typeof o['password'] === 'string' ? o['password'] : '',
+    coid: id(o['coid']),
+    stid: id(o['stid']),
+    countryName: text(o['countryName']),
+    stateName: text(o['stateName']),
   };
 }
 

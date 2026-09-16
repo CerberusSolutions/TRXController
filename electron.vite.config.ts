@@ -9,6 +9,9 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin({ exclude: ['@trxcontroller/rcip'] })],
     resolve: { alias: { '@trxcontroller/rcip': rcip } },
+    // RadioReference application key, baked in at build time. Absent (empty) in
+    // builds made without RR_KEY, which disables the RadioReference features.
+    define: { __RR_APP_KEY__: JSON.stringify(process.env['RR_KEY'] ?? '') },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
