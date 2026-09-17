@@ -195,6 +195,18 @@ captured on 14 Sep 2026.
   log's Src column adds `RID` when the row's only name is the radio ID's callsign
   (`rowSource` in `src/renderer/src/lib/sources.ts`); the hero's Listed pills use the same
   initials and colours. The CSV export has a `source` column.
+- A reception the display never named (a blip too short for the object screen, or a search on
+  a programmed frequency) takes the scanner's object (name, scanlist, type, system) from the
+  latest row on that frequency which showed it (`LogDb.lastScannerObject`,
+  `ReceptionLogger.remember`), with source `MEM` so it is never taken for a live reading; a
+  live object arriving later replaces it. The Detail view's Scanner column dims it.
+- Each row also keeps every source's own answer (`scannerName`, `wtr`, `rrName`, `rrSystem`,
+  `rpt`) beside the chosen name, so the log's **Detail** view (Simple / Detail toggle, kept in
+  localStorage) can show one column per source: Scanner · List · WTR · RRDB · UKR · Sys. Rows
+  from before those fields existed fall back to the chosen name under its source's column. The
+  CSV carries the same columns. `LogTable` is column-driven (`Column[]` per view); dragging a
+  header divider resizes that column (px override kept per view in localStorage
+  `trx.logColumns`), double-click resets it.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

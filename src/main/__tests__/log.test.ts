@@ -84,7 +84,7 @@ describe('describe()', () => {
     // RadioReference fills the name (unless a higher-ranked licensee will show instead), or the system behind a scanner-named object.
     expect(describeSnapshot({ ...snap({ lcd: idle }), rr })).toMatchObject({ name: 'University of Buckingham', source: 'RRDB' });
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: '', licensee: 'FCC Recycling (UK) Limited', source: 'WTR' });
-    expect(describeSnapshot({ ...snap({}), rr: trunked })).toMatchObject({ name: 'TC NW Deps', system: 'WM Morrison HQ', source: 'RRDB' });
+    expect(describeSnapshot({ ...snap({}), rr: trunked })).toMatchObject({ name: 'TC NW Deps', system: 'WM Morrison HQ', source: 'RRDB', scannerName: 'TC NW Deps', rrName: '', rrSystem: 'WM Morrison HQ' });
     expect(describeSnapshot({ ...snap({ header: true }), rr: trunked })).toMatchObject({ name: 'Fire Dispatch', system: 'County P25', source: '' });
     expect(describeSnapshot(snap({ lcd: idle }))).toMatchObject({ name: '', licensee: '', source: '' });
   });
@@ -96,7 +96,10 @@ describe('describe()', () => {
     const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
     const order = (...ids: ('WTR' | 'RRDB' | 'UKR')[]) => ids.map((id) => ({ id, enabled: true }));
     // Default order: the register beats RadioReference's channel description.
-    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv })).toMatchObject({ name: '', licensee: 'RESOUND LIMITED', source: 'WTR' });
+    // Every source's own answer is kept beside the chosen name, for the Detail view and the CSV.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv })).toMatchObject({
+      name: '', licensee: 'RESOUND LIMITED', source: 'WTR', scannerName: '', wtr: 'RESOUND LIMITED', rrName: 'Addenbrookes Hospital (Cambridge)', rrSystem: '', rpt: '',
+    });
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv, lookups: order('RRDB', 'WTR', 'UKR') })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', licensee: 'RESOUND LIMITED', source: 'RRDB' });
     // A talkgroup name is trunked knowledge the register does not have: it wins whatever the order.
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: trunked })).toMatchObject({ name: 'Addenbrookes Porters', system: 'Cambs DMR', source: 'RRDB' });
@@ -223,7 +226,7 @@ describe('ReceptionTracker', () => {
 describe('LogDb', () => {
   it('inserts, updates, lists newest first and counts hits per frequency', () => {
     const db = new LogDb(':memory:');
-    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', rssiPeak: 1, calls: 1 };
+    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 1, calls: 1 };
     const r1 = db.insert({ ...base, startedAt: 1000, frequencyHz: 100 });
     const r2 = db.insert({ ...base, startedAt: 2000, frequencyHz: 200, name: 'B' });
     const r3 = db.insert({ ...base, startedAt: 3000, frequencyHz: 100, name: 'A2' });
@@ -246,7 +249,7 @@ describe('LogDb', () => {
 
   it('closes receptions left open by a previous run', () => {
     const db = new LogDb(':memory:');
-    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', rssiPeak: 0, calls: 1 });
+    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 0, calls: 1 });
     expect(r.endedAt).toBeNull();
     // simulate restart by constructing on the same in-memory handle is not possible; exercise the statement directly
     const db2 = new LogDb(':memory:');
@@ -273,6 +276,30 @@ describe('ReceptionLogger', () => {
     const dis = emptySnapshot();
     log.onSnapshot(dis, 1500);
     expect(db.recent()[0]!.endedAt).toBe(1500);
+    db.close();
+  });
+
+  it('names a blip from the last reception on the frequency whose display showed the scanner object', () => {
+    const db = new LogDb(':memory:');
+    const rows: ReceptionRow[] = [];
+    const log = new ReceptionLogger(db, (r) => rows.push(r), { closeDebounceMs: 100, minDurationMs: 0, mergeWindowMs: 0 });
+    const wtr = { id: 1, frequencyHz: 119_775_000, direction: 'T', licensee: 'NATS', product: '', emission: '', mode: '', widthHz: 25_000, lat: null, lon: null, ngr: '', licenceNo: '', distanceKm: 1 };
+    const sweeping = ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'];
+    // A proper reception: the scan screen names the object.
+    log.onSnapshot(snap({ rf: true }), 0);
+    log.onSnapshot(snap({ rf: false }), 100);
+    log.onSnapshot(snap({ rf: false }), 300);
+    // A blip: the display never left the sweeping screen, and only the register has a name.
+    log.onSnapshot({ ...snap({ rf: true, lcd: sweeping }), licences: [wtr] }, 1000);
+    expect(db.recent()[0]).toMatchObject({ name: 'TC NW Deps', scanlist: 'Civil Airband', objectType: 'CONV', source: 'MEM', scannerName: '', licensee: 'NATS', wtr: 'NATS' });
+    // The display catches up: the live object replaces the remembered one.
+    log.onSnapshot(snap({ rf: true }), 1200);
+    expect(db.recent()[0]).toMatchObject({ name: 'TC NW Deps', source: '', scannerName: 'TC NW Deps' });
+    log.onSnapshot(snap({ rf: false }), 1500);
+    log.onSnapshot(snap({ rf: false }), 1700);
+    // A frequency never seen with an object stays as the lookups left it.
+    log.onSnapshot({ ...snap({ rf: true, hz: 121_025_000, lcd: sweeping }), licences: [wtr] }, 3000);
+    expect(db.recent()[0]).toMatchObject({ frequencyHz: 121_025_000, name: '', source: 'WTR' });
     db.close();
   });
 

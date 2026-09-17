@@ -135,18 +135,22 @@ export class LogDb {
     if (!cols.includes('tone')) this.db.exec("ALTER TABLE receptions ADD COLUMN tone TEXT NOT NULL DEFAULT ''");
     if (!cols.includes('licensee')) this.db.exec("ALTER TABLE receptions ADD COLUMN licensee TEXT NOT NULL DEFAULT ''");
     if (!cols.includes('source')) this.db.exec("ALTER TABLE receptions ADD COLUMN source TEXT NOT NULL DEFAULT ''");
+    for (const c of ['scanner_name', 'wtr', 'rr_name', 'rr_system', 'rpt']) {
+      if (!cols.includes(c)) this.db.exec(`ALTER TABLE receptions ADD COLUMN ${c} TEXT NOT NULL DEFAULT ''`);
+    }
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, tone, licensee, source, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '', r.rssiPeak, r.calls ?? 1,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
+        r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -157,7 +161,8 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source', rssiPeak: 'rssi_peak', calls: 'calls',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source',
+      scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -169,6 +174,21 @@ export class LogDb {
       this.db.prepare(`UPDATE receptions SET ${cols.join(', ')} WHERE id = ?`).run(...vals, id);
     }
     return this.get(id);
+  }
+
+  /**
+   * The scanner's own object for a frequency, from the latest reception whose display showed it
+   * (rows from before `scanner_name` existed count when the scanner named them).
+   */
+  lastScannerObject(hz: number): { name: string; scanlist: string; objectType: string; system: string } | null {
+    const row = this.db
+      .prepare(
+        `SELECT CASE WHEN scanner_name != '' THEN scanner_name ELSE name END AS name, scanlist, object_type, system
+         FROM receptions WHERE frequency_hz = ? AND (scanner_name != '' OR (source = '' AND name != ''))
+         ORDER BY started_at DESC, id DESC LIMIT 1`,
+      )
+      .get(hz) as { name: string; scanlist: string; object_type: string; system: string } | undefined;
+    return row ? { name: row.name, scanlist: row.scanlist, objectType: row.object_type, system: row.system } : null;
   }
 
   get(id: number): ReceptionRow | undefined {
@@ -504,6 +524,11 @@ interface Raw {
   tone: string;
   licensee: string;
   source: string;
+  scanner_name: string;
+  wtr: string;
+  rr_name: string;
+  rr_system: string;
+  rpt: string;
   rssi_peak: number;
   calls: number;
   hits: number;
@@ -530,6 +555,11 @@ function toRow(r: Raw): ReceptionRow {
     tone: r.tone ?? '',
     licensee: r.licensee ?? '',
     source: (r.source ?? '') as LookupSource,
+    scannerName: r.scanner_name ?? '',
+    wtr: r.wtr ?? '',
+    rrName: r.rr_name ?? '',
+    rrSystem: r.rr_system ?? '',
+    rpt: r.rpt ?? '',
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),

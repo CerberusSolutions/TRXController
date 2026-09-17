@@ -69,7 +69,7 @@ describe('readUserFile + LogDb', () => {
     expect(db.lookupDmrUser(7654321)?.callsign).toBe('M0XYZ');
     expect(db.lookupDmrUser(1)).toBeUndefined();
 
-    const row = db.insert({ startedAt: 1, endedAt: 2, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: 9, radioId: 7654321, site: '', squelch: '', tone: '', licensee: '', source: '', rssiPeak: 0, calls: 1 });
+    const row = db.insert({ startedAt: 1, endedAt: 2, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: 9, radioId: 7654321, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 0, calls: 1 });
     expect(row.radioCallsign).toBe('M0XYZ');
     expect(row.radioName).toBe('Jane "JJ" Doe');
     const unknown = db.insert({ ...row, id: undefined as unknown as number, radioId: 5 } as never);
