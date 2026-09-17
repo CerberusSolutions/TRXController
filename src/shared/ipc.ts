@@ -2,6 +2,7 @@
  * Types shared between main, preload and renderer. Pure types plus channel
  * names; no runtime dependencies on Node or Electron.
  */
+import type { Confirmation } from './confirm';
 import type { Units } from './geo';
 import type { Candidate } from './listed';
 import type { LookupPref, LookupSource } from './sources';
@@ -60,6 +61,8 @@ export interface ScannerSnapshot {
   updatedAt: number;
   /** The lookup order in force when this snapshot was built, so the tracker and hero rank sources the same way. */
   lookups: LookupPref[];
+  /** The identity the user confirmed for status.frequencyHz (and the tone / talkgroup in hand), if any. */
+  confirmed: Confirmation | null;
 }
 
 /** One logged reception (a period with squelch open on one frequency). */
@@ -351,6 +354,9 @@ export const IPC = {
   logClear: 'log:clear',
   logUpsert: 'log:upsert',
   logExportCsv: 'log:export-csv',
+  logConfirm: 'log:confirm',
+  logUnconfirm: 'log:unconfirm',
+  logConfirmations: 'log:confirmations',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',

@@ -49,8 +49,19 @@ export class ReceptionLogger {
     return { ...r, name: mem.name, scanlist: r.scanlist || mem.scanlist, objectType: r.objectType || mem.objectType, system: r.system || mem.system, source: 'MEM' };
   }
 
+  /**
+   * An identity the user confirmed for the frequency (and the tone / talkgroup in hand) outranks
+   * everything, the scanner's own programming included: that is what confirming is for. The other
+   * sources' columns keep what they said, so the Detail view still shows the disagreement.
+   */
+  private confirm(r: NewReception): NewReception {
+    const c = this.db.confirmationFor(r.frequencyHz, r.tone, r.tgid);
+    if (!c) return r;
+    return { ...r, name: c.name, system: c.system || r.system, source: 'CONF', distanceKm: c.distanceKm ?? r.distanceKm, bearingDeg: c.bearingDeg ?? r.bearingDeg };
+  }
+
   private apply(ev: TrackerEvent): void {
-    const e = ev.type === 'discard' ? ev : { ...ev, reception: this.remember(ev.reception) };
+    const e = ev.type === 'discard' ? ev : { ...ev, reception: this.confirm(this.remember(ev.reception)) };
     switch (e.type) {
       case 'open': {
         if (e.merged && this.lastClosedId !== null) {

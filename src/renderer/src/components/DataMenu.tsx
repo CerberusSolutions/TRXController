@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
+import { useLog } from '../store/log';
 import { useUi } from '../store/ui';
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
 import { normaliseLookups, type LookupPref } from '../../../shared/sources';
@@ -115,6 +116,33 @@ function LookupOrder() {
         </li>
       ))}
     </ol>
+  );
+}
+
+/** What the user has confirmed by hand, with a way to withdraw one or all. */
+function ConfirmedList() {
+  const confirmations = useLog((s) => s.confirmations);
+  const unconfirm = useLog((s) => s.unconfirm);
+  if (confirmations.length === 0) return <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, or type a name.</p>;
+  return (
+    <div className="mt-1">
+      <ul className="max-h-28 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
+        {confirmations.map((c) => (
+          <li key={c.id} className="flex items-center gap-2">
+            <span className="text-amber-2">{(c.frequencyHz / 1e6).toFixed(4)}</span>
+            <span className="w-16 shrink-0 truncate text-ink-3" title={c.tone || 'any tone'}>{[c.tone, c.tgid !== null ? `TG ${c.tgid}` : ''].filter(Boolean).join(' · ') || 'any'}</span>
+            <span className="min-w-0 flex-1 truncate font-sans text-ink" title={c.detail || undefined}>{c.name}</span>
+            <span className={`shrink-0 rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${c.source === 'USER' ? 'bg-panel-2 text-ink-3' : SOURCE_PILL[c.source]}`}>{c.source === 'USER' ? 'typed' : c.source}</span>
+            <button className="shrink-0 text-[10px] text-ink-3 underline decoration-ink-3/40 underline-offset-2 hover:text-red" title="Withdraw" onClick={() => void unconfirm(c.id)}>
+              remove
+            </button>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-[11px] text-ink-3">
+        {confirmations.length} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone.
+      </p>
+    </div>
   );
 }
 
@@ -326,6 +354,10 @@ export default function DataDialog() {
             <Section title="Lookup order">
               <LookupOrder />
               <p className="mt-1 text-[11px] text-ink-3">The first lookup with a match names a channel the scanner left blank. Untick one to ignore it.</p>
+            </Section>
+
+            <Section title="Confirmed identities">
+              <ConfirmedList />
             </Section>
 
             <Section title="Your location (for nearest licensee and repeater)">

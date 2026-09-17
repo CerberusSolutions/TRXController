@@ -8,6 +8,7 @@ import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
 import { MIN_WINDOW, SettingsStore } from './settings';
 import { DEFAULT_LOOKUPS, lookupEnabled, type LookupPref } from '../shared/sources';
+import type { NewConfirmation } from '../shared/confirm';
 import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
@@ -88,7 +89,38 @@ function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const prefs = lookups();
   const licences = s.status && lookupEnabled(prefs, 'WTR') ? licencesFor(s.status.frequencyHz) : [];
   const repeaters = s.status && lookupEnabled(prefs, 'UKR') ? repeatersFor(s.status.frequencyHz) : [];
-  return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, lookups: prefs };
+  const confirmed = db && s.status ? confirmedFor(s) : null;
+  return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, lookups: prefs, confirmed };
+}
+
+/** The identity the user confirmed for the current frequency, tone and talkgroup, if any. */
+function confirmedFor(s: ScannerSnapshot): ScannerSnapshot['confirmed'] {
+  const d = describeSnapshot(s);
+  return db!.confirmationFor(s.status!.frequencyHz, d.tone, d.tgid);
+}
+
+/** A confirmation as the renderer sent it, checked field by field. */
+function sanitizeConfirmation(v: unknown): NewConfirmation {
+  if (typeof v !== 'object' || v === null) throw new Error('Bad confirmation');
+  const o = v as Record<string, unknown>;
+  const text = (x: unknown): string => (typeof x === 'string' ? x.trim() : '');
+  const num = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
+  const hz = num(o['frequencyHz']);
+  const name = text(o['name']);
+  if (hz === null || hz <= 0 || !Number.isInteger(hz)) throw new Error('Bad frequency');
+  if (!name) throw new Error('A confirmed identity needs a name');
+  const src = o['source'];
+  return {
+    frequencyHz: hz,
+    tone: text(o['tone']),
+    tgid: Number.isInteger(o['tgid']) ? (o['tgid'] as number) : null,
+    name,
+    system: text(o['system']),
+    source: src === 'RRDB' || src === 'WTR' || src === 'UKR' ? src : 'USER',
+    detail: text(o['detail']),
+    distanceKm: num(o['distanceKm']),
+    bearingDeg: num(o['bearingDeg']),
+  };
 }
 
 /** Settings as the renderer may see them: the RadioReference password stays in main. */
@@ -206,6 +238,20 @@ function registerIpc(): void {
     // A BOM so Excel opens it as UTF-8 (callsigns and names are plain ASCII, but places are not always).
     await writeFile(res.filePath, '\uFEFF' + csv, 'utf8');
     return res.filePath;
+  });
+  ipcMain.handle(IPC.logConfirmations, () => db?.confirmations() ?? []);
+  ipcMain.handle(IPC.logConfirm, (_e, c: unknown) => {
+    if (!db) throw new Error('No log');
+    const conf = sanitizeConfirmation(c);
+    const saved = db.confirm(conf);
+    // The hero and the open reception follow the confirmation at once.
+    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    return saved;
+  });
+  ipcMain.handle(IPC.logUnconfirm, (_e, id: unknown) => {
+    if (!db || typeof id !== 'number') throw new Error('Bad confirmation');
+    db.unconfirm(id);
+    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
   });
   ipcMain.handle(IPC.logClear, () => {
     logger?.flush();

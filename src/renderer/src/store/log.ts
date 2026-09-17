@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { ReceptionRow } from '../../../shared/ipc';
+import type { Confirmation, NewConfirmation } from '../../../shared/confirm';
 
 export const MAX_ROWS = 1000;
 
@@ -7,23 +8,41 @@ interface LogState {
   rows: ReceptionRow[];
   filter: string;
   loaded: boolean;
+  /** Identities the user has confirmed by hand, every frequency. */
+  confirmations: Confirmation[];
   setFilter: (f: string) => void;
   load: () => Promise<void>;
   upsert: (row: ReceptionRow) => void;
   clear: () => Promise<void>;
+  confirm: (c: NewConfirmation) => Promise<void>;
+  unconfirm: (id: number) => Promise<void>;
 }
 
 export const useLog = create<LogState>((set, get) => ({
   rows: [],
   filter: '',
   loaded: false,
+  confirmations: [],
 
   setFilter: (filter) => set({ filter }),
 
   load: async () => {
     if (!window.trx) return;
-    const rows = await window.trx.logRecent(MAX_ROWS);
-    set({ rows, loaded: true });
+    const [rows, confirmations] = await Promise.all([window.trx.logRecent(MAX_ROWS), window.trx.logConfirmations?.() ?? []]);
+    set({ rows, confirmations, loaded: true });
+  },
+
+  // A confirmation renames every row it applies to, so the log is reloaded rather than patched.
+  confirm: async (c) => {
+    if (!window.trx) return;
+    await window.trx.logConfirm(c);
+    await get().load();
+  },
+
+  unconfirm: async (id) => {
+    if (!window.trx) return;
+    await window.trx.logUnconfirm(id);
+    await get().load();
   },
 
   upsert: (row) => {

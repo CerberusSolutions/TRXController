@@ -3,7 +3,7 @@
  * programming is the blank source; the initials name the lookup that filled
  * in what the scanner did not know.
  */
-export type LookupSource = '' | 'RRDB' | 'WTR' | 'UKR' | 'RID' | 'MEM';
+export type LookupSource = '' | 'RRDB' | 'WTR' | 'UKR' | 'RID' | 'MEM' | 'CONF';
 
 export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = {
   RRDB: 'RadioReference database',
@@ -11,6 +11,7 @@ export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = 
   UKR: 'RSGB ETCC repeater list (ukrepeater.net)',
   RID: 'radioid.net DMR user database',
   MEM: "scanner's object remembered from an earlier reception on this frequency",
+  CONF: 'identity you confirmed by hand (outranks every lookup and the scanner)',
 };
 
 /** The lookups a user can order and switch off. The scanner's own programming is always first. */

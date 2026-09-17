@@ -221,6 +221,18 @@ captured on 14 Sep 2026.
   grows while a reception is open (RadioReference answers late) and survives a merge. The log's **+**
   column unfolds a row's candidates beneath it; the **Dist** column shows the row's placement; the CSV
   has `distance_km`, `bearing_deg` and a `candidates` column (one line, ` | ` separated, always km).
+- Confirmed identities (`src/shared/confirm.ts`, `confirmations` table): the user unfolds a log row
+  and confirms a candidate, or types a name (`LogTable`'s `Candidates`; `log:confirm` /
+  `log:unconfirm` / `log:confirmations` IPC). A confirmation is keyed by frequency plus the row's
+  tone (colour code / CTCSS / NAC, '' = any) and, on a trunked object, its talkgroup;
+  `pickConfirmation` takes the most specific one that does not contradict a reception. It outranks
+  everything, the scanner's own programming included: `LogDb.confirm` renames every logged reception
+  it fits (source `CONF`, the per-source columns untouched, so the Detail view still shows the
+  disagreement), `ReceptionLogger.confirm` overlays it on every new event after `remember`, and
+  `enrich()` puts the one for the current frequency / tone / talkgroup on the snapshot as `confirmed`
+  (the hero shows it with a CONF pill and "Scanner: X" beneath when the scanner disagrees). Withdrawing
+  one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
+  The Data dialog lists them with a remove link.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

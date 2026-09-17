@@ -5,6 +5,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
+import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
@@ -111,6 +112,20 @@ export class LogDb {
         lon        REAL,
         range_km   REAL
       );
+      CREATE TABLE IF NOT EXISTS confirmations (
+        id           INTEGER PRIMARY KEY AUTOINCREMENT,
+        frequency_hz INTEGER NOT NULL,
+        tone         TEXT NOT NULL DEFAULT '',
+        tgid         INTEGER,
+        name         TEXT NOT NULL,
+        system       TEXT NOT NULL DEFAULT '',
+        source       TEXT NOT NULL DEFAULT 'USER',
+        detail       TEXT NOT NULL DEFAULT '',
+        distance_km  REAL,
+        bearing_deg  INTEGER,
+        confirmed_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS confirmations_freq ON confirmations(frequency_hz);
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
         tg_dec   INTEGER NOT NULL,
@@ -196,6 +211,83 @@ export class LogDb {
       )
       .get(hz) as { name: string; scanlist: string; object_type: string; system: string } | undefined;
     return row ? { name: row.name, scanlist: row.scanlist, objectType: row.object_type, system: row.system } : null;
+  }
+
+  // --- Confirmed identities ------------------------------------------------
+
+  /**
+   * Record that a frequency (with this tone / talkgroup) is `c.name`, replacing an earlier
+   * confirmation with the same key, and rename every logged reception it applies to.
+   */
+  confirm(c: NewConfirmation, now = Date.now()): Confirmation {
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM confirmations WHERE frequency_hz = ? AND tone = ? AND tgid IS ?').run(c.frequencyHz, c.tone, c.tgid);
+      const res = this.db
+        .prepare(
+          `INSERT INTO confirmations (frequency_hz, tone, tgid, name, system, source, detail, distance_km, bearing_deg, confirmed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(c.frequencyHz, c.tone, c.tgid, c.name, c.system, c.source, c.detail, c.distanceKm, c.bearingDeg, now);
+      const saved = this.confirmation(Number(res.lastInsertRowid))!;
+      this.applyConfirmations(c.frequencyHz);
+      this.db.exec('COMMIT');
+      return saved;
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  /** Forget a confirmation; the rows it renamed go back to the scanner's name, else the licensee. */
+  unconfirm(id: number): void {
+    const c = this.confirmation(id);
+    if (!c) return;
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('DELETE FROM confirmations WHERE id = ?').run(id);
+      this.applyConfirmations(c.frequencyHz);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+  }
+
+  confirmation(id: number): Confirmation | null {
+    const r = this.db.prepare('SELECT * FROM confirmations WHERE id = ?').get(id) as unknown as RawConfirmation | undefined;
+    return r ? toConfirmation(r) : null;
+  }
+
+  confirmations(): Confirmation[] {
+    return (this.db.prepare('SELECT * FROM confirmations ORDER BY frequency_hz, tone, tgid').all() as unknown as RawConfirmation[]).map(toConfirmation);
+  }
+
+  /** The confirmation that applies to a reception on `hz` with this tone / talkgroup, if any. */
+  confirmationFor(hz: number, tone: string | null | undefined, tgid: number | null | undefined): Confirmation | null {
+    const rows = (this.db.prepare('SELECT * FROM confirmations WHERE frequency_hz = ?').all(hz) as unknown as RawConfirmation[]).map(toConfirmation);
+    return pickConfirmation(rows, hz, tone, tgid);
+  }
+
+  /**
+   * Bring every reception on `hz` in line with the confirmations that now apply: the confirmed name
+   * where one does, else back to what the scanner or the lookups said (rows only ever carry CONF
+   * while a confirmation stands). Returns the ids of the rows changed.
+   */
+  private applyConfirmations(hz: number): number[] {
+    const confs = (this.db.prepare('SELECT * FROM confirmations WHERE frequency_hz = ?').all(hz) as unknown as RawConfirmation[]).map(toConfirmation);
+    const rows = this.db.prepare('SELECT * FROM receptions WHERE frequency_hz = ?').all(hz) as unknown as Raw[];
+    const changed: number[] = [];
+    for (const r of rows) {
+      const c = pickConfirmation(confs, hz, r.tone, r.tgid);
+      const next = c ? confirmed(r, c) : r.source === 'CONF' ? unconfirmed(r) : null;
+      if (!next) continue;
+      this.db
+        .prepare('UPDATE receptions SET name = ?, system = ?, source = ?, distance_km = ?, bearing_deg = ? WHERE id = ?')
+        .run(next.name, next.system, next.source, next.distance_km, next.bearing_deg, r.id);
+      changed.push(Number(r.id));
+    }
+    return changed;
   }
 
   get(id: number): ReceptionRow | undefined {
@@ -444,6 +536,56 @@ export class LogDb {
   close(): void {
     this.db.close();
   }
+}
+
+interface RawConfirmation {
+  id: number;
+  frequency_hz: number;
+  tone: string;
+  tgid: number | null;
+  name: string;
+  system: string;
+  source: string;
+  detail: string;
+  distance_km: number | null;
+  bearing_deg: number | null;
+  confirmed_at: number;
+}
+
+function toConfirmation(r: RawConfirmation): Confirmation {
+  return {
+    id: Number(r.id),
+    frequencyHz: Number(r.frequency_hz),
+    tone: r.tone,
+    tgid: r.tgid === null ? null : Number(r.tgid),
+    name: r.name,
+    system: r.system,
+    source: (r.source === 'RRDB' || r.source === 'WTR' || r.source === 'UKR' ? r.source : 'USER') as Confirmation['source'],
+    detail: r.detail,
+    distanceKm: r.distance_km === null ? null : Number(r.distance_km),
+    bearingDeg: r.bearing_deg === null ? null : Number(r.bearing_deg),
+    confirmedAt: Number(r.confirmed_at),
+  };
+}
+
+type Renamed = Pick<Raw, 'name' | 'system' | 'source' | 'distance_km' | 'bearing_deg'>;
+
+/** A row as the confirmation says it is; null when it already is. */
+function confirmed(r: Raw, c: Confirmation): Renamed | null {
+  const next: Renamed = { name: c.name, system: c.system || r.system, source: 'CONF', distance_km: c.distanceKm ?? r.distance_km, bearing_deg: c.bearingDeg ?? r.bearing_deg };
+  return next.name === r.name && next.system === r.system && r.source === 'CONF' && next.distance_km === r.distance_km && next.bearing_deg === r.bearing_deg ? null : next;
+}
+
+/** A row with its confirmation withdrawn: the scanner's own name if it showed one, else unnamed with the licensee credited. */
+function unconfirmed(r: Raw): Renamed {
+  const licSrc: LookupSource = r.wtr && r.wtr === r.licensee ? 'WTR' : r.rpt && r.rpt === r.licensee ? 'UKR' : '';
+  return {
+    name: r.scanner_name,
+    system: r.rr_system && r.system === r.rr_system ? r.system : r.scanner_name ? r.system : '',
+    source: r.scanner_name ? '' : r.licensee ? licSrc : '',
+    distance_km: r.distance_km,
+    bearing_deg: r.bearing_deg,
+  };
 }
 
 /** The user's location from lookup options, or null when either coordinate is missing. */
