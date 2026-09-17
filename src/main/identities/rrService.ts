@@ -171,8 +171,12 @@ export class RrService {
         continue;
       }
       const site = pickSite(sys.sites, hz, ctx.nac ?? null, here);
-      const d = here && site && site.lat !== null && site.lon !== null ? distanceKm(here.lat, here.lon, site.lat, site.lon) : null;
-      if (far(d)) continue;
+      // Distance to the site when RadioReference places it, else to the system's own centre
+      // (allowing its coverage range); many UK sites carry no coordinates but the system does.
+      const siteD = here && site && site.lat !== null && site.lon !== null ? distanceKm(here.lat, here.lon, site.lat, site.lon) : null;
+      const sysD = here && sys.system.lat !== null && sys.system.lon !== null ? distanceKm(here.lat, here.lon, sys.system.lat, sys.system.lon) : null;
+      const d = siteD ?? sysD;
+      if (siteD !== null ? far(siteD) : far(sysD, sys.system.rangeKm ?? 0)) continue;
       const tg = ctx.tgid != null ? this.db.rrGetTalkgroup(h.sid, ctx.tgid) : null;
       systems.push({
         sid: h.sid,
@@ -255,7 +259,8 @@ export class RrService {
         await this.pause();
         const talkgroups = await client.getTrsTalkgroups(h.sid);
         this.db.rrPutSystem(system, sites, talkgroups, this.now());
-        this.log(`system ${h.sid} "${system.name}": ${sites.length} sites, ${talkgroups.length} talkgroups`);
+        const at = system.lat !== null ? ` at ${system.lat.toFixed(2)},${system.lon!.toFixed(2)}` : ' (no position)';
+        this.log(`system ${h.sid} "${system.name}"${at}: ${sites.length} sites (${sites.filter((x) => x.lat !== null).length} placed), ${talkgroups.length} talkgroups`);
       }
       this.lastError = null;
     } catch (e) {

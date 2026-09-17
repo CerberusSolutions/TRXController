@@ -75,7 +75,7 @@ describe('RrClient', () => {
     expect(hits[1]).toMatchObject({ sid: null, aid: 12, ctid: 34 });
     expect(calls[0]!.body).toContain('<freq xsi:type="xsd:decimal">417.725</freq>');
 
-    expect(await c.getTrsDetails(9876)).toEqual({ sid: 9876, name: 'Airwave Test', type: 16, flavor: 3, voice: 2, city: 'Cambridge', sysids: [{ sysid: '3A2', wacn: 'BEE00', ct: 'Cambs' }] });
+    expect(await c.getTrsDetails(9876)).toEqual({ sid: 9876, name: 'Airwave Test', type: 16, flavor: 3, voice: 2, city: 'Cambridge', lat: null, lon: null, rangeKm: null, sysids: [{ sysid: '3A2', wacn: 'BEE00', ct: 'Cambs' }] });
     const sites = await c.getTrsSites(9876);
     expect(sites[0]).toMatchObject({ siteId: 5, siteNumber: 3, descr: 'Croughton', nac: '167', ran: null, location: 'RAF Croughton', lat: 51.99 });
     expect(sites[0]!.freqs).toEqual([{ freqMHz: 417.725, use: 'c', colorCode: '', lcn: 1 }, { freqMHz: 419.475, use: '', colorCode: '', lcn: 2 }]);

@@ -173,9 +173,10 @@ captured on 14 Sep 2026.
   (`electron.vite.config.ts`; `secrets.RR_KEY` in release.yml). Never commit or print the key.
   A region-wide search returns every system and channel in England on a frequency, so
   results are filtered to the user's WTR location / radius: systems by the matched site's
-  lat/lon (`pickSite`: NAC, else nearest), conventional entries by their county's centre plus
-  its range (`getCountyInfo` once per county, cached in `rr_counties`). No location: keep
-  all. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
+  lat/lon (`pickSite`: NAC, else nearest), else by the system's own centre plus its range
+  (many UK sites carry no coordinates; 0,0 counts as none), conventional entries by their
+  county's centre plus its range (`getCountyInfo` once per county, cached in `rr_counties`).
+  No location, or nothing placed: keep. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.

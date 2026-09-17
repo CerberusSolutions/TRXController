@@ -13,7 +13,7 @@ function soap(body: string): string {
 }
 const RESP: Record<string, string> = {
   searchStateFreq: soap('<ns1:searchStateFreqResponse><return><item><out>417.725</out><in xsi:nil="true"/><descr>USAF Bases UK</descr><alpha></alpha><tone></tone><mode>P25</mode><sid>9876</sid><aid>0</aid><ctid>0</ctid></item><item><out>417.725</out><descr>Conv user</descr><alpha>CONV</alpha><tone>167 NAC</tone><mode>P25</mode><sid>0</sid><aid>0</aid><ctid>2450</ctid></item></return></ns1:searchStateFreqResponse>'),
-  getTrsDetails: soap('<ns1:getTrsDetailsResponse><return><sName>USAF Bases UK</sName><sType>16</sType><sFlavor>3</sFlavor><sVoice>2</sVoice><sCity></sCity><sysid><item><sysid>3A2</sysid><ct></ct><wacn>BEE00</wacn></item></sysid></return></ns1:getTrsDetailsResponse>'),
+  getTrsDetails: soap('<ns1:getTrsDetailsResponse><return><sName>USAF Bases UK</sName><sType>16</sType><sFlavor>3</sFlavor><sVoice>2</sVoice><sCity></sCity><lat>0</lat><lon>0</lon><range>0</range><sysid><item><sysid>3A2</sysid><ct></ct><wacn>BEE00</wacn></item></sysid></return></ns1:getTrsDetailsResponse>'),
   getTrsSites: soap('<ns1:getTrsSitesResponse><return><item><siteId>1</siteId><siteNumber>1</siteNumber><siteDescr>Lakenheath</siteDescr><siteLocation>RAF Lakenheath</siteLocation><nac>3A1</nac><lat>52.41</lat><lon>0.56</lon><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item></siteFreqs></item><item><siteId>2</siteId><siteNumber>2</siteNumber><siteDescr>Croughton</siteDescr><siteLocation>RAF Croughton</siteLocation><nac>167</nac><lat>51.99</lat><lon>-1.19</lon><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item><item><lcn>2</lcn><freq>419.475</freq><use></use></item></siteFreqs></item></return></ns1:getTrsSitesResponse>'),
   getCountyInfo: soap('<ns1:getCountyInfoResponse><return><ctid>2450</ctid><countyName>Buckinghamshire</countyName><lat>51.8</lat><lon>-0.8</lon><range>25</range></return></ns1:getCountyInfoResponse>'),
   getTrsTalkgroupCats: soap('<ns1:getTrsTalkgroupCatsResponse><return><item><tgCid>7</tgCid><tgCname>Security</tgCname></item></return></ns1:getTrsTalkgroupCatsResponse>'),
@@ -110,6 +110,26 @@ describe('RrService', () => {
     farAway.svc.request(417_725_000);
     await settle();
     expect(farAway.svc.info(417_725_000)).toMatchObject({ systems: [], conventional: [] });
+  });
+
+  it('falls back to the system position when its site has none, and keeps a system nobody can place', async () => {
+    const unplacedSite = { ...RESP, getTrsSites: RESP.getTrsSites!.replace('<lat>51.99</lat><lon>-1.19</lon>', '<lat>0</lat><lon>0</lon>').replace('<lat>52.41</lat><lon>0.56</lon>', '') };
+    // System centred on Bradford (Morrisons HQ), 12-mile range: dropped from Aylesbury, kept from Leeds.
+    const bradford = { ...unplacedSite, getTrsDetails: RESP.getTrsDetails!.replace('<lat>0</lat><lon>0</lon><range>0</range>', '<lat>53.79</lat><lon>-1.75</lon><range>12</range>') };
+    const bucks = make({}, { responses: bradford, location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
+    bucks.svc.request(417_725_000);
+    await settle();
+    expect(bucks.svc.info(417_725_000)?.systems).toEqual([]);
+    const leeds = make({}, { responses: bradford, location: { lat: 53.8, lon: -1.55, radiusKm: 60 } });
+    leeds.svc.request(417_725_000);
+    await settle();
+    expect(leeds.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK' });
+    expect(leeds.svc.info(417_725_000)?.systems[0]!.distanceKm).toBeGreaterThan(10);
+    // Neither the site nor the system is placed: nothing to judge by, so it stays.
+    const unknown = make({}, { responses: unplacedSite, location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
+    unknown.svc.request(417_725_000);
+    await settle();
+    expect(unknown.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK', distanceKm: null });
   });
 
   it('backs off a failed frequency and empties the queue on a login fault', async () => {

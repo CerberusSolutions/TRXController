@@ -248,6 +248,10 @@ export interface RrSystemSummary {
   flavor: number;
   voice: number;
   city: string;
+  /** The system's own centre and coverage (miles in the API, km here); sites carry their own. */
+  lat: number | null;
+  lon: number | null;
+  rangeKm: number | null;
   sysids: { sysid: string; wacn: string; ct: string }[];
 }
 export interface RrSite {
@@ -293,6 +297,13 @@ const dec = (p: Plain | undefined): number | null => {
   const v = Number(str(p));
   return str(p) !== '' && Number.isFinite(v) ? v : null;
 };
+/** A coordinate pair; 0,0 (RadioReference's "not set") counts as unknown. */
+const coords = (o: Obj): { lat: number | null; lon: number | null } => {
+  const lat = dec(o['lat']);
+  const lon = dec(o['lon']);
+  return lat !== null && lon !== null && !(lat === 0 && lon === 0) ? { lat, lon } : { lat: null, lon: null };
+};
+const MILES_TO_KM = 1.609344;
 const tagNames = (p: Plain | undefined): string[] => arr(p ?? null).map((t) => str(obj(t)['tagDescr'])).filter(Boolean);
 
 export function readFreqHit(p: Plain): RrFreqHit | null {
@@ -345,8 +356,7 @@ export function readSite(p: Plain): RrSite | null {
     location: str(o['siteLocation']),
     nac: str(o['nac']),
     ran: int(o['ran']),
-    lat: dec(o['lat']),
-    lon: dec(o['lon']),
+    ...coords(o),
     freqs: arr(o['siteFreqs'] ?? null)
       .map((f) => {
         const fo = obj(f);
@@ -359,6 +369,7 @@ export function readSite(p: Plain): RrSite | null {
 
 export function readSystem(sid: number, p: Plain): RrSystemSummary {
   const o = obj(p);
+  const range = dec(o['range']);
   return {
     sid,
     name: str(o['sName']),
@@ -366,6 +377,8 @@ export function readSystem(sid: number, p: Plain): RrSystemSummary {
     flavor: int(o['sFlavor']) ?? 0,
     voice: int(o['sVoice']) ?? 0,
     city: str(o['sCity']),
+    ...coords(o),
+    rangeKm: range === null ? null : range * MILES_TO_KM,
     sysids: arr(o['sysid'] ?? null).map((s) => ({ sysid: str(obj(s)['sysid']), wacn: str(obj(s)['wacn']), ct: str(obj(s)['ct']) })),
   };
 }
@@ -410,7 +423,7 @@ export class RrClient {
   async getCountyInfo(ctid: number): Promise<RrCounty> {
     const o = obj(await this.call('getCountyInfo', { ctid }));
     const range = dec(o['range']);
-    return { ctid, name: str(o['countyName']), lat: dec(o['lat']), lon: dec(o['lon']), rangeKm: range === null ? null : range * 1.609344 };
+    return { ctid, name: str(o['countyName']), ...coords(o), rangeKm: range === null ? null : range * MILES_TO_KM };
   }
 
   async getTrsDetails(sid: number): Promise<RrSystemSummary> {
