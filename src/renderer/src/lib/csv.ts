@@ -1,4 +1,5 @@
 import type { ReceptionRow } from '../../../shared/ipc';
+import { formatBearing } from '../../../shared/geo';
 
 /** RFC 4180 quoting: wrap when the value has a comma, quote, or line break; double the quotes. */
 export function csvCell(v: string | number | null | undefined): string {
@@ -21,8 +22,18 @@ function localStamp(ms: number): string {
 export const LOG_CSV_HEADER = [
   'first_heard', 'last_heard', 'duration_s', 'calls', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type',
   'tgid', 'radio_id', 'callsign', 'radio_name', 'tone', 'squelch', 'site', 'licensee', 'source',
-  'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'rssi_peak', 'hits',
+  'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'distance_km', 'bearing_deg', 'candidates', 'rssi_peak', 'hits',
 ];
+
+/** Every candidate on one line: "WTR University of Buckingham (3.2 km 047°) | RRDB …", distances always in km. */
+export function candidatesText(r: Pick<ReceptionRow, 'candidates'>): string {
+  return (r.candidates ?? [])
+    .map((c) => {
+      const where = c.distanceKm === null ? '' : ` (${c.distanceKm.toFixed(1)} km ${formatBearing(c.bearingDeg)})`.replace(/ \)$/, ')');
+      return `${c.source} ${c.name}${c.detail ? ` · ${c.detail}` : ''}${where}`;
+    })
+    .join(' | ');
+}
 
 /** The log table as CSV, one line per row as displayed (oldest last, like the table). */
 export function logToCsv(rows: readonly ReceptionRow[], now = Date.now()): string {
@@ -54,6 +65,9 @@ export function logToCsv(rows: readonly ReceptionRow[], now = Date.now()): strin
       r.rrName ?? '',
       r.rrSystem ?? '',
       r.rpt ?? '',
+      r.distanceKm === null || r.distanceKm === undefined ? '' : r.distanceKm.toFixed(1),
+      r.bearingDeg ?? '',
+      candidatesText(r),
       r.rssiPeak,
       r.hits,
     ]),

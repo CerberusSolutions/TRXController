@@ -209,6 +209,18 @@ captured on 14 Sep 2026.
   CSV carries the same columns. `LogTable` is column-driven (`Column[]` per view); dragging a
   header divider resizes that column (px override kept per view in localStorage
   `trx.logColumns`), double-click resets it.
+- Distance and bearing: `src/shared/geo.ts` (`distanceKm`, `bearingDeg`, `placeFrom`, `formatPlace`) places
+  every match (`WtrMatch`, `RepeaterMatch`, `RrConventional`, `RrSystemInfo` carry `distanceKm` +
+  `bearingDeg`); distances are stored in km and shown in `settings.units` (`km` | `mi`, the toggle beside
+  the radius in the Data dialog, which also shows the radius in those units). Each row stores the placement
+  of the identity it shows (`distanceKm`, `bearingDeg`: the licensee's licence or repeater, or
+  RadioReference's site / county when RadioReference named it; the tracker moves it with the name exactly as
+  `sourceAfter` moves the source) and `candidates`, everything the enabled lookups offered for the
+  frequency, ranked by `candidatesFor` in `src/shared/listed.ts` (placed first, then lookup order, tone
+  match leading the repeaters), which the hero's Listed block draws from the same function. The list only
+  grows while a reception is open (RadioReference answers late) and survives a merge. The log's **+**
+  column unfolds a row's candidates beneath it; the **Dist** column shows the row's placement; the CSV
+  has `distance_km`, `bearing_deg` and a `candidates` column (one line, ` | ` separated, always km).
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

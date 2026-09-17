@@ -1,11 +1,10 @@
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
-import { lookupRank, type LookupPref } from '../../../shared/sources';
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
-import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
-import { conventionalLabel, rrToneMatches } from '../../../shared/rr';
+import { formatPlace } from '../../../shared/geo';
+import { candidatesFor } from '../../../shared/listed';
+import { useIdentities } from '../store/identities';
 import { useScanner } from '../store/scanner';
-import type { RepeaterMatch, RrInfo, WtrMatch } from '../../../shared/ipc';
 import SignalMeter from './SignalMeter';
 
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
@@ -33,80 +32,6 @@ function ModePills({ modes }: { modes: string }) {
   );
 }
 
-type Source = 'RRDB' | 'WTR' | 'UKR';
-
-interface ListedRow {
-  key: string;
-  source: Source;
-  /** RadioReference, the register or the repeater list could place it relative to the user. */
-  placed: boolean;
-  name: string;
-  detail: string;
-  title: string;
-  pills?: string;
-}
-
-const km = (d: number | null): string => (d === null ? '' : d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d)} km`);
-
-function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: RepeaterMatch[], detected: string | null, detectedHz: number | null, prefs: readonly LookupPref[]): ListedRow[] {
-  const out: ListedRow[] = [];
-  for (const sys of rr?.systems ?? []) {
-    const tg = sys.talkgroup;
-    out.push({
-      key: `rr-s${sys.sid}`,
-      source: 'RRDB',
-      placed: sys.distanceKm !== null,
-      name: sys.name,
-      detail: [sys.site?.descr, tg ? `${tg.descr || tg.alpha}${tg.category ? ` (${tg.category})` : ''}${tg.enc ? ' · enc' : ''}` : '', km(sys.distanceKm)].filter(Boolean).join(' · '),
-      title: `RadioReference system ${sys.sid}${sys.city ? ` · ${sys.city}` : ''}${sys.site ? ` · site ${sys.site.descr} (${sys.site.location}) NAC ${sys.site.nac}` : ''}${tg ? ` · TG ${tg.tgDec} ${tg.alpha}` : ''}`,
-    });
-  }
-  (rr?.conventional ?? []).forEach((c, i) => {
-    const match = rrToneMatches(c.tone, detected);
-    out.push({
-      key: `rr-c${i}`,
-      source: 'RRDB',
-      placed: c.distanceKm !== null,
-      name: c.descr || c.alpha,
-      detail: [c.county, km(c.distanceKm), c.tone ? `${c.tone}${match === true ? ' ✓' : ''}` : '', c.mode, c.tags[0]].filter(Boolean).join(' · '),
-      title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
-    });
-  });
-  for (const l of licences) {
-    out.push({
-      key: `wtr-${l.id}`,
-      source: 'WTR',
-      placed: l.distanceKm !== null,
-      name: l.licensee,
-      detail: [km(l.distanceKm), l.mode, l.direction === 'R' ? 'mob' : l.direction === 'T' ? 'base' : ''].filter(Boolean).join(' · '),
-      title: `${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`,
-    });
-  }
-  for (const r of repeaters) {
-    const match = toneMatches(r, detectedHz);
-    out.push({
-      key: `rpt-${r.id}`,
-      source: 'UKR',
-      placed: r.distanceKm !== null,
-      name: r.callsign,
-      pills: r.modes,
-      detail: [r.where ? r.where.charAt(0) + r.where.slice(1).toLowerCase() : '', km(r.distanceKm), r.ctcss !== null ? `${r.ctcss.toFixed(1)} Hz${match ? ' ✓' : ''}` : '', r.side === 'input' ? 'input' : '']
-        .filter(Boolean)
-        .join(' · '),
-      title: `${r.channel || r.band}${r.inputHz ? ` · input ${(r.inputHz / 1e6).toFixed(4)}` : ''} · ${r.locator || 'no locator'}${r.side === 'input' ? ' · you are hearing its input (a mobile)' : ''}${
-        match ? ' · CTCSS matches the detected tone' : detectedHz !== null && r.ctcss !== null ? ' · CTCSS differs from the detected tone' : ''
-      }`,
-    });
-  }
-  // Anything placed near the user beats anything nobody can place; then the user's lookup order;
-  // within a lookup, nearest / best match first as built.
-  return out
-    .map((row, i) => ({ row, i, rank: lookupRank(prefs, row.source) }))
-    .filter((x) => x.rank !== Infinity)
-    .sort((a, b) => Number(b.row.placed) - Number(a.row.placed) || a.rank - b.rank || a.i - b.i)
-    .map((x) => x.row);
-}
-
 /**
  * `minCh` reserves a value width (in mono characters) so toggling text such as Muted / Unmuted
  * does not shift the neighbours. `flex` lets a long value (a radio user's location) take the
@@ -127,6 +52,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 export default function FrequencyHero() {
   const { status, lcd, active, link, licences, repeaters, rr, lookups } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
+  const units = useIdentities((s) => s.settings.units);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
 
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
@@ -157,11 +83,10 @@ export default function FrequencyHero() {
   // name on screen on the polls where the display shows the TGID line instead.
   const radioUser = snapshotUser && snapshotUser.id === radioId ? snapshotUser : held?.radioUser && held.radioUser.id === radioId ? held.radioUser : null;
   const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
-  // Everything that lists this frequency, in one block, in the user's lookup order (Data menu);
-  // repeaters with the one whose CTCSS matches the detected tone first, since several share a
-  // channel. Each source is filtered to the user's area upstream.
-  const detectedHz = ctcssHz(detected);
-  const listed = listedRows(rr, licences, rankRepeaters(repeaters, detected), detected, detectedHz, lookups);
+  // Everything that lists this frequency, in one block, ranked as the log stores it: placed
+  // entries first, then the user's lookup order (Data menu), repeaters with the one whose CTCSS
+  // matches the detected tone first. Each source is filtered to the user's area upstream.
+  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: detected }, lookups);
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -255,7 +180,10 @@ export default function FrequencyHero() {
                   </span>
                   <span className={`shrink-0 truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.name}</span>
                   {row.pills && <ModePills modes={row.pills} />}
-                  <span className="min-w-0 truncate text-ink-3">{row.detail}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink-3">{row.detail}</span>
+                  <span className="shrink-0 text-ink-2" title={row.distanceKm === null ? undefined : 'Distance and bearing from your location (Data menu)'}>
+                    {formatPlace(row, units)}
+                  </span>
                 </li>
               ))}
             </ul>

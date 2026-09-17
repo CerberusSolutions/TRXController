@@ -4,6 +4,7 @@ import { useIdentities } from '../store/identities';
 import { useUi } from '../store/ui';
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
 import { normaliseLookups, type LookupPref } from '../../../shared/sources';
+import { KM_PER_MILE, type Units } from '../../../shared/geo';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -16,21 +17,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function LocationForm() {
   const { settings, saveSettings } = useIdentities();
+  const units: Units = settings.units ?? 'km';
+  // The radius is stored in km and shown in the chosen units.
+  const radiusShown = (km: number | null): string => (km === null ? '' : units === 'mi' ? String(Math.round((km / KM_PER_MILE) * 10) / 10) : String(km));
   const [lat, setLat] = useState(settings.lat?.toString() ?? '');
   const [lon, setLon] = useState(settings.lon?.toString() ?? '');
-  const [radius, setRadius] = useState(settings.radiusKm?.toString() ?? '');
+  const [radius, setRadius] = useState(radiusShown(settings.radiusKm));
   useEffect(() => {
     setLat(settings.lat?.toString() ?? '');
     setLon(settings.lon?.toString() ?? '');
-    setRadius(settings.radiusKm?.toString() ?? '');
+    setRadius(radiusShown(settings.radiusKm));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
   const inp = 'w-full rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-xs text-ink outline-none focus:border-cyan';
   const save = (): void => {
     const n = (s: string): number | null => (s.trim() === '' ? null : Number(s));
-    void saveSettings({ lat: n(lat), lon: n(lon), radiusKm: n(radius) });
+    const r = n(radius);
+    void saveSettings({ lat: n(lat), lon: n(lon), radiusKm: r === null ? null : units === 'mi' ? Math.round(r * KM_PER_MILE * 10) / 10 : r });
+  };
+  const chooseUnits = (u: Units): void => {
+    if (u !== units) void saveSettings({ units: u });
   };
   return (
-    <div className="mt-1 grid grid-cols-[1fr_1fr_4.5rem_auto] items-end gap-2">
+    <div className="mt-1 grid grid-cols-[1fr_1fr_4.5rem_auto_auto] items-end gap-2">
       <label className="text-[10px] text-ink-3">
         Latitude
         <input className={inp} value={lat} placeholder="51.5074" onChange={(e) => setLat(e.target.value)} />
@@ -40,9 +49,16 @@ function LocationForm() {
         <input className={inp} value={lon} placeholder="-0.1278" onChange={(e) => setLon(e.target.value)} />
       </label>
       <label className="text-[10px] text-ink-3">
-        km
-        <input className={inp} value={radius} placeholder="60" onChange={(e) => setRadius(e.target.value)} />
+        Radius
+        <input className={inp} value={radius} placeholder={units === 'mi' ? '37' : '60'} onChange={(e) => setRadius(e.target.value)} />
       </label>
+      <div className="flex overflow-hidden rounded-md border border-edge text-[11px]" role="radiogroup" aria-label="Distance units" title="How distances and the radius are shown">
+        {(['km', 'mi'] as const).map((u) => (
+          <button key={u} role="radio" aria-checked={units === u} className={`px-2 py-1 ${units === u ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink'}`} onClick={() => chooseUnits(u)}>
+            {u === 'km' ? 'km' : 'miles'}
+          </button>
+        ))}
+      </div>
       <button className="rounded-md border border-edge px-2 py-1 text-xs text-ink-2 hover:text-ink" onClick={save}>
         Save
       </button>

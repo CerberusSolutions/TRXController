@@ -13,6 +13,12 @@ describe('sanitize', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, port: '' }).port).toBeNull();
   });
 
+  it('keeps the distance units to km or miles', () => {
+    expect(sanitize({ ...DEFAULT_SETTINGS, units: 'mi' }).units).toBe('mi');
+    expect(sanitize({ ...DEFAULT_SETTINGS, units: 'furlongs' as never }).units).toBe('km');
+    expect(sanitize({ ...DEFAULT_SETTINGS, units: undefined as never }).units).toBe('km');
+  });
+
   it('keeps the lookup order, drops unknown lookups and appends missing ones enabled', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, lookups: [{ id: 'RRDB', enabled: false }, { id: 'X' }, { id: 'RRDB', enabled: true }] as never }).lookups).toEqual([
       { id: 'RRDB', enabled: false },

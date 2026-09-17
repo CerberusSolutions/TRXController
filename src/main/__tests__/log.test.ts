@@ -118,6 +118,32 @@ describe('describe()', () => {
     expect(describeSnapshot({ ...rptFirst, rr: conv })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', source: 'RRDB' });
   });
 
+  it('places the row by the identity it shows and stores every candidate the lookups offered', () => {
+    const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
+    const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };
+    const far = { ...wtr, id: 2, licensee: 'Kwik Fit (GB) Limited', lat: null, lon: null, distanceKm: null, bearingDeg: null };
+    const conv = { frequencyHz: 456_350_000, conventional: [{ descr: 'Addenbrookes Hospital (Cambridge)', alpha: 'ADDENBR', tone: '', mode: 'FM', callsign: '', tags: [], county: 'Cambs', distanceKm: 60, bearingDeg: 62 }], systems: [], fetchedAt: 1, pending: false, error: null };
+    // Named by the register: placed by the licence, with both licences and the RadioReference channel listed.
+    const byWtr = describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr, far], rr: conv });
+    expect(byWtr).toMatchObject({ licensee: 'RESOUND LIMITED', source: 'WTR', distanceKm: 6.7, bearingDeg: 47 });
+    expect(byWtr.candidates.map((c) => [c.source, c.name, c.distanceKm])).toEqual([
+      ['WTR', 'RESOUND LIMITED', 6.7],
+      ['RRDB', 'Addenbrookes Hospital (Cambridge)', 60],
+      ['WTR', 'Kwik Fit (GB) Limited', null],
+    ]);
+    expect(byWtr.candidates[0]).not.toHaveProperty('title');
+    // Named by RadioReference (ranked first): placed by its county instead.
+    const byRr = describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr, far], rr: conv, lookups: [{ id: 'RRDB', enabled: true }, { id: 'WTR', enabled: true }, { id: 'UKR', enabled: true }] });
+    expect(byRr).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', source: 'RRDB', distanceKm: 60, bearingDeg: 62 });
+    // The scanner's own name: the licensee still places the row (it is the nearest known user of the channel).
+    expect(describeSnapshot({ ...snap({}), licences: [wtr] })).toMatchObject({ name: 'TC NW Deps', source: '', distanceKm: 6.7, bearingDeg: 47 });
+    // Nothing placed: nothing to show, and a lookup switched off contributes no candidates.
+    const off = describeSnapshot({ ...snap({ lcd: idle }), licences: [far], rr: conv, lookups: [{ id: 'WTR', enabled: true }, { id: 'RRDB', enabled: false }, { id: 'UKR', enabled: true }] });
+    expect(off).toMatchObject({ licensee: 'Kwik Fit (GB) Limited', distanceKm: null, bearingDeg: null });
+    expect(off.candidates).toHaveLength(1);
+    expect(describeSnapshot(snap({}))).toMatchObject({ distanceKm: null, bearingDeg: null, candidates: [] });
+  });
+
   it('does not treat the sweeping screen as a channel', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'] }));
     expect(d.name).toBe('');
@@ -141,6 +167,32 @@ describe('ReceptionTracker', () => {
     // Reopened before the name shows again: the earlier row's name and blank source stand.
     ev = t.update({ ...snap({ lcd: idle }), licences: [wtr] }, 3000);
     expect(ev[0]).toMatchObject({ type: 'open', merged: true, reception: { name: 'TC NW Deps', source: '', calls: 2 } });
+  });
+
+  it('grows the candidate list as lookups answer and moves the placement with the name', () => {
+    const t = new ReceptionTracker({ minDurationMs: 0, closeDebounceMs: 0, mergeWindowMs: 10_000 });
+    const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
+    const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };
+    const conv = { frequencyHz: 456_350_000, conventional: [{ descr: 'Addenbrookes Hospital (Cambridge)', alpha: 'ADDENBR', tone: '', mode: 'FM', callsign: '', tags: [], county: 'Cambs', distanceKm: 60, bearingDeg: 62 }], systems: [], fetchedAt: 1, pending: false, error: null };
+    const rrFirst = [{ id: 'RRDB' as const, enabled: true }, { id: 'WTR' as const, enabled: true }, { id: 'UKR' as const, enabled: true }];
+    // The register answers at once; RadioReference is still being asked.
+    let ev = t.update({ ...snap({ lcd: idle }), licences: [wtr], lookups: rrFirst }, 1000);
+    expect(ev[0]).toMatchObject({ type: 'open', reception: { source: 'WTR', distanceKm: 6.7, bearingDeg: 47 } });
+    expect(ev[0]!.reception.candidates).toHaveLength(1);
+    // Same answer again: nothing to report.
+    expect(t.update({ ...snap({ lcd: idle }), licences: [wtr], lookups: rrFirst }, 1100)).toEqual([]);
+    // RadioReference lands and, ranked first, names the row: the placement follows the name and the list grows.
+    ev = t.update({ ...snap({ lcd: idle }), licences: [wtr], rr: conv, lookups: rrFirst }, 1200);
+    expect(ev[0]).toMatchObject({ type: 'update', reception: { name: 'Addenbrookes Hospital (Cambridge)', source: 'RRDB', distanceKm: 60, bearingDeg: 62 } });
+    expect(ev[0]!.reception.candidates.map((c) => c.source)).toEqual(['RRDB', 'WTR']);
+    // A poll with fewer answers (a lookup hiccup) never shrinks the list.
+    expect(t.update({ ...snap({ lcd: idle }), licences: [wtr], lookups: rrFirst }, 1300).map((e) => e.type)).not.toContain('update');
+    expect(t.open?.candidates).toHaveLength(2);
+    t.update({ ...snap({ rf: false, lcd: idle }), licences: [wtr], lookups: rrFirst }, 1500);
+    // A merged reopening keeps the longer list and the placement.
+    ev = t.update({ ...snap({ lcd: idle }), licences: [wtr], lookups: rrFirst }, 3000);
+    expect(ev[0]).toMatchObject({ type: 'open', merged: true, reception: { name: 'Addenbrookes Hospital (Cambridge)', distanceKm: 60, calls: 2 } });
+    expect(ev[0]!.reception.candidates).toHaveLength(2);
   });
 
   it('opens on squelch, absorbs later details, closes after the debounce', () => {
@@ -252,6 +304,19 @@ describe('LogDb', () => {
     expect(db.count()).toBe(3);
     db.clear();
     expect(db.count()).toBe(0);
+    db.close();
+  });
+
+  it('stores the placement and the candidate list with the row', () => {
+    const db = new LogDb(':memory:');
+    const candidates = [
+      { source: 'WTR' as const, name: 'RESOUND LIMITED', detail: 'DIG · base', distanceKm: 6.7, bearingDeg: 47 },
+      { source: 'UKR' as const, name: 'GB3BS', detail: 'Bristol · 118.8 Hz ✓', distanceKm: null, bearingDeg: null, match: true, pills: 'FM · DMR' },
+    ];
+    const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: 'RESOUND LIMITED', source: 'WTR', scannerName: '', wtr: 'RESOUND LIMITED', rrName: '', rrSystem: '', rpt: '', distanceKm: 6.7, bearingDeg: 47, candidates, rssiPeak: 0, calls: 1 });
+    expect(r).toMatchObject({ distanceKm: 6.7, bearingDeg: 47, candidates });
+    expect(db.update(r.id, { distanceKm: 60, bearingDeg: 62, candidates: candidates.slice(0, 1) })).toMatchObject({ distanceKm: 60, bearingDeg: 62, candidates: candidates.slice(0, 1) });
+    expect(db.update(r.id, { distanceKm: null, bearingDeg: null, candidates: [] })).toMatchObject({ distanceKm: null, bearingDeg: null, candidates: [] });
     db.close();
   });
 
