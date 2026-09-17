@@ -25,7 +25,7 @@ function ModePills({ modes }: { modes: string }) {
   return (
     <span className="inline-flex shrink-0 gap-1 align-middle">
       {list.map((m) => (
-        <span key={m} className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${MODE_PILL[m] ?? 'bg-panel-2 text-ink-3'}`}>
+        <span key={m} className={`rounded px-1 py-px font-sans text-[10px] font-bold uppercase tracking-wider ${MODE_PILL[m] ?? 'bg-panel-2 text-ink-3'}`}>
           {m}
         </span>
       ))}
@@ -38,6 +38,8 @@ type Source = 'RRDB' | 'WTR' | 'UKR';
 interface ListedRow {
   key: string;
   source: Source;
+  /** RadioReference, the register or the repeater list could place it relative to the user. */
+  placed: boolean;
   name: string;
   detail: string;
   title: string;
@@ -53,6 +55,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     out.push({
       key: `rr-s${sys.sid}`,
       source: 'RRDB',
+      placed: sys.distanceKm !== null,
       name: sys.name,
       detail: [sys.site?.descr, tg ? `${tg.descr || tg.alpha}${tg.category ? ` (${tg.category})` : ''}${tg.enc ? ' · enc' : ''}` : '', km(sys.distanceKm)].filter(Boolean).join(' · '),
       title: `RadioReference system ${sys.sid}${sys.city ? ` · ${sys.city}` : ''}${sys.site ? ` · site ${sys.site.descr} (${sys.site.location}) NAC ${sys.site.nac}` : ''}${tg ? ` · TG ${tg.tgDec} ${tg.alpha}` : ''}`,
@@ -63,6 +66,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     out.push({
       key: `rr-c${i}`,
       source: 'RRDB',
+      placed: c.distanceKm !== null,
       name: c.descr || c.alpha,
       detail: [c.county, km(c.distanceKm), c.tone ? `${c.tone}${match === true ? ' ✓' : ''}` : '', c.mode, c.tags[0]].filter(Boolean).join(' · '),
       title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
@@ -72,6 +76,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     out.push({
       key: `wtr-${l.id}`,
       source: 'WTR',
+      placed: l.distanceKm !== null,
       name: l.licensee,
       detail: [km(l.distanceKm), l.mode, l.direction === 'R' ? 'mob' : l.direction === 'T' ? 'base' : ''].filter(Boolean).join(' · '),
       title: `${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`,
@@ -82,6 +87,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     out.push({
       key: `rpt-${r.id}`,
       source: 'UKR',
+      placed: r.distanceKm !== null,
       name: r.callsign,
       pills: r.modes,
       detail: [r.where ? r.where.charAt(0) + r.where.slice(1).toLowerCase() : '', km(r.distanceKm), r.ctcss !== null ? `${r.ctcss.toFixed(1)} Hz${match ? ' ✓' : ''}` : '', r.side === 'input' ? 'input' : '']
@@ -92,11 +98,12 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
       }`,
     });
   }
-  // The user's lookup order decides which comes first; within a lookup, nearest / best match first as built.
+  // Anything placed near the user beats anything nobody can place; then the user's lookup order;
+  // within a lookup, nearest / best match first as built.
   return out
     .map((row, i) => ({ row, i, rank: lookupRank(prefs, row.source) }))
     .filter((x) => x.rank !== Infinity)
-    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .sort((a, b) => Number(b.row.placed) - Number(a.row.placed) || a.rank - b.rank || a.i - b.i)
     .map((x) => x.row);
 }
 
@@ -234,16 +241,16 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
+      <div className="mt-3 h-[4.6rem] overflow-hidden border-t border-edge pt-2">
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
             <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
               Listed
             </span>
-            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
+            <ul className="min-w-0 space-y-0.5 font-mono text-[13.5px] leading-tight">
               {listed.slice(0, 3).map((row, i) => (
                 <li key={row.key} className="flex min-w-0 items-center gap-2" title={row.title}>
-                  <span className={`shrink-0 rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[row.source]}`} title={SOURCE_NAME[row.source]}>
+                  <span className={`shrink-0 rounded px-1 py-px font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL[row.source]}`} title={SOURCE_NAME[row.source]}>
                     {row.source}
                   </span>
                   <span className={`shrink-0 truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.name}</span>
