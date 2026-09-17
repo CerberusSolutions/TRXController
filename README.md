@@ -72,6 +72,12 @@ outranks every lookup and the scanner's own programming: every logged reception 
 with a green **CONF** pill, new receptions take it as they arrive, and the hero shows it while the
 scanner is on the frequency. **remove** withdraws it. Data > Confirmed identities lists them all.
 
+Codes count: a candidate whose tone or DMR colour code matches the one the scanner shows ("CC 12",
+"CTCSS 94.8", "NAC 293") is listed first and names the row whatever the lookup order; one whose code
+differs sinks. The unfolded row also shows the traffic heard on that frequency by code: how many
+receptions, first and last heard, which radio IDs and which names, so the users sharing a channel
+can be told apart and confirmed one code at a time.
+
 ## Windows installer
 
 ```

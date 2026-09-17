@@ -97,10 +97,14 @@ function fromRepeater(r: RepeaterMatch, detectedHz: number | null): ListedCandid
   };
 }
 
+/** A tone / colour code that matches the detected one is the strongest evidence there is; one that differs is evidence against. */
+export const matchScore = (c: { match?: boolean }): number => (c.match === true ? 0 : c.match === undefined ? 1 : 2);
+
 /**
- * Every candidate the enabled lookups offer, ranked: anything placed near the user beats anything
- * nobody can place; then the user's lookup order; within a lookup, nearest / best match first as
- * the lookup returned them (the repeater whose tone matches leads its list).
+ * Every candidate the enabled lookups offer, ranked: an entry whose tone / colour code matches the
+ * one detected first, one whose tone differs last; between them anything placed near the user beats
+ * anything nobody can place; then the user's lookup order; within a lookup, nearest first as the
+ * lookup returned them.
  */
 export function candidatesFor(inputs: CandidateInputs, prefs: readonly LookupPref[]): ListedCandidate[] {
   const out: ListedCandidate[] = [];
@@ -115,7 +119,7 @@ export function candidatesFor(inputs: CandidateInputs, prefs: readonly LookupPre
   }
   return out
     .map((row, i) => ({ row, i, rank: lookupRank(prefs, row.source) }))
-    .sort((a, b) => Number(placed(b.row)) - Number(placed(a.row)) || a.rank - b.rank || a.i - b.i)
+    .sort((a, b) => matchScore(a.row) - matchScore(b.row) || Number(placed(b.row)) - Number(placed(a.row)) || a.rank - b.rank || a.i - b.i)
     .map((x) => x.row);
 }
 

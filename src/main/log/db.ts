@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
@@ -288,6 +288,39 @@ export class LogDb {
       changed.push(Number(r.id));
     }
     return changed;
+  }
+
+  // --- Traffic analysis ----------------------------------------------------
+
+  /** What has been heard on `hz`, grouped by tone / colour code and talkgroup, busiest first. */
+  traffic(hz: number, opts: { groups?: number; radioIds?: number; names?: number } = {}): TrafficGroup[] {
+    const groups = this.db
+      .prepare(
+        `SELECT tone, tgid, COUNT(*) AS n, SUM(calls) AS calls, MIN(started_at) AS first_at, MAX(COALESCE(ended_at, started_at)) AS last_at
+         FROM receptions WHERE frequency_hz = ? GROUP BY tone, tgid ORDER BY n DESC, last_at DESC LIMIT ?`,
+      )
+      .all(hz, opts.groups ?? 12) as { tone: string; tgid: number | null; n: number; calls: number; first_at: number; last_at: number }[];
+    const ids = this.db.prepare(
+      `SELECT radio_id, MAX(COALESCE(ended_at, started_at)) AS last_at FROM receptions
+       WHERE frequency_hz = ? AND tone = ? AND tgid IS ? AND radio_id IS NOT NULL GROUP BY radio_id ORDER BY last_at DESC`,
+    );
+    const names = this.db.prepare(
+      `SELECT name, COUNT(*) AS n FROM receptions WHERE frequency_hz = ? AND tone = ? AND tgid IS ? AND name != '' GROUP BY name ORDER BY n DESC LIMIT ?`,
+    );
+    return groups.map((g) => {
+      const rids = (ids.all(hz, g.tone, g.tgid) as { radio_id: number }[]).map((r) => Number(r.radio_id));
+      return {
+        tone: g.tone,
+        tgid: g.tgid === null ? null : Number(g.tgid),
+        receptions: Number(g.n),
+        calls: Number(g.calls),
+        firstAt: Number(g.first_at),
+        lastAt: Number(g.last_at),
+        radioIds: rids.slice(0, opts.radioIds ?? 6),
+        radioCount: rids.length,
+        names: (names.all(hz, g.tone, g.tgid, opts.names ?? 3) as { name: string }[]).map((r) => r.name),
+      };
+    });
   }
 
   get(id: number): ReceptionRow | undefined {

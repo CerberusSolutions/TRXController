@@ -20,6 +20,7 @@ import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 import { candidatesFor, storedCandidates } from '../../shared/listed';
 import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
+import { detectedCode, rrToneMatches } from '../../shared/rr';
 import { lookupRank, type LookupId, type LookupSource } from '../../shared/sources';
 
 export interface OpenReception extends NewReception {
@@ -242,15 +243,20 @@ export function describe(s: ScannerSnapshot): Description {
   const rrOn = rank('RRDB') !== Infinity;
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
   const rrSys = rrOn ? s.rr?.systems[0] : undefined;
-  const rrConv = rrOn ? s.rr?.conventional[0] : undefined;
+  // RadioReference's channel for this reception: the one whose tone / colour code matches the detected
+  // one if any does (several users are listed on a shared channel), else the nearest.
+  const detected = detectedCode(details);
+  const toneScore = (t: string): number => ({ true: 0, null: 1, false: 2 })[String(rrToneMatches(t, detected))] ?? 1;
+  const rrConv = rrOn && s.rr?.conventional.length ? [...s.rr.conventional].sort((a, b) => toneScore(a.tone) - toneScore(b.tone))[0] : undefined;
+  const rrMatch = rrConv ? rrToneMatches(rrConv.tone, detected) : null;
   // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
   const rrTalkgroup = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || '';
-  const rrChannel = rrOn ? s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '' : '';
+  const rrChannel = rrConv?.descr || rrConv?.alpha || '';
   const scannerName = (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '';
   // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
   // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
   const wtr = rank('WTR') !== Infinity ? s.licences?.[0]?.licensee || '' : '';
-  const bestRpt = rank('UKR') !== Infinity && s.repeaters?.length ? rankRepeaters(s.repeaters, details?.detectedTone)[0]! : null;
+  const bestRpt = rank('UKR') !== Infinity && s.repeaters?.length ? rankRepeaters(s.repeaters, detected)[0]! : null;
   const rpt = bestRpt ? repeaterLabel(bestRpt) : '';
   const licSrc: LookupSource = wtr && rpt ? (rank('WTR') <= rank('UKR') ? 'WTR' : 'UKR') : wtr ? 'WTR' : rpt ? 'UKR' : '';
   const licensee = licSrc === 'WTR' ? wtr : licSrc === 'UKR' ? rpt : '';
@@ -258,7 +264,10 @@ export function describe(s: ScannerSnapshot): Description {
   // an entry nobody can place never outranks one that is, whatever the order.
   const licPlaced = licSrc === 'WTR' ? s.licences![0]!.distanceKm !== null : licSrc === 'UKR' ? bestRpt!.distanceKm !== null : false;
   const rrPlaced = (rrConv?.distanceKm ?? null) !== null;
-  const licenseeWins = licensee !== '' && (rank(licSrc as LookupId) < rank('RRDB') || (licPlaced && !rrPlaced));
+  // A RadioReference channel whose tone matches the detected one wins whatever the order (the registers
+  // know no tones); one whose tone differs loses to any licensee.
+  const licenseeWins =
+    licensee !== '' && (rrMatch === false || (rrMatch !== true && (rank(licSrc as LookupId) < rank('RRDB') || (licPlaced && !rrPlaced))));
   // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
   // talkgroups), else RadioReference's channel description unless the licensee will show in its place.
   const rrName = rrTalkgroup || (rrChannel && !licenseeWins ? rrChannel : '');
@@ -279,7 +288,7 @@ export function describe(s: ScannerSnapshot): Description {
   const first = source === 'RRDB' ? rrPlace : licPlace;
   const second = source === 'RRDB' ? licPlace : rrPlace;
   const placed = first?.distanceKm != null ? first : second?.distanceKm != null ? second : (first ?? second);
-  const candidates = storedCandidates(candidatesFor({ rr: s.rr, licences: s.licences, repeaters: s.repeaters, detectedTone: details?.detectedTone }, s.lookups));
+  const candidates = storedCandidates(candidatesFor({ rr: s.rr, licences: s.licences, repeaters: s.repeaters, detectedTone: detected }, s.lookups));
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
@@ -291,7 +300,7 @@ export function describe(s: ScannerSnapshot): Description {
     radioId: idOr(h?.radioId1) ?? details?.radioId ?? null,
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
-    tone: details?.detectedTone ?? '',
+    tone: detected ?? '',
     licensee,
     source,
     // Every source's own answer, for the log's Detail view and the CSV, whatever the order chose.

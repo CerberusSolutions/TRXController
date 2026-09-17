@@ -10,6 +10,7 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type TrafficGroup,
   type UpdateInfo,
   type WtrMatch,
   type RepeaterMatch,
@@ -55,6 +56,8 @@ const api = {
   logConfirm: (c: NewConfirmation): Promise<Confirmation> => ipcRenderer.invoke(IPC.logConfirm, c),
   logUnconfirm: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logUnconfirm, id),
   logConfirmations: (): Promise<Confirmation[]> => ipcRenderer.invoke(IPC.logConfirmations),
+  /** What has been heard on a frequency, grouped by tone / colour code and talkgroup. */
+  logTraffic: (hz: number): Promise<TrafficGroup[]> => ipcRenderer.invoke(IPC.logTraffic, hz),
   onLogUpsert: (cb: (row: ReceptionRow) => void): (() => void) => {
     const listener = (_e: unknown, row: ReceptionRow): void => cb(row);
     ipcRenderer.on(IPC.logUpsert, listener);

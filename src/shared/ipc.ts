@@ -121,6 +121,25 @@ export interface ReceptionRow {
   radioName: string | null;
 }
 
+/**
+ * Traffic seen on one frequency, grouped by the tone / colour code and talkgroup the receptions
+ * carried: how the users sharing a channel tell apart.
+ */
+export interface TrafficGroup {
+  tone: string;
+  tgid: number | null;
+  /** Logged receptions (rows) and the squelch openings merged into them. */
+  receptions: number;
+  calls: number;
+  firstAt: number;
+  lastAt: number;
+  /** Distinct radio IDs heard, most recent first, at most a handful; `radioCount` is the full number. */
+  radioIds: number[];
+  radioCount: number;
+  /** Distinct names the rows carry, most frequent first, at most a few. */
+  names: string[];
+}
+
 /** One entry of the DMR user database (radioid.net). */
 export interface DmrUser {
   id: number;
@@ -357,6 +376,7 @@ export const IPC = {
   logConfirm: 'log:confirm',
   logUnconfirm: 'log:unconfirm',
   logConfirmations: 'log:confirmations',
+  logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',

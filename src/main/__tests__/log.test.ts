@@ -118,6 +118,24 @@ describe('describe()', () => {
     expect(describeSnapshot({ ...rptFirst, rr: conv })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', source: 'RRDB' });
   });
 
+  it('lets a RadioReference channel whose tone matches the detected one name the row, and one whose tone differs lose', () => {
+    const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: '', widthHz: 12_500, lat: null, lon: null, ngr: '', licenceNo: '', distanceKm: 2, bearingDeg: 10 };
+    const cc12 = { descr: 'Amazon MK1 Security', alpha: 'AMZ', tone: 'CC 12', mode: 'DMR', callsign: '', tags: [], county: 'Bucks', distanceKm: 29, bearingDeg: 80 };
+    const cc3 = { ...cc12, descr: 'Shop Safe Aylesbury', tone: 'CC 3' };
+    const rr = { frequencyHz: 456_350_000, conventional: [cc3, cc12], systems: [], fetchedAt: 1, pending: false, error: null };
+    const cc = (n: number) => ['', 'Imported/New', 'CONV        psDr', 'TGID:         19', 'DMR   456.350000', `Slot:1  Color:${n}`];
+    // Default order puts the register first, but CC 12 detected picks Amazon out of RadioReference's list and names the row with it.
+    expect(describeSnapshot({ ...snap({ lcd: cc(12) }), licences: [wtr], rr })).toMatchObject({ name: 'Amazon MK1 Security', source: 'RRDB', tone: 'CC 12', licensee: 'RESOUND LIMITED', rrName: 'Amazon MK1 Security', distanceKm: 29 });
+    expect(describeSnapshot({ ...snap({ lcd: cc(3) }), licences: [wtr], rr })).toMatchObject({ name: 'Shop Safe Aylesbury', source: 'RRDB', tone: 'CC 3' });
+    // CC 7 matches neither: the RadioReference channels lose to the licensee even with RadioReference ranked first.
+    const rrFirst = [{ id: 'RRDB' as const, enabled: true }, { id: 'WTR' as const, enabled: true }, { id: 'UKR' as const, enabled: true }];
+    expect(describeSnapshot({ ...snap({ lcd: cc(7) }), licences: [wtr], rr, lookups: rrFirst })).toMatchObject({ name: '', licensee: 'RESOUND LIMITED', source: 'WTR', tone: 'CC 7' });
+    // No tone detected: the order decides as before.
+    const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr, lookups: rrFirst })).toMatchObject({ name: 'Shop Safe Aylesbury', source: 'RRDB' });
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: '', source: 'WTR' });
+  });
+
   it('places the row by the identity it shows and stores every candidate the lookups offered', () => {
     const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
     const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };
@@ -346,6 +364,24 @@ describe('LogDb', () => {
     expect(db.get(a.id)).toMatchObject({ name: '', source: 'WTR', distanceKm: 29 });
     expect(db.get(c.id)).toMatchObject({ name: 'Resound Ayles', source: '' });
     db.unconfirm(999); // unknown id: nothing happens
+    db.close();
+  });
+
+  it('breaks the traffic on a frequency down by tone and talkgroup', () => {
+    const db = new LogDb(':memory:');
+    const base = { endedAt: null as number | null, mode: 'NFM', signalType: 'DG', name: '', system: '', scanlist: '', objectType: 'CONV', tgid: null as number | null, radioId: null as number | null, site: '', squelch: '', tone: '', licensee: '', source: '' as const, scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', distanceKm: null, bearingDeg: null, candidates: [], rssiPeak: 1, calls: 1 };
+    db.insert({ ...base, startedAt: 1000, endedAt: 1500, frequencyHz: 456_350_000, tone: 'CC 12', tgid: 19, radioId: 1904, name: 'Resound Ayles', calls: 3 });
+    db.insert({ ...base, startedAt: 2000, endedAt: 2500, frequencyHz: 456_350_000, tone: 'CC 12', tgid: 19, radioId: 2211, name: 'Resound Ayles' });
+    db.insert({ ...base, startedAt: 3000, endedAt: 3500, frequencyHz: 456_350_000, tone: 'CC 12', tgid: 19, radioId: 1904, name: 'Amazon' });
+    db.insert({ ...base, startedAt: 4000, endedAt: null, frequencyHz: 456_350_000, tone: 'CC 3', tgid: 1, radioId: null });
+    db.insert({ ...base, startedAt: 5000, endedAt: 5100, frequencyHz: 453_250_000, tone: 'CC 1', tgid: 1003, radioId: 204 });
+    const t = db.traffic(456_350_000);
+    expect(t).toEqual([
+      { tone: 'CC 12', tgid: 19, receptions: 3, calls: 5, firstAt: 1000, lastAt: 3500, radioIds: [1904, 2211], radioCount: 2, names: ['Resound Ayles', 'Amazon'] },
+      { tone: 'CC 3', tgid: 1, receptions: 1, calls: 1, firstAt: 4000, lastAt: 4000, radioIds: [], radioCount: 0, names: [] },
+    ]);
+    expect(db.traffic(456_350_000, { radioIds: 1 })[0]).toMatchObject({ radioIds: [1904], radioCount: 2 });
+    expect(db.traffic(1)).toEqual([]);
     db.close();
   });
 

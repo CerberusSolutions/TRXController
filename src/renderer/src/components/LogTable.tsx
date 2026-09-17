@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ReceptionRow } from "../../../shared/ipc";
+import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
 import { formatPlace, type Units } from "../../../shared/geo";
 import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
 import { rowMatches, useLog } from "../store/log";
@@ -82,13 +82,12 @@ const moreCell: Column = {
   minPx: 1.1 * REM,
   render: (r, { expanded, toggle }) => {
     const n = r.candidates?.length ?? 0;
-    if (n === 0 && r.source !== "CONF") return <span />;
     const open = expanded.has(r.id);
     return (
       <button
         type="button"
         className={`w-full text-center leading-none ${open ? "text-ink" : "text-ink-3 hover:text-ink"}`}
-        title={open ? "Hide the candidates" : `${n} candidate${n === 1 ? "" : "s"} from the lookups: click to show, then confirm the right one`}
+        title={open ? "Fold away" : `${n ? `${n} candidate${n === 1 ? "" : "s"} from the lookups` : "No lookup offered a name"}, and the traffic heard on the frequency by code: click to show, then confirm the right one`}
         onClick={() => toggle(r.id)}
       >
         {open ? "−" : "+"}
@@ -372,6 +371,66 @@ const sysCell: Column = {
 const SIMPLE: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 
+function fmtStamp(ms: number): string {
+  return `${fmtDate(ms) ? fmtDate(ms) + " " : ""}${fmtTime(ms)}`;
+}
+
+/**
+ * What has been heard on the row's frequency, by tone / colour code and talkgroup: the users sharing
+ * a channel tell apart by code, so this is what to confirm against.
+ */
+function Traffic({ r }: { r: ReceptionRow }) {
+  const [groups, setGroups] = useState<TrafficGroup[] | null>(null);
+  const rows = useLog((s) => s.rows);
+  // Refetched when the log changes (a new reception on the frequency), cheaply: one grouped query.
+  const version = useMemo(() => rows.filter((x) => x.frequencyHz === r.frequencyHz).map((x) => `${x.id}:${x.calls}:${x.endedAt}:${x.name}`).join(), [rows, r.frequencyHz]);
+  useEffect(() => {
+    let live = true;
+    void window.trx?.logTraffic?.(r.frequencyHz).then((g) => {
+      if (live) setGroups(g);
+    });
+    return () => {
+      live = false;
+    };
+  }, [r.frequencyHz, version]);
+  if (!groups || groups.length === 0) return null;
+  const mine = (g: TrafficGroup): boolean => g.tone === r.tone && g.tgid === r.tgid;
+  return (
+    <ul className="mt-1 border-t border-edge/40 pt-1">
+      <li className="flex items-center gap-2 py-px font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+        <span className="w-9 shrink-0" />
+        Traffic on {(r.frequencyHz / 1e6).toFixed(4)} by code
+      </li>
+      {groups.map((g, i) => (
+        <li key={i} className={`flex min-w-0 items-center gap-2 py-px ${mine(g) ? "text-ink" : "text-ink-2"}`} title={`${g.calls} squelch openings in ${g.receptions} logged receptions`}>
+          <span className="w-9 shrink-0" />
+          <span className="w-24 shrink-0 truncate" title="Tone / colour code and talkgroup">
+            {[g.tone.replace("CTCSS ", "CT "), g.tgid !== null ? `TG ${g.tgid}` : ""].filter(Boolean).join(" · ") || <span className="text-ink-3">no code</span>}
+          </span>
+          <span className="w-14 shrink-0 text-right">{g.receptions} rx</span>
+          <span className="w-32 shrink-0 truncate text-ink-3" title="First heard">
+            {fmtStamp(g.firstAt)}
+          </span>
+          <span className="w-32 shrink-0 truncate text-ink-3" title="Last heard">
+            {fmtStamp(g.lastAt)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-ink-3" title={g.radioCount ? `${g.radioCount} radio ID${g.radioCount === 1 ? "" : "s"}` : undefined}>
+            {g.radioCount > 0 && (
+              <>
+                RID {g.radioIds.join(", ")}
+                {g.radioCount > g.radioIds.length ? ` +${g.radioCount - g.radioIds.length}` : ""}
+              </>
+            )}
+          </span>
+          <span className="min-w-0 max-w-[16rem] shrink truncate font-sans text-[11.5px]" title={g.names.join(" · ") || undefined}>
+            {g.names.join(" · ")}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** The key a confirmation made from this row applies to: its tone (colour code, CTCSS, NAC) and, on a trunked object, its talkgroup. */
 function confirmationKey(r: ReceptionRow): Pick<NewConfirmation, "frequencyHz" | "tone" | "tgid"> {
   const trunked = /^(TGRP|Talkgroup)$/i.test(r.objectType) || r.system !== "";
@@ -485,6 +544,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
         </button>
         <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{keyText(key)}</span>
       </li>
+      <Traffic r={r} />
     </ul>
   );
 }
@@ -690,7 +750,7 @@ export default function LogTable() {
           )}
           {visible.map((r) => {
             const open = r.endedAt === null;
-            const unfolded = expanded.has(r.id) && (r.candidates.length > 0 || r.source === "CONF");
+            const unfolded = expanded.has(r.id);
             return (
               <div key={r.id}>
                 <div

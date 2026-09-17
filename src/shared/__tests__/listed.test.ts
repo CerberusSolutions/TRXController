@@ -19,18 +19,42 @@ const rr: RrInfo = {
 
 describe('candidatesFor', () => {
   it('lists every lookup answer, placed ones first, then in the lookup order, with the match marked', () => {
-    const list = candidatesFor({ rr, licences: [wtr(1, 'Kwik Fit', null), wtr(2, 'University of Buckingham', 3.2)], repeaters: [], detectedTone: 'CC 13' }, DEFAULT_LOOKUPS);
+    const list = candidatesFor({ rr, licences: [wtr(1, 'Kwik Fit', null), wtr(2, 'University of Buckingham', 3.2)], repeaters: [], detectedTone: null }, DEFAULT_LOOKUPS);
     expect(list.map((c) => [c.source, c.name, c.distanceKm])).toEqual([
       ['WTR', 'University of Buckingham', 3.2],
       ['RRDB', 'Cambs DMR', 60],
       ['RRDB', 'University of Buckingham', 3.2],
       ['WTR', 'Kwik Fit', null],
     ]);
-    expect(list[2]).toMatchObject({ match: true, detail: 'Bucks · CC 13 ✓ · DMR · Education', bearingDeg: 47 });
+    expect(list[2]).toMatchObject({ detail: 'Bucks · CC 13 · DMR · Education', bearingDeg: 47 });
+    expect(list[2]).not.toHaveProperty('match');
     expect(list[1]!.detail).toBe('Addenbrookes · Porters (Hospital)');
     expect(list[0]!.title).toContain('BR Tech Assigned');
     // The distance is never baked into the detail: the renderer formats it in the user's units.
     expect(list.some((c) => /km/.test(c.detail))).toBe(false);
+  });
+
+  it('puts a tone / colour-code match first whatever the order, and a mismatch last', () => {
+    const licences = [wtr(1, 'Kwik Fit', null), wtr(2, 'University of Buckingham', 3.2)];
+    // CC 13 detected: RadioReference's CC 13 entry leads, even unplaced and ranked last.
+    const far = { ...rr, conventional: [{ ...rr.conventional[0]!, distanceKm: null, bearingDeg: null }] };
+    const list = candidatesFor({ rr: far, licences, repeaters: [], detectedTone: 'CC 13' }, [{ id: 'WTR', enabled: true }, { id: 'UKR', enabled: true }, { id: 'RRDB', enabled: true }]);
+    expect(list.map((c) => [c.source, c.name])).toEqual([
+      ['RRDB', 'University of Buckingham'],
+      ['WTR', 'University of Buckingham'],
+      ['RRDB', 'Cambs DMR'],
+      ['WTR', 'Kwik Fit'],
+    ]);
+    expect(list[0]).toMatchObject({ match: true, detail: 'Bucks · CC 13 ✓ · DMR · Education' });
+    // CC 5 detected: the CC 13 entry sinks below everything, placed or not.
+    const miss = candidatesFor({ rr, licences, repeaters: [], detectedTone: 'CC 5' }, DEFAULT_LOOKUPS);
+    expect(miss.map((c) => [c.source, c.name])).toEqual([
+      ['WTR', 'University of Buckingham'],
+      ['RRDB', 'Cambs DMR'],
+      ['WTR', 'Kwik Fit'],
+      ['RRDB', 'University of Buckingham'],
+    ]);
+    expect(miss[3]).toMatchObject({ match: false });
   });
 
   it('drops lookups that are switched off and leads with the repeater whose tone matches', () => {
@@ -38,13 +62,14 @@ describe('candidatesFor', () => {
       { rr, licences: [wtr(1, 'Kwik Fit', 5)], repeaters: [rpt(1, 'GB3BS', 118.8, 21), rpt(2, 'GB3AA', 94.8, 28)], detectedTone: 'CTCSS 94.8' },
       [{ id: 'UKR', enabled: true }, { id: 'RRDB', enabled: false }, { id: 'WTR', enabled: true }],
     );
+    // GB3AA's tone matches, so it leads; GB3BS's differs, so it sinks below the licence that has no tone to compare.
     expect(list.map((c) => [c.source, c.name])).toEqual([
       ['UKR', 'GB3AA'],
-      ['UKR', 'GB3BS'],
       ['WTR', 'Kwik Fit'],
+      ['UKR', 'GB3BS'],
     ]);
     expect(list[0]).toMatchObject({ match: true, pills: 'FM · DMR', detail: 'Bristol · 94.8 Hz ✓' });
-    expect(list[1]).toMatchObject({ match: false });
+    expect(list[2]).toMatchObject({ match: false });
   });
 
   it('stores the list without the tooltips and reads it back leniently', () => {

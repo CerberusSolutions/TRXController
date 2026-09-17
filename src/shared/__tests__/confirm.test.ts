@@ -23,3 +23,14 @@ describe('pickConfirmation', () => {
     expect(pickConfirmation([cc12tg19], 456_350_000, 'CC 12', null)).toBeNull();
   });
 });
+
+describe('detectedCode', () => {
+  it('is the detected tone, else the DMR colour code', async () => {
+    const { detectedCode } = await import('../rr');
+    expect(detectedCode({ detectedTone: 'CTCSS 94.8', colorCode: null })).toBe('CTCSS 94.8');
+    expect(detectedCode({ detectedTone: null, colorCode: 12 })).toBe('CC 12');
+    expect(detectedCode({ detectedTone: 'NAC 293', colorCode: 12 })).toBe('NAC 293');
+    expect(detectedCode({ detectedTone: null, colorCode: null })).toBeNull();
+    expect(detectedCode(null)).toBeNull();
+  });
+});

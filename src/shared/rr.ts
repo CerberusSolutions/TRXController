@@ -1,5 +1,14 @@
 import type { RrConventional, RrInfo } from './ipc';
 
+/**
+ * The code a reception carries, for matching against what the lookups list: the detected tone
+ * ("CTCSS 94.8", "DCS 023", "NAC 293"), else the DMR colour code as "CC 12". Null when neither shows.
+ */
+export function detectedCode(d: { detectedTone: string | null; colorCode: number | null } | null | undefined): string | null {
+  if (!d) return null;
+  return d.detectedTone ?? (d.colorCode !== null ? `CC ${d.colorCode}` : null);
+}
+
 /** First number in a tone string: "94.8 PL" -> 94.8, "023 DPL" -> 23, "167 NAC" -> 167, "CC 1" -> 1. */
 export function toneNumber(text: string | null | undefined): number | null {
   const m = /(\d+(?:\.\d+)?)/.exec(text ?? '');

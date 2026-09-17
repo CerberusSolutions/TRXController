@@ -233,6 +233,18 @@ captured on 14 Sep 2026.
   (the hero shows it with a CONF pill and "Scanner: X" beneath when the scanner disagrees). Withdrawing
   one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
   The Data dialog lists them with a remove link.
+- Code matching: `detectedCode` (`src/shared/rr.ts`) is the reception's tone ("CTCSS 94.8", "DCS 023",
+  "NAC 293") else its DMR colour code as "CC 12"; it is what `tone` on a row holds and what the
+  lookups' tones are matched against (`rrToneMatches` for RadioReference, CTCSS for repeaters). A
+  candidate whose code matches ranks first whatever the order and placement, one whose code differs
+  last (`matchScore` in `candidatesFor`); `describe()` picks RadioReference's channel by the same
+  score and lets a matching channel name the row over any licensee, a mismatching one lose to any.
+  Confirmations are keyed by the same code, so they are the learned code table.
+- Traffic analysis: `LogDb.traffic(hz)` (`log:traffic`) groups the frequency's receptions by tone /
+  colour code and talkgroup: rows, calls, first / last heard, distinct radio IDs (most recent first,
+  a handful plus the count) and the names the rows carry. The log's unfolded row shows it under the
+  candidates, the row's own group highlighted, so the users sharing a channel can be told apart and
+  confirmed one code at a time.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

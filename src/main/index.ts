@@ -240,6 +240,7 @@ function registerIpc(): void {
     return res.filePath;
   });
   ipcMain.handle(IPC.logConfirmations, () => db?.confirmations() ?? []);
+  ipcMain.handle(IPC.logTraffic, (_e, hz: unknown) => (db && typeof hz === 'number' ? db.traffic(hz) : []));
   ipcMain.handle(IPC.logConfirm, (_e, c: unknown) => {
     if (!db) throw new Error('No log');
     const conf = sanitizeConfirmation(c);

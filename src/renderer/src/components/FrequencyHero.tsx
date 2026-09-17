@@ -3,6 +3,7 @@ import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { formatPlace } from '../../../shared/geo';
 import { candidatesFor } from '../../../shared/listed';
+import { detectedCode } from '../../../shared/rr';
 import { useIdentities } from '../store/identities';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
@@ -68,6 +69,8 @@ export default function FrequencyHero() {
   // RadioID lines, so the held copy shows both at once until the signal drops.
   const details = held;
   const detected = details?.detectedTone ?? null;
+  // What the lookups' tones / colour codes are matched against: the tone, else the DMR colour code.
+  const code = detectedCode(details);
   // The header carries the IDs on trunked / scanned objects; in Tune Mode and
   // the searches they only appear on the display.
   const tgid = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : (details?.tgid ?? null);
@@ -86,7 +89,7 @@ export default function FrequencyHero() {
   // Everything that lists this frequency, in one block, ranked as the log stores it: placed
   // entries first, then the user's lookup order (Data menu), repeaters with the one whose CTCSS
   // matches the detected tone first. Each source is filtered to the user's area upstream.
-  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: detected }, lookups);
+  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: code }, lookups);
   // An identity the user confirmed for this frequency (and tone / talkgroup) outranks everything shown.
   const conf = confirmed && confirmed.frequencyHz === hz ? confirmed : null;
   const scannerName = (id.source === 'active' || id.source === 'lcd') && id.name !== '—' ? id.name : '';
