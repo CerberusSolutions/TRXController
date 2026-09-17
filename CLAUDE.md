@@ -186,7 +186,9 @@ captured on 14 Sep 2026.
   `describe()` and the hero rank the sources the same way: the scanner's own name always
   wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); a
   RadioReference channel description is used only when no higher-ranked licensee will show;
-  the licensee is the higher-ranked of WTR / UKR with a match. A lookup switched off is neither
+  the licensee is the higher-ranked of WTR / UKR with a match; an entry nobody can place
+  (`distanceKm` null) never outranks one that is, in the log or the hero's Listed block, whatever
+  the order. A lookup switched off is neither
   queried (main skips the WTR / repeater queries and RadioReference requests) nor shown.
 - Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `WTR`, `UKR`), the
   lookup behind the name, or behind the system when the scanner named the object, or behind

@@ -219,13 +219,18 @@ export function describe(s: ScannerSnapshot): Description {
   // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
   // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
   const wtr = rank('WTR') !== Infinity ? s.licences?.[0]?.licensee || '' : '';
-  const rpt = rank('UKR') !== Infinity && s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : '';
+  const bestRpt = rank('UKR') !== Infinity && s.repeaters?.length ? rankRepeaters(s.repeaters, details?.detectedTone)[0]! : null;
+  const rpt = bestRpt ? repeaterLabel(bestRpt) : '';
   const licSrc: LookupSource = wtr && rpt ? (rank('WTR') <= rank('UKR') ? 'WTR' : 'UKR') : wtr ? 'WTR' : rpt ? 'UKR' : '';
   const licensee = licSrc === 'WTR' ? wtr : licSrc === 'UKR' ? rpt : '';
+  // Whether the chosen licensee, and RadioReference's channel, could be placed relative to the user:
+  // an entry nobody can place never outranks one that is, whatever the order.
+  const licPlaced = licSrc === 'WTR' ? s.licences![0]!.distanceKm !== null : licSrc === 'UKR' ? bestRpt!.distanceKm !== null : false;
+  const rrPlaced = (s.rr?.conventional[0]?.distanceKm ?? null) !== null;
+  const licenseeWins = licensee !== '' && (rank(licSrc as LookupId) < rank('RRDB') || (licPlaced && !rrPlaced));
   // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
-  // talkgroups), else RadioReference's channel description unless a licensee ranked above it will
-  // show in its place.
-  const rrName = rrTalkgroup || (rrChannel && !(licensee && rank(licSrc as LookupId) < rank('RRDB')) ? rrChannel : '');
+  // talkgroups), else RadioReference's channel description unless the licensee will show in its place.
+  const rrName = rrTalkgroup || (rrChannel && !licenseeWins ? rrChannel : '');
   const name = scannerName || rrName;
   const system = h?.systemTag || rrSys?.name || '';
   // What the log should credit: the lookup behind the name, or behind the system when the scanner

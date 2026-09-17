@@ -108,6 +108,14 @@ describe('describe()', () => {
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: trunked, lookups: [{ id: 'WTR', enabled: true }, { id: 'RRDB', enabled: false }] })).toMatchObject({ name: '', system: '', licensee: 'RESOUND LIMITED', source: 'WTR' });
     // The scanner's own name is never displaced by any order.
     expect(describeSnapshot({ ...snap({}), licences: [wtr], rr: conv, lookups: order('RRDB', 'WTR', 'UKR') })).toMatchObject({ name: 'TC NW Deps', source: '' });
+    // An entry nobody can place never outranks one that is: RadioReference's area description for
+    // GB3IW (county unmapped) loses to the repeater 18 km away even with RRDB ranked first.
+    const gb3tu = { id: 3, callsign: 'GB3TU', band: '70cm', channel: 'RB5', outputHz: 433_225_000, inputHz: 434_825_000, ctcss: 77, locator: '', where: 'TRING', lat: null, lon: null, modes: 'FM', distanceKm: 18, side: 'output' as const };
+    const area = { ...conv, conventional: [{ ...conv.conventional[0]!, descr: 'Portsmouth and Solent area', county: 'Isle of Wight', distanceKm: null }] };
+    const rptFirst = { ...snap({ lcd: idle }), repeaters: [gb3tu], rr: area, lookups: order('RRDB', 'WTR', 'UKR') };
+    expect(describeSnapshot(rptFirst)).toMatchObject({ name: '', licensee: 'GB3TU · TRING', source: 'UKR', rrName: 'Portsmouth and Solent area' });
+    // Placed as well: the order decides again.
+    expect(describeSnapshot({ ...rptFirst, rr: conv })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', source: 'RRDB' });
   });
 
   it('does not treat the sweeping screen as a channel', () => {
