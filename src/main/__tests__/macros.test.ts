@@ -88,6 +88,10 @@ class FakeScanner implements MacroHost {
   }
 
   async refresh(): Promise<void> {}
+
+  stalled(): boolean {
+    return false;
+  }
 }
 
 const DIGITS = new Map<number, string>([
@@ -151,6 +155,24 @@ describe('menus', () => {
     s.mode = 'main';
     await expect(selectMenuItem(s, 'Weather')).rejects.toThrow(/not in the Main Menu menu/);
     expect(s.presses.length).toBeLessThan(FakeScanner.MAIN.length + 2);
+  });
+
+  it('treats the scanner going silent after Scan is selected as scanning having started', async () => {
+    const s = new FakeScanner();
+    s.mode = 'tune';
+    // Selecting Scan leaves the last display as the menu and the scanner stops answering (loading scanlists).
+    let silent = false;
+    const origPress = s.press.bind(s);
+    s.press = async (code: number) => {
+      await origPress(code);
+      if (s.mode === 'scan') {
+        s.mode = 'main';
+        silent = true;
+      }
+    };
+    s.stalled = () => silent;
+    await resumeScan(s);
+    expect(silent).toBe(true);
   });
 
   it('returns to scanning from Tune Mode via Main Menu > Scan', async () => {

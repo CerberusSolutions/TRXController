@@ -20,6 +20,8 @@ function emptySnapshot(): ScannerSnapshot {
 }
 
 export const MAX_CCDUMP_LINES = 200;
+/** A tune / scan failure message clears itself after this long. */
+const ERROR_SHOWN_MS = 8000;
 
 interface ScannerState {
   snapshot: ScannerSnapshot;
@@ -73,7 +75,11 @@ export const useScanner = create<ScannerState>((set, get) => ({
         if (get().tuneState?.phase === 'done') set({ tuneState: null });
       }, 2500);
     } catch (e) {
-      set({ tuneState: { hz, phase: 'error', message: ipcMessage(e) } });
+      const tuneState = { hz, phase: 'error' as const, message: ipcMessage(e) };
+      set({ tuneState });
+      setTimeout(() => {
+        if (get().tuneState === tuneState) set({ tuneState: null });
+      }, ERROR_SHOWN_MS);
     }
   },
 
@@ -82,7 +88,11 @@ export const useScanner = create<ScannerState>((set, get) => ({
     try {
       await api().resumeScan();
     } catch (e) {
-      set({ tuneState: { hz: 0, phase: 'error', message: ipcMessage(e) } });
+      const tuneState = { hz: 0, phase: 'error' as const, message: ipcMessage(e) };
+      set({ tuneState });
+      setTimeout(() => {
+        if (get().tuneState === tuneState) set({ tuneState: null });
+      }, ERROR_SHOWN_MS);
     }
   },
 

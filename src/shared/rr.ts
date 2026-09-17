@@ -28,7 +28,7 @@ export function rrSummary(info: RrInfo | null): string[] {
   if (!info) return [];
   const out: string[] = [];
   for (const s of info.systems) {
-    const tg = s.talkgroup ? `${s.talkgroup.alpha || s.talkgroup.descr}${s.talkgroup.enc ? ' (enc)' : ''}` : '';
+    const tg = s.talkgroup ? `${s.talkgroup.descr || s.talkgroup.alpha}${s.talkgroup.enc ? ' (enc)' : ''}` : '';
     out.push([s.name, s.site?.descr, tg].filter(Boolean).join(' · '));
   }
   for (const c of info.conventional) out.push(conventionalLabel(c));
@@ -36,5 +36,5 @@ export function rrSummary(info: RrInfo | null): string[] {
 }
 
 export function conventionalLabel(c: RrConventional): string {
-  return [c.alpha && c.descr && c.alpha !== c.descr ? `${c.alpha} · ${c.descr}` : c.alpha || c.descr, c.tone, c.mode].filter(Boolean).join(' · ');
+  return [c.descr || c.alpha, c.alpha && c.descr && c.alpha !== c.descr ? `(${c.alpha})` : '', c.county, c.tone, c.mode].filter(Boolean).join(' · ');
 }

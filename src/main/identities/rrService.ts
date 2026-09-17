@@ -9,9 +9,10 @@
  * talkgroup list once and keeps them, after which every talkgroup on that
  * system resolves offline. Failures back off per frequency.
  */
-import type { RrInfo, RrSettings, RrStatus, RrSystemInfo } from '../../shared/ipc';
+import type { RrConventional, RrInfo, RrSettings, RrStatus, RrSystemInfo } from '../../shared/ipc';
 import type { LogDb } from '../log/db';
 import { RrClient, RrError, type FetchLike, type RrFreqHit, type RrSite, type RrSystemSummary } from './radioreference';
+import { distanceKm } from './wtr';
 
 /** Re-ask about a frequency after this long. */
 export const FREQ_TTL_MS = 30 * 24 * 3600 * 1000;
@@ -30,6 +31,12 @@ export interface RrServiceOptions {
   getSettings: () => RrSettings;
   /** Decrypt the stored password; throws or returns '' if it cannot. */
   decrypt: (cipher: string) => string;
+  /**
+   * The user's location and radius (the WTR settings). A region-wide search
+   * returns every system and channel in England on a frequency; only those
+   * with a site or county within the radius are kept. No location: keep all.
+   */
+  getLocation?: () => { lat: number | null; lon: number | null; radiusKm: number | null };
   fetchImpl?: FetchLike;
   /** Called after the cache changes, so the caller can refresh what it shows. */
   onChange?: () => void;
@@ -44,6 +51,7 @@ export class RrService {
   private readonly appKey: string;
   private readonly getSettings: () => RrSettings;
   private readonly decrypt: (cipher: string) => string;
+  private readonly getLocation: () => { lat: number | null; lon: number | null; radiusKm: number | null };
   private readonly fetchImpl: FetchLike | undefined;
   private readonly onChange: () => void;
   private readonly log: (msg: string) => void;
@@ -63,6 +71,7 @@ export class RrService {
     this.appKey = opts.appKey;
     this.getSettings = opts.getSettings;
     this.decrypt = opts.decrypt;
+    this.getLocation = opts.getLocation ?? (() => ({ lat: null, lon: null, radiusKm: null }));
     this.fetchImpl = opts.fetchImpl;
     this.onChange = opts.onChange ?? (() => {});
     this.log = opts.log ?? (() => {});
@@ -135,9 +144,22 @@ export class RrService {
     const pending = this.inFlight === hz || this.queue.includes(hz);
     const error = this.failed.get(hz)?.message ?? null;
     if (!cached) return { frequencyHz: hz, conventional: [], systems: [], fetchedAt: null, pending, error };
-    const conventional = cached.hits
-      .filter((h) => h.sid === null)
-      .map((h) => ({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags }));
+    const loc = this.getLocation();
+    const here = loc.lat !== null && loc.lon !== null ? { lat: loc.lat, lon: loc.lon } : null;
+    const radius = loc.radiusKm ?? 60;
+    const far = (d: number | null, slack = 0): boolean => here !== null && d !== null && d > radius + slack;
+
+    const conventional: RrConventional[] = [];
+    for (const h of cached.hits) {
+      if (h.sid !== null) continue;
+      const county = h.ctid !== null ? this.db.rrGetCounty(h.ctid) : null;
+      const d = here && county && county.lat !== null && county.lon !== null ? distanceKm(here.lat, here.lon, county.lat, county.lon) : null;
+      // A county entry is local if its centre is within the radius plus the county's own coverage range.
+      if (far(d, county?.rangeKm ?? 0)) continue;
+      conventional.push({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags, county: county?.name ?? '', distanceKm: d });
+    }
+    conventional.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
+
     const systems: RrSystemInfo[] = [];
     const seen = new Set<number>();
     for (const h of cached.hits) {
@@ -145,19 +167,23 @@ export class RrService {
       seen.add(h.sid);
       const sys = this.db.rrGetSystem(h.sid);
       if (!sys) {
-        systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, talkgroup: null });
+        systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, talkgroup: null });
         continue;
       }
-      const site = pickSite(sys.sites, hz, ctx.nac ?? null);
+      const site = pickSite(sys.sites, hz, ctx.nac ?? null, here);
+      const d = here && site && site.lat !== null && site.lon !== null ? distanceKm(here.lat, here.lon, site.lat, site.lon) : null;
+      if (far(d)) continue;
       const tg = ctx.tgid != null ? this.db.rrGetTalkgroup(h.sid, ctx.tgid) : null;
       systems.push({
         sid: h.sid,
         name: sys.system.name,
         city: sys.system.city,
         site: site ? { descr: site.descr, location: site.location, nac: site.nac } : null,
+        distanceKm: d,
         talkgroup: tg ? { tgDec: tg.tgDec, alpha: tg.alpha, descr: tg.descr, mode: tg.mode, enc: tg.enc, category: tg.category } : null,
       });
     }
+    systems.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
     return { frequencyHz: hz, conventional, systems, fetchedAt: cached.fetchedAt, pending, error };
   }
 
@@ -212,6 +238,14 @@ export class RrService {
       const hits = await client.searchStateFreq(stid, hz / 1e6);
       this.db.rrPutFreq(hz, stid, hits, this.now());
       this.log(`${(hz / 1e6).toFixed(4)} MHz: ${hits.length} entries`);
+      // Counties place conventional entries on the map; each is fetched once.
+      for (const ctid of new Set(hits.filter((h) => h.sid === null && h.ctid !== null).map((h) => h.ctid!))) {
+        if (this.db.rrGetCounty(ctid)) continue;
+        await this.pause();
+        const county = await client.getCountyInfo(ctid);
+        this.db.rrPutCounty(county, this.now());
+        this.log(`county ${ctid} "${county.name}"`);
+      }
       for (const h of hits) {
         if (h.sid === null) continue;
         const sys = this.db.rrGetSystem(h.sid);
@@ -251,14 +285,18 @@ export class RrService {
   }
 }
 
-/** The site using `hz`; when several do, the one whose NAC matches, else the first. */
-export function pickSite(sites: RrSite[], hz: number, nac: string | null): RrSite | null {
+/** The site using `hz`; when several do, the one whose NAC matches, else the nearest, else the first. */
+export function pickSite(sites: RrSite[], hz: number, nac: string | null, here: { lat: number; lon: number } | null = null): RrSite | null {
   const onFreq = sites.filter((s) => s.freqs.some((f) => Math.abs(Math.round(f.freqMHz * 1e6) - hz) <= MATCH_TOLERANCE_HZ));
   if (onFreq.length === 0) return null;
   if (nac) {
     const want = nac.replace(/^0+/, '').toUpperCase();
     const byNac = onFreq.find((s) => s.nac.replace(/^0+/, '').toUpperCase() === want);
     if (byNac) return byNac;
+  }
+  if (here) {
+    const d = (s: RrSite): number => (s.lat !== null && s.lon !== null ? distanceKm(here.lat, here.lon, s.lat, s.lon) : 1e9);
+    return [...onFreq].sort((a, b) => d(a) - d(b))[0]!;
   }
   return onFreq[0]!;
 }

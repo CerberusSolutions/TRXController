@@ -189,7 +189,8 @@ export function describe(s: ScannerSnapshot): Description {
   const tag = h?.objectTag ?? '';
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
   const rrSys = s.rr?.systems[0];
-  const rrName = rrSys?.talkgroup?.alpha || rrSys?.talkgroup?.descr || s.rr?.conventional[0]?.alpha || s.rr?.conventional[0]?.descr || '';
+  // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
+  const rrName = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '';
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',

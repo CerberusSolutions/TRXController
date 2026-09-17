@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ReceptionRow } from "../../../shared/ipc";
 import { rowMatches, useLog } from "../store/log";
 import { useScanner } from "../store/scanner";
+import { logToCsv } from "../lib/csv";
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -86,7 +87,18 @@ export default function LogTable() {
           </span>
         )}
         <button
-          className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
+          className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40"
+          disabled={visible.length === 0 || !window.trx?.logExportCsv}
+          title="Save the rows shown (after the filter) as a CSV file"
+          onClick={() => {
+            const stamp = new Date().toISOString().slice(0, 16).replace("T", "-").replace(":", "");
+            void window.trx.logExportCsv(logToCsv(visible), `trx-log-${stamp}.csv`);
+          }}
+        >
+          CSV
+        </button>
+        <button
+          className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
           disabled={rows.length === 0}
           onClick={() => {
             if (window.confirm("Delete the whole reception log?")) void clear();
