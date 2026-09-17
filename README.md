@@ -55,13 +55,39 @@ npm run dist:dir    # release/win-unpacked/ only, for a quick check without inst
 
 Run `npm run dist` on Windows (the NSIS step needs Wine anywhere else; `dist:dir` works on Linux).
 
-## macOS (Apple silicon)
+## Installing on a Mac (Apple silicon)
 
-`npm run dist:mac` on a Mac produces `release/TRXController-<version>-mac-arm64.dmg` (and a zip).
-The app is unsigned and not notarised, so on first launch right-click it and choose Open, or run
-`xattr -dr com.apple.quarantine /Applications/TRXController.app`. Data lives in
-`~/Library/Application Support/TRXController`. The scanner should appear as `/dev/tty.usbserial…`
-or `/dev/tty.usbmodem…` with no driver install; pick it in the top bar. Cmd+Shift+D toggles diagnostics.
+The macOS build is for M-series Macs only (M1 onwards); it will not run on an Intel Mac. It is
+unsigned and not notarised, which is why Gatekeeper objects the first time. These steps are all
+that is needed:
+
+1. Download `TRXController-<version>-mac-arm64.dmg` from the
+   [releases page](https://github.com/CerberusSolutions/TRXController/releases) and open it.
+2. Drag **TRXController** into **Applications**, then eject the disk image.
+3. First launch: in Finder, open Applications, **right-click** (or Control-click) TRXController and
+   choose **Open**, then **Open** again in the dialog. A plain double-click is refused for an
+   unsigned app; right-click › Open only has to be done once.
+4. If macOS says the app **"is damaged and can't be opened"** or should be moved to the bin, that is
+   the download quarantine flag rather than a damaged file. Open Terminal and run:
+
+   ```
+   xattr -dr com.apple.quarantine /Applications/TRXController.app
+   ```
+
+   then launch it normally. On macOS 15 (Sequoia) and later you may instead see the app blocked
+   with a note in **System Settings › Privacy & Security**; scroll to the bottom of that page and
+   choose **Open Anyway**.
+5. Plug the scanner in over USB and switch it on. No driver is needed; it appears in the port
+   selector in the top bar as `/dev/tty.usbserial-…` or `/dev/tty.usbmodem…`. Press **Connect**.
+   The port is remembered for next time.
+
+Everything else is the same as on Windows, with Cmd in place of Ctrl (Cmd+Shift+D for
+diagnostics). The log, settings and imported data live in
+`~/Library/Application Support/TRXController`. To update, download the new dmg and drag the app
+over the old one; data and settings are kept. To remove it, delete the app and, if you want a
+clean slate, that folder.
+
+Building it yourself: `npm run dist:mac` on a Mac produces the dmg (and a zip) in `release/`.
 electron-builder config is `electron-builder.yml`; the icon is `build/icon.ico`. The installer
 is unsigned, so SmartScreen shows a warning the first time it runs. The app installs under
 `%LOCALAPPDATA%\Programs\TRXController` and keeps its log, settings and imported data in
