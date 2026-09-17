@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
+import { useUi } from '../store/ui';
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
 import { normaliseLookups, type LookupPref } from '../../../shared/sources';
 
@@ -225,136 +226,186 @@ function RadioReferenceForm() {
   );
 }
 
-/** "Data" dropdown in the top bar: identity databases, location, import status. */
-export default function DataMenu() {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+/** The "Data" button in the top bar: opens the Data dialog. */
+export function DataButton() {
+  const open = useUi((s) => s.dataOpen);
+  const openData = useUi((s) => s.openData);
+  const refresh = useIdentities((s) => s.refresh);
+  // Settings and import counts are wanted before the dialog opens (the hero and forms read them).
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+  return (
+    <button
+      className={`rounded-md border border-edge px-2.5 py-1.5 text-sm ${open ? 'bg-panel-2 text-ink' : 'text-ink-2 hover:text-ink'}`}
+      onClick={openData}
+      title="Lookups, identity databases and location"
+    >
+      Data
+    </button>
+  );
+}
+
+/**
+ * The Data dialog: lookup order and location on the left, the data files and RadioReference on the
+ * right. Same chrome as the help screen: Esc or a click outside closes it; the keypad ignores
+ * shortcuts while it is open.
+ */
+export default function DataDialog() {
+  const open = useUi((s) => s.dataOpen);
+  const close = useUi((s) => s.closeData);
   const { stats, importing, lastResult, wtrImporting, wtrResult, repeatersImporting, repeatersResult, error, refresh, importFile, importWtr, importRepeaters } =
     useIdentities();
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    void refresh();
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+      }
     };
-    window.addEventListener('mousedown', onDown);
-    return () => window.removeEventListener('mousedown', onDown);
-  }, [open]);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, close, refresh]);
+
+  if (!open) return null;
 
   const when = (at: number | null, src: string | null): string =>
     [at ? new Date(at).toLocaleDateString() : '', src ?? ''].filter(Boolean).join(' · ');
 
   return (
-    <div className="relative" ref={ref}>
-      <button
-        className={`rounded-md border border-edge px-2.5 py-1.5 text-sm ${open ? 'bg-panel-2 text-ink' : 'text-ink-2 hover:text-ink'}`}
-        onClick={() => setOpen((v) => !v)}
-        title="Identity databases and location"
+    <div
+      className="no-drag fixed inset-0 z-50 flex items-center justify-center bg-bg/70 p-6 backdrop-blur-sm"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) close();
+      }}
+      role="presentation"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="data-title"
+        className="relative max-h-[88vh] w-full max-w-[52rem] overflow-y-auto rounded-xl border border-edge bg-panel p-6 text-sm text-ink-2 shadow-2xl"
       >
-        Data
-      </button>
-      {open && (
-        <div className="absolute left-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
-          <Section title="Lookup order">
-            <LookupOrder />
-            <p className="mt-1 text-[11px] text-ink-3">The first lookup with a match names a channel the scanner left blank. Untick one to ignore it.</p>
-          </Section>
+        <button
+          className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-md text-lg text-ink-3 hover:bg-panel-2 hover:text-ink"
+          onClick={close}
+          title="Close (Esc)"
+          aria-label="Close"
+        >
+          ×
+        </button>
 
-          <Section title="Ofcom Wireless Telegraphy Register">
-            <p className="mt-1 text-ink-2">
-              {stats.wtrLicences > 0 ? (
-                <>
-                  <span className="font-mono text-ink">{stats.wtrLicences.toLocaleString()}</span> licences
-                  <span className="text-ink-3"> · {when(stats.wtrImportedAt, stats.wtrSource)}</span>
-                </>
-              ) : (
-                'Not imported. Frequencies will not show a licensee.'
-              )}
-            </p>
-            <button
-              className="mt-2 w-full rounded-md bg-cyan px-3 py-1.5 text-sm font-semibold text-bg hover:brightness-110 disabled:opacity-50"
-              disabled={wtrImporting}
-              onClick={() => void importWtr()}
-            >
-              {wtrImporting ? 'Importing… (this takes a few seconds)' : 'Import WTR CSV…'}
-            </button>
-            {wtrResult && !wtrImporting && (
-              <p className="mt-1 text-xs text-green">
-                Kept {wtrResult.imported.toLocaleString()} licences from {wtrResult.file} ({wtrResult.skipped.toLocaleString()} rows outside 25–1300 MHz or too wide).
-              </p>
-            )}
-          </Section>
-
-          <Section title="UK amateur repeaters (RSGB ETCC)">
-            <p className="mt-1 text-ink-2">
-              {stats.repeaters > 0 ? (
-                <>
-                  <span className="font-mono text-ink">{stats.repeaters.toLocaleString()}</span> repeaters
-                  <span className="text-ink-3"> · {when(stats.repeatersImportedAt, stats.repeatersSource)}</span>
-                </>
-              ) : (
-                'Not imported. Amateur repeater outputs will not be named.'
-              )}
-            </p>
-            <button
-              className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
-              disabled={repeatersImporting}
-              onClick={() => void importRepeaters()}
-            >
-              {repeatersImporting ? 'Importing…' : 'Import repeater list CSV…'}
-            </button>
-            {repeatersResult && !repeatersImporting && (
-              <p className="mt-1 text-xs text-green">
-                Loaded {repeatersResult.imported.toLocaleString()} repeaters from {repeatersResult.file}
-                {repeatersResult.skipped > 0 ? ` (${repeatersResult.skipped} rows skipped)` : ''}.
-              </p>
-            )}
-          </Section>
-
-          <Section title="RadioReference (online)">
-            <RadioReferenceForm />
-          </Section>
-
-          <Section title="Your location (for nearest licensee and repeater)">
-            <LocationForm />
-            <p className="mt-1 text-[11px] text-ink-3">Decimal degrees. Leave blank to sort by name only.</p>
-          </Section>
-
-          <Section title="DMR user database (radioid.net)">
-            <p className="mt-1 text-ink-2">
-              {stats.dmrUsers > 0 ? (
-                <>
-                  <span className="font-mono text-ink">{stats.dmrUsers.toLocaleString()}</span> radio IDs
-                  <span className="text-ink-3"> · {when(stats.importedAt, stats.source)}</span>
-                </>
-              ) : (
-                'Not imported. Radio IDs will show as numbers.'
-              )}
-            </p>
-            <button
-              className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
-              disabled={importing}
-              onClick={() => void importFile()}
-            >
-              {importing ? 'Importing…' : 'Import radioid.net CSV or JSON…'}
-            </button>
-            {lastResult && !importing && (
-              <p className="mt-1 text-xs text-green">
-                Imported {lastResult.imported.toLocaleString()} from {lastResult.file}
-                {lastResult.skipped ? `, ${lastResult.skipped} rows skipped` : ''}.
-              </p>
-            )}
-          </Section>
-
-          <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
-
-          {error && <p className="text-xs text-red">{error}</p>}
+        <div className="mb-5 flex items-baseline gap-3 pr-10">
+          <h2 id="data-title" className="text-xl font-semibold tracking-tight text-ink">
+            Data
+          </h2>
+          <span className="text-xs text-ink-3">Lookups, identity databases and your location</span>
         </div>
-      )}
+
+        <div className="grid gap-x-8 gap-y-3 md:grid-cols-2">
+          <div className="space-y-3">
+            <Section title="Lookup order">
+              <LookupOrder />
+              <p className="mt-1 text-[11px] text-ink-3">The first lookup with a match names a channel the scanner left blank. Untick one to ignore it.</p>
+            </Section>
+
+            <Section title="Your location (for nearest licensee and repeater)">
+              <LocationForm />
+              <p className="mt-1 text-[11px] text-ink-3">Decimal degrees. Leave blank to sort by name only.</p>
+            </Section>
+
+            <Section title="RadioReference (online)">
+              <RadioReferenceForm />
+            </Section>
+          </div>
+
+          <div className="space-y-3 md:border-l md:border-edge md:pl-8">
+            <Section title="Ofcom Wireless Telegraphy Register">
+              <p className="mt-1 text-ink-2">
+                {stats.wtrLicences > 0 ? (
+                  <>
+                    <span className="font-mono text-ink">{stats.wtrLicences.toLocaleString()}</span> licences
+                    <span className="text-ink-3"> · {when(stats.wtrImportedAt, stats.wtrSource)}</span>
+                  </>
+                ) : (
+                  'Not imported. Frequencies will not show a licensee.'
+                )}
+              </p>
+              <button
+                className="mt-2 w-full rounded-md bg-cyan px-3 py-1.5 text-sm font-semibold text-bg hover:brightness-110 disabled:opacity-50"
+                disabled={wtrImporting}
+                onClick={() => void importWtr()}
+              >
+                {wtrImporting ? 'Importing… (this takes a few seconds)' : 'Import WTR CSV…'}
+              </button>
+              {wtrResult && !wtrImporting && (
+                <p className="mt-1 text-xs text-green">
+                  Kept {wtrResult.imported.toLocaleString()} licences from {wtrResult.file} ({wtrResult.skipped.toLocaleString()} rows outside 25–1300 MHz or too wide).
+                </p>
+              )}
+            </Section>
+
+            <Section title="UK amateur repeaters (RSGB ETCC)">
+              <p className="mt-1 text-ink-2">
+                {stats.repeaters > 0 ? (
+                  <>
+                    <span className="font-mono text-ink">{stats.repeaters.toLocaleString()}</span> repeaters
+                    <span className="text-ink-3"> · {when(stats.repeatersImportedAt, stats.repeatersSource)}</span>
+                  </>
+                ) : (
+                  'Not imported. Amateur repeater outputs will not be named.'
+                )}
+              </p>
+              <button
+                className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
+                disabled={repeatersImporting}
+                onClick={() => void importRepeaters()}
+              >
+                {repeatersImporting ? 'Importing…' : 'Import repeater list CSV…'}
+              </button>
+              {repeatersResult && !repeatersImporting && (
+                <p className="mt-1 text-xs text-green">
+                  Loaded {repeatersResult.imported.toLocaleString()} repeaters from {repeatersResult.file}
+                  {repeatersResult.skipped > 0 ? ` (${repeatersResult.skipped} rows skipped)` : ''}.
+                </p>
+              )}
+            </Section>
+
+            <Section title="DMR user database (radioid.net)">
+              <p className="mt-1 text-ink-2">
+                {stats.dmrUsers > 0 ? (
+                  <>
+                    <span className="font-mono text-ink">{stats.dmrUsers.toLocaleString()}</span> radio IDs
+                    <span className="text-ink-3"> · {when(stats.importedAt, stats.source)}</span>
+                  </>
+                ) : (
+                  'Not imported. Radio IDs will show as numbers.'
+                )}
+              </p>
+              <button
+                className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50"
+                disabled={importing}
+                onClick={() => void importFile()}
+              >
+                {importing ? 'Importing…' : 'Import radioid.net CSV or JSON…'}
+              </button>
+              {lastResult && !importing && (
+                <p className="mt-1 text-xs text-green">
+                  Imported {lastResult.imported.toLocaleString()} from {lastResult.file}
+                  {lastResult.skipped ? `, ${lastResult.skipped} rows skipped` : ''}.
+                </p>
+              )}
+            </Section>
+
+            <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
+          </div>
+        </div>
+
+        {error && <p className="mt-3 text-xs text-red">{error}</p>}
+      </div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import FrequencyHero from './components/FrequencyHero';
 import HelpDialog from './components/HelpDialog';
+import DataDialog from './components/DataMenu';
 import Keypad from './components/Keypad';
 import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
@@ -54,6 +55,7 @@ export default function App() {
       </main>
       <StatusBar />
       <HelpDialog />
+      <DataDialog />
     </div>
   );
 }

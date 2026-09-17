@@ -14,6 +14,8 @@ function loadDiagnostics(): boolean {
 
 interface UiState {
   helpOpen: boolean;
+  /** The Data dialog (lookups, identity databases, location). */
+  dataOpen: boolean;
   app: AppInfo | null;
   /** Ctrl+Shift+D: shows the raw display bytes and other testing aids. */
   diagnostics: boolean;
@@ -22,18 +24,23 @@ interface UiState {
   setUpdate: (u: UpdateInfo | null) => void;
   openHelp: () => void;
   closeHelp: () => void;
+  openData: () => void;
+  closeData: () => void;
   toggleDiagnostics: () => void;
   loadAppInfo: () => Promise<void>;
 }
 
-/** Cross-cutting UI state: the help dialog and the build identity shown in the top bar. */
+/** Cross-cutting UI state: the help and Data dialogs and the build identity shown in the top bar. */
 export const useUi = create<UiState>((set) => ({
   helpOpen: false,
+  dataOpen: false,
   app: null,
   diagnostics: loadDiagnostics(),
   update: null,
   setUpdate: (update) => set({ update }),
   openHelp: () => set({ helpOpen: true }),
+  openData: () => set({ dataOpen: true }),
+  closeData: () => set({ dataOpen: false }),
   toggleDiagnostics: () =>
     set((s) => {
       const diagnostics = !s.diagnostics;

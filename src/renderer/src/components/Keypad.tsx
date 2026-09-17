@@ -41,7 +41,8 @@ export default function Keypad() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (useUi.getState().helpOpen) return;
+      const ui = useUi.getState();
+      if (ui.helpOpen || ui.dataOpen) return;
       const def = keyDefForKeyboard(e);
       if (!def || e.repeat) return;
       e.preventDefault();
