@@ -1,4 +1,5 @@
-# Windows installer. `npm run dist` builds with electron-vite then packages this.
+# Windows installer and macOS (Apple silicon) app. `npm run dist` builds with electron-vite
+# then packages the Windows target; `npm run dist:mac` the macOS one (on a Mac).
 appId: uk.co.cerberus.trxcontroller
 productName: TRXController
 copyright: Copyright © 2026 Cerberus Systems
@@ -8,8 +9,6 @@ directories:
 files:
   - out/**/*
   - package.json
-  # serialport ships prebuilt bindings for every platform; only win32-x64 is needed.
-  - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,darwin-*,linux-*,win32-arm64}/**"
 # serialport ships prebuilt N-API binaries; nothing needs compiling against Electron.
 npmRebuild: false
 asar: true
@@ -27,6 +26,28 @@ win:
   artifactName: ${productName}-Setup-${version}.${ext}
   # Unsigned beta: SmartScreen will warn on first run.
   signAndEditExecutable: true
+  # serialport ships prebuilt bindings for every platform; only win32-x64 is needed here.
+  files:
+    - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,darwin-*,linux-*,win32-arm64,win32-ia32}/**"
+mac:
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  # electron-builder makes the .icns from the 512 px PNG.
+  icon: build/icon.png
+  category: public.app-category.utilities
+  artifactName: ${productName}-${version}-mac-arm64.${ext}
+  # Unsigned and not notarised: Gatekeeper needs a right-click › Open (or xattr) on first run.
+  identity: null
+  hardenedRuntime: false
+  gatekeeperAssess: false
+  # The darwin prebuild is a universal (x64 + arm64) binary.
+  files:
+    - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,linux-*,win32-*}/**"
+dmg:
+  artifactName: ${productName}-${version}-mac-arm64.${ext}
 nsis:
   oneClick: false
   perMachine: false

@@ -3,6 +3,11 @@ import { useUi } from '../store/ui';
 
 export const PUBLISHER = 'Cerberus Systems';
 
+const IS_MAC = typeof window !== 'undefined' && window.trx?.platform === 'darwin';
+/** Where the log, settings and imported data live, as the user would type it. */
+const DATA_DIR = IS_MAC ? '~/Library/Application Support/TRXController' : '%APPDATA%\\TRXController';
+const MOD_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
+
 /** Where the two optional data files come from. Shown verbatim so they can be copied. */
 export const DATA_SOURCES = [
   {
@@ -108,7 +113,7 @@ export default function HelpDialog() {
             <ol className="list-decimal space-y-1 pl-5">
               <li>Connect the scanner by USB and switch it on.</li>
               <li>
-                Pick its COM port in the top bar. The Whistler port is chosen automatically when it can be told apart; use ⟳ to rescan after plugging
+                Pick its serial port in the top bar. The Whistler port is chosen automatically when it can be told apart; use ⟳ to rescan after plugging
                 in.
               </li>
               <li>
@@ -174,7 +179,7 @@ export default function HelpDialog() {
                   <b className="text-green">Version {update.latest} is available</b> (you have {update.current}). Download the new installer and
                   run it; settings, log and imported data are kept.{' '}
                   <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href={update.downloadUrl ?? update.url} target="_blank" rel="noreferrer">
-                    {update.downloadUrl ? 'Download TRXController-Setup-' + update.latest + '.exe' : 'Open the release page'}
+                    {update.downloadUrl ? 'Download ' + (update.downloadUrl.split('/').pop() ?? 'the installer') : 'Open the release page'}
                   </a>
                 </p>
               ) : (
@@ -207,8 +212,8 @@ export default function HelpDialog() {
           </Section>
 
           <p className="border-t border-edge pt-3 text-[11px] text-ink-3">
-            Log and imported data live in %APPDATA%\TRXController. Open this screen again any time with the ? button in the top bar.
-            Ctrl+Shift+D shows diagnostics (the raw display bytes on the Scanner display tab).
+            Log and imported data live in {DATA_DIR}. Open this screen again any time with the ? button in the top bar.
+            {MOD_KEY}+Shift+D shows diagnostics (the raw display bytes on the Scanner display tab).
           </p>
         </div>
       </div>

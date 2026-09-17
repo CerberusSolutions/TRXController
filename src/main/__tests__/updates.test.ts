@@ -8,7 +8,10 @@ const release = {
   published_at: '2026-09-15T12:00:00Z',
   draft: false,
   prerelease: false,
-  assets: [{ name: 'TRXController-Setup-0.2.4.exe', browser_download_url: 'https://github.com/x/TRXController-Setup-0.2.4.exe' }],
+  assets: [
+    { name: 'TRXController-Setup-0.2.4.exe', browser_download_url: 'https://github.com/x/TRXController-Setup-0.2.4.exe' },
+    { name: 'TRXController-0.2.4-mac-arm64.dmg', browser_download_url: 'https://github.com/x/TRXController-0.2.4-mac-arm64.dmg' },
+  ],
 };
 
 describe('versions', () => {
@@ -25,10 +28,12 @@ describe('versions', () => {
 
 describe('readRelease', () => {
   it('flags a newer release with its page and installer link', () => {
-    const info = readRelease(release, '0.2.3', 1000);
+    const info = readRelease(release, '0.2.3', 1000, 'win32');
     expect(info).toMatchObject({ current: '0.2.3', latest: '0.2.4', newer: true, checkedAt: 1000 });
     expect(info?.url).toContain('/releases/tag/v0.2.4');
     expect(info?.downloadUrl).toMatch(/Setup-0\.2\.4\.exe$/);
+    expect(readRelease(release, '0.2.3', 1000, 'darwin')?.downloadUrl).toMatch(/mac-arm64\.dmg$/);
+    expect(readRelease({ ...release, assets: [release.assets[0]] }, '0.2.3', 1000, 'darwin')?.downloadUrl).toBeNull();
     expect(info?.publishedAt).toBe(Date.parse('2026-09-15T12:00:00Z'));
   });
 
