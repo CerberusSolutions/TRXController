@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
+import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
+import { normaliseLookups, type LookupPref } from '../../../shared/sources';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -44,6 +46,58 @@ function LocationForm() {
         Save
       </button>
     </div>
+  );
+}
+
+/**
+ * The order in which lookups fill a name the scanner did not have, with a tick to switch one
+ * off (it is then neither queried nor shown) when it is offline or returning junk.
+ */
+function LookupOrder() {
+  const { settings, saveSettings } = useIdentities();
+  const prefs = normaliseLookups(settings.lookups);
+  const save = (next: LookupPref[]): void => void saveSettings({ lookups: next });
+  const move = (i: number, d: -1 | 1): void => {
+    const next = prefs.slice();
+    const [p] = next.splice(i, 1);
+    next.splice(i + d, 0, p!);
+    save(next);
+  };
+  const short: Record<LookupPref['id'], string> = { WTR: 'Ofcom licence register', RRDB: 'RadioReference', UKR: 'RSGB repeater list' };
+  const btn = 'rounded border border-edge px-1 text-[10px] leading-4 text-ink-3 hover:text-ink disabled:opacity-30 disabled:hover:text-ink-3';
+  return (
+    <ol className="mt-1 space-y-1 text-xs">
+      <li className="flex items-center gap-2 text-ink-2">
+        <span className="w-4 text-right font-mono text-ink-3">1</span>
+        <span className="w-8" />
+        <span className="flex-1">Scanner's own programming</span>
+        <span className="text-[10px] text-ink-3">always first</span>
+      </li>
+      {prefs.map((p, i) => (
+        <li key={p.id} className={`flex items-center gap-2 ${p.enabled ? 'text-ink-2' : 'text-ink-3'}`}>
+          <span className="w-4 text-right font-mono text-ink-3">{i + 2}</span>
+          <span className={`w-8 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${p.enabled ? SOURCE_PILL[p.id] : 'bg-panel-2 text-ink-3'}`}>{p.id}</span>
+          <label className="flex flex-1 cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              className="accent-cyan"
+              checked={p.enabled}
+              title={p.enabled ? 'Untick to ignore this lookup (it is neither queried nor shown)' : 'Tick to use this lookup again'}
+              onChange={(e) => save(prefs.map((q, j) => (j === i ? { ...q, enabled: e.target.checked } : q)))}
+            />
+            <span className={p.enabled ? '' : 'line-through'} title={SOURCE_NAME[p.id]}>
+              {short[p.id]}
+            </span>
+          </label>
+          <button className={btn} disabled={i === 0} title="Move up" onClick={() => move(i, -1)}>
+            ▲
+          </button>
+          <button className={btn} disabled={i === prefs.length - 1} title="Move down" onClick={() => move(i, 1)}>
+            ▼
+          </button>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -205,6 +259,11 @@ export default function DataMenu() {
       </button>
       {open && (
         <div className="absolute left-0 z-20 mt-1 w-[22rem] space-y-3 rounded-lg border border-edge bg-panel p-3 text-sm shadow-xl">
+          <Section title="Lookup order">
+            <LookupOrder />
+            <p className="mt-1 text-[11px] text-ink-3">The first lookup with a match names a channel the scanner left blank. Untick one to ignore it.</p>
+          </Section>
+
           <Section title="Ofcom Wireless Telegraphy Register">
             <p className="mt-1 text-ink-2">
               {stats.wtrLicences > 0 ? (

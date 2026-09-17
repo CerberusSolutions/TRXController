@@ -19,6 +19,7 @@ import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
+import { lookupRank, type LookupId, type LookupSource } from '../../shared/sources';
 
 export interface OpenReception extends NewReception {
   endedAt: null;
@@ -40,9 +41,21 @@ export interface TrackerOptions {
 
 export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequencyHz' | 'calls'>;
 
-const FIELDS: (keyof Description)[] = [
+/** Fields merged value by value; `source` travels with the name, system and licensee instead (see `sourceAfter`). */
+const FIELDS: Exclude<keyof Description, 'source'>[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee', 'rssiPeak',
 ];
+
+/**
+ * The source after `fresh` has been merged into `base` (blanks in `fresh` never replace
+ * values in `base`): a fresh name or system brings its own source; a fresh licensee only
+ * matters while there is no name or system for it to hide behind.
+ */
+export function sourceAfter(base: Description, fresh: Description): LookupSource {
+  if (fresh.name !== '' || fresh.system !== '') return fresh.source;
+  if (fresh.licensee !== '' && base.name === '' && base.system === '') return fresh.source;
+  return base.source;
+}
 
 export class ReceptionTracker {
   private current: OpenReception | null = null;
@@ -116,6 +129,7 @@ export class ReceptionTracker {
   private absorb(fresh: Description): boolean {
     let changed = false;
     const cur = this.current!;
+    const source = sourceAfter(cur, fresh);
     for (const f of FIELDS) {
       const next = fresh[f];
       const prev = cur[f];
@@ -125,6 +139,10 @@ export class ReceptionTracker {
         (cur as unknown as Record<string, unknown>)[f] = next;
         changed = true;
       }
+    }
+    if (source !== cur.source) {
+      cur.source = source;
+      changed = true;
     }
     return changed;
   }
@@ -147,6 +165,7 @@ export class ReceptionTracker {
         endedAt: null,
         calls: prev.calls + 1,
         rssiPeak: Math.max(prev.rssiPeak, cur.rssiPeak),
+        source: sourceAfter(prev, cur),
       };
       // Blanks in the new opening must not erase what the earlier one knew.
       for (const f of FIELDS) {
@@ -187,15 +206,40 @@ export function describe(s: ScannerSnapshot): Description {
   const details = screen ?? search;
   const idOr = (v: number | undefined): number | null => (v === undefined || v === NO_ID ? null : v);
   const tag = h?.objectTag ?? '';
+  // The user's lookup order (Data menu): a lookup switched off ranks Infinity and contributes nothing.
+  const rank = (id: LookupId): number => lookupRank(s.lookups, id);
+  const rrOn = rank('RRDB') !== Infinity;
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
-  const rrSys = s.rr?.systems[0];
+  const rrSys = rrOn ? s.rr?.systems[0] : undefined;
   // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
-  const rrName = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '';
+  const rrTalkgroup = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || '';
+  const rrChannel = rrOn ? s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '' : '';
+  const scannerName = (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '';
+  // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
+  // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
+  const wtr = rank('WTR') !== Infinity ? s.licences?.[0]?.licensee || '' : '';
+  const rpt = rank('UKR') !== Infinity && s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : '';
+  const licSrc: LookupSource = wtr && rpt ? (rank('WTR') <= rank('UKR') ? 'WTR' : 'UKR') : wtr ? 'WTR' : rpt ? 'UKR' : '';
+  const licensee = licSrc === 'WTR' ? wtr : licSrc === 'UKR' ? rpt : '';
+  // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
+  // talkgroups), else RadioReference's channel description unless a licensee ranked above it will
+  // show in its place.
+  const rrName = rrTalkgroup || (rrChannel && !(licensee && rank(licSrc as LookupId) < rank('RRDB')) ? rrChannel : '');
+  const name = scannerName || rrName;
+  const system = h?.systemTag || rrSys?.name || '';
+  // What the log should credit: the lookup behind the name, or behind the system when the scanner
+  // named the object itself, or behind the licensee when that is all there is to show.
+  const source: LookupSource =
+    (scannerName === '' && rrName !== '') || (!h?.systemTag && system !== '')
+      ? 'RRDB'
+      : name === '' && system === '' && licensee !== ''
+        ? licSrc
+        : '';
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
-    name: (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || rrName,
-    system: h?.systemTag || rrSys?.name || '',
+    name,
+    system,
     scanlist: screen?.scanlist ?? search?.name ?? '',
     objectType: screen?.type || (h ? h.recordingTypeName : search ? 'Search' : ''),
     tgid: idOr(h?.talkgroupId1) ?? details?.tgid ?? null,
@@ -203,8 +247,8 @@ export function describe(s: ScannerSnapshot): Description {
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
     tone: details?.detectedTone ?? '',
-    // Amateur bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in for the licensee.
-    licensee: s.licences?.[0]?.licensee || (s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : ''),
+    licensee,
+    source,
     rssiPeak: status.rssi,
   };
 }

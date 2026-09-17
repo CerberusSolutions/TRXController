@@ -11,6 +11,15 @@ describe('sanitize', () => {
 
   it('drops an empty or non-string port', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, port: '' }).port).toBeNull();
+  });
+
+  it('keeps the lookup order, drops unknown lookups and appends missing ones enabled', () => {
+    expect(sanitize({ ...DEFAULT_SETTINGS, lookups: [{ id: 'RRDB', enabled: false }, { id: 'X' }, { id: 'RRDB', enabled: true }] as never }).lookups).toEqual([
+      { id: 'RRDB', enabled: false },
+      { id: 'WTR', enabled: true },
+      { id: 'UKR', enabled: true },
+    ]);
+    expect(sanitize({ ...DEFAULT_SETTINGS, lookups: 'all' as never }).lookups).toEqual(DEFAULT_SETTINGS.lookups);
     expect(sanitize({ ...DEFAULT_SETTINGS, port: 7 as unknown as string }).port).toBeNull();
   });
 

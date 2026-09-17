@@ -173,12 +173,27 @@ captured on 14 Sep 2026.
   (`electron.vite.config.ts`; `secrets.RR_KEY` in release.yml). Never commit or print the key.
   A region-wide search returns every system and channel in England on a frequency, so
   results are filtered to the user's WTR location / radius: systems by the matched site's
-  lat/lon (`pickSite`: NAC, else nearest), conventional entries by their county's centre plus
-  its range (`getCountyInfo` once per county, cached in `rr_counties`). No location: keep
-  all. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
+  lat/lon (`pickSite`: NAC, else nearest), else by the system's own centre plus its range
+  (many UK sites carry no coordinates; 0,0 counts as none), conventional entries by their
+  county's centre plus its range (`getCountyInfo` once per county, cached in `rr_counties`).
+  No location, or nothing placed: keep. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.
+- Lookup order: `settings.lookups` (`LookupPref[]`, Data menu "Lookup order", default WTR >
+  RRDB > UKR, each with an `enabled` tick) is carried on every snapshot as `lookups` so
+  `describe()` and the hero rank the sources the same way: the scanner's own name always
+  wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); a
+  RadioReference channel description is used only when no higher-ranked licensee will show;
+  the licensee is the higher-ranked of WTR / UKR with a match. A lookup switched off is neither
+  queried (main skips the WTR / repeater queries and RadioReference requests) nor shown.
+- Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `WTR`, `UKR`), the
+  lookup behind the name, or behind the system when the scanner named the object, or behind
+  the licensee when that is all the row will show. The tracker carries it with those fields
+  (`sourceAfter`), not value by value, so a scanner name arriving a poll later clears it. The
+  log's Src column adds `RID` when the row's only name is the radio ID's callsign
+  (`rowSource` in `src/renderer/src/lib/sources.ts`); the hero's Listed pills use the same
+  initials and colours. The CSV export has a `source` column.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

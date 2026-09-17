@@ -64,7 +64,7 @@ export function attachLogEvents(): () => void {
 export function rowMatches(r: ReceptionRow, filter: string): boolean {
   const f = filter.trim().toLowerCase();
   if (!f) return true;
-  const hay = [r.name, r.system, r.scanlist, r.objectType, r.mode, r.site, r.squelch, r.tone, (r.frequencyHz / 1e6).toFixed(6), r.tgid ?? '', r.radioId ?? '', r.radioCallsign ?? '', r.radioName ?? '']
+  const hay = [r.name, r.system, r.scanlist, r.objectType, r.mode, r.site, r.squelch, r.tone, (r.frequencyHz / 1e6).toFixed(6), r.tgid ?? '', r.radioId ?? '', r.radioCallsign ?? '', r.radioName ?? '', r.source ?? '']
     .join(' ')
     .toLowerCase();
   return f.split(/\s+/).every((word) => hay.includes(word));

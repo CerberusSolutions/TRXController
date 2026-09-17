@@ -7,6 +7,7 @@ import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
 import { MIN_WINDOW, SettingsStore } from './settings';
+import { DEFAULT_LOOKUPS, lookupEnabled, type LookupPref } from '../shared/sources';
 import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
@@ -75,13 +76,19 @@ function rrFor(s: ScannerSnapshot): ScannerSnapshot['rr'] {
   return rr.info(s.status.frequencyHz, { tgid: d.tgid, nac });
 }
 
+/** The user's lookup order; a lookup switched off here is neither queried nor shown. */
+function lookups(): LookupPref[] {
+  return settings?.get().lookups ?? DEFAULT_LOOKUPS.map((p) => ({ ...p }));
+}
+
 /** Attach the DMR user for the current radio ID, and the nearest Ofcom licences, amateur repeaters and RadioReference data for the frequency. */
 function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const rid = snapshotRadioId(s);
   const radioUser = db && rid !== null ? (s.radioUser?.id === rid ? s.radioUser : (db.lookupDmrUser(rid) ?? null)) : null;
-  const licences = s.status ? licencesFor(s.status.frequencyHz) : [];
-  const repeaters = s.status ? repeatersFor(s.status.frequencyHz) : [];
-  return { ...s, radioUser, licences, repeaters, rr: rrFor(s) };
+  const prefs = lookups();
+  const licences = s.status && lookupEnabled(prefs, 'WTR') ? licencesFor(s.status.frequencyHz) : [];
+  const repeaters = s.status && lookupEnabled(prefs, 'UKR') ? repeatersFor(s.status.frequencyHz) : [];
+  return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, lookups: prefs };
 }
 
 /** Settings as the renderer may see them: the RadioReference password stays in main. */
@@ -92,7 +99,7 @@ function publicSettings(s: Settings): Settings {
 const session = new ScannerSession(serialTransportFactory, {
   onSnapshot: (raw: ScannerSnapshot) => {
     // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
-    if (rr && raw.status?.squelch.rf) rr.request(raw.status.frequencyHz);
+    if (rr && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRDB')) rr.request(raw.status.frequencyHz);
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
@@ -227,7 +234,7 @@ function registerIpc(): void {
     console.log(`[wtr] imported ${imported} licences from ${file} (${parsed.read} rows read, ${parsed.skipped} skipped)`);
     return { imported, skipped: parsed.skipped, file: name };
   });
-  ipcMain.handle(IPC.wtrLookup, (_e, hz: unknown) => (typeof hz === 'number' ? licencesFor(hz) : []));
+  ipcMain.handle(IPC.wtrLookup, (_e, hz: unknown) => (typeof hz === 'number' && lookupEnabled(lookups(), 'WTR') ? licencesFor(hz) : []));
   ipcMain.handle(IPC.repeatersImport, async (): Promise<ImportResult | null> => {
     if (!db) throw new Error('Database not open');
     const res = await dialog.showOpenDialog({
@@ -248,7 +255,7 @@ function registerIpc(): void {
     console.log(`[repeaters] imported ${imported} repeaters from ${file} (${parsed.read} rows read, ${parsed.skipped} skipped)`);
     return { imported, skipped: parsed.skipped, file: name };
   });
-  ipcMain.handle(IPC.repeatersLookup, (_e, hz: unknown) => (typeof hz === 'number' ? repeatersFor(hz) : []));
+  ipcMain.handle(IPC.repeatersLookup, (_e, hz: unknown) => (typeof hz === 'number' && lookupEnabled(lookups(), 'UKR') ? repeatersFor(hz) : []));
   ipcMain.handle(IPC.settingsGet, () => (settings ? publicSettings(settings.get()) : null));
   ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) => {
     if (!settings || typeof patch !== 'object' || patch === null) throw new Error('Bad settings');
@@ -258,6 +265,8 @@ function registerIpc(): void {
     const next = settings.set(p);
     licenceCache = null;
     repeaterCache = null;
+    // A new location or lookup order changes what the current frequency shows: republish it.
+    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
     return publicSettings(next);
   });
   ipcMain.handle(IPC.rrStatus, () => rr?.status() ?? null);
