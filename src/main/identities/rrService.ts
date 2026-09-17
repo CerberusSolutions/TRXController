@@ -167,7 +167,8 @@ export class RrService {
       seen.add(h.sid);
       const sys = this.db.rrGetSystem(h.sid);
       if (!sys) {
-        systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, talkgroup: null });
+        // Details not fetched (yet): with a location set there is nothing to place it by, so it waits.
+        if (!here) systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, talkgroup: null });
         continue;
       }
       const site = pickSite(sys.sites, hz, ctx.nac ?? null, here);
@@ -177,6 +178,11 @@ export class RrService {
       const sysD = here && sys.system.lat !== null && sys.system.lon !== null ? distanceKm(here.lat, here.lon, sys.system.lat, sys.system.lon) : null;
       const d = siteD ?? sysD;
       if (siteD !== null ? far(siteD) : far(sysD, sys.system.rangeKm ?? 0)) continue;
+      // A region-wide search returns every system in England on the frequency, so with a location
+      // set a system nobody can place is more likely far away than near: it is dropped unless the
+      // site's NAC matches the one heard, which places it well enough on its own.
+      const nacMatch = site !== null && ctx.nac != null && site.nac.replace(/^0+/, '').toUpperCase() === ctx.nac.replace(/^0+/, '').toUpperCase();
+      if (here && d === null && !nacMatch) continue;
       const tg = ctx.tgid != null ? this.db.rrGetTalkgroup(h.sid, ctx.tgid) : null;
       systems.push({
         sid: h.sid,

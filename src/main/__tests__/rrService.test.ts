@@ -112,7 +112,7 @@ describe('RrService', () => {
     expect(farAway.svc.info(417_725_000)).toMatchObject({ systems: [], conventional: [] });
   });
 
-  it('falls back to the system position when its site has none, and keeps a system nobody can place', async () => {
+  it('falls back to the system position when its site has none, and drops a system nobody can place unless its NAC matches', async () => {
     const unplacedSite = { ...RESP, getTrsSites: RESP.getTrsSites!.replace('<lat>51.99</lat><lon>-1.19</lon>', '<lat>0</lat><lon>0</lon>').replace('<lat>52.41</lat><lon>0.56</lon>', '') };
     // System centred on Bradford (Morrisons HQ), 12-mile range: dropped from Aylesbury, kept from Leeds.
     const bradford = { ...unplacedSite, getTrsDetails: RESP.getTrsDetails!.replace('<lat>0</lat><lon>0</lon><range>0</range>', '<lat>53.79</lat><lon>-1.75</lon><range>12</range>') };
@@ -125,11 +125,17 @@ describe('RrService', () => {
     await settle();
     expect(leeds.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK' });
     expect(leeds.svc.info(417_725_000)?.systems[0]!.distanceKm).toBeGreaterThan(10);
-    // Neither the site nor the system is placed: nothing to judge by, so it stays.
+    // Neither the site nor the system is placed: with a location set it is dropped, unless the NAC heard is that site's.
     const unknown = make({}, { responses: unplacedSite, location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
     unknown.svc.request(417_725_000);
     await settle();
-    expect(unknown.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK', distanceKm: null });
+    expect(unknown.svc.info(417_725_000)?.systems).toEqual([]);
+    expect(unknown.svc.info(417_725_000, { nac: '167' })?.systems[0]).toMatchObject({ name: 'USAF Bases UK', site: { nac: '167' }, distanceKm: null });
+    // No location: nothing to judge by, so it stays.
+    const anywhere = make({}, { responses: unplacedSite, location: { lat: null, lon: null, radiusKm: null } });
+    anywhere.svc.request(417_725_000);
+    await settle();
+    expect(anywhere.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK', distanceKm: null });
   });
 
   it('backs off a failed frequency and empties the queue on a login fault', async () => {
