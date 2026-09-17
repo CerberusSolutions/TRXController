@@ -257,13 +257,14 @@ const fromLegacy = (r: ReceptionRow, source: ReceptionRow["source"]): string => 
 const scannerCell: Column = {
   key: "scanner",
   label: "Scanner",
-  title: "The object name programmed in the scanner",
+  title: "The object name programmed in the scanner (dimmed when remembered from an earlier reception on the frequency)",
   track: "minmax(6rem,1.2fr)",
   minPx: 4 * REM,
   render: (r) => {
-    const v = r.scannerName || fromLegacy(r, "");
+    const remembered = r.source === "MEM";
+    const v = r.scannerName || (remembered ? r.name : fromLegacy(r, ""));
     return (
-      <span className="truncate font-sans text-[13px] text-ink" title={v || undefined}>
+      <span className={`truncate font-sans text-[13px] ${remembered ? "text-ink-2" : "text-ink"}`} title={v ? (remembered ? `${v} · ${SOURCE_NAME.MEM}` : v) : undefined}>
         {v || dash}
       </span>
     );

@@ -176,6 +176,21 @@ export class LogDb {
     return this.get(id);
   }
 
+  /**
+   * The scanner's own object for a frequency, from the latest reception whose display showed it
+   * (rows from before `scanner_name` existed count when the scanner named them).
+   */
+  lastScannerObject(hz: number): { name: string; scanlist: string; objectType: string; system: string } | null {
+    const row = this.db
+      .prepare(
+        `SELECT CASE WHEN scanner_name != '' THEN scanner_name ELSE name END AS name, scanlist, object_type, system
+         FROM receptions WHERE frequency_hz = ? AND (scanner_name != '' OR (source = '' AND name != ''))
+         ORDER BY started_at DESC, id DESC LIMIT 1`,
+      )
+      .get(hz) as { name: string; scanlist: string; object_type: string; system: string } | undefined;
+    return row ? { name: row.name, scanlist: row.scanlist, objectType: row.object_type, system: row.system } : null;
+  }
+
   get(id: number): ReceptionRow | undefined {
     const row = this.db.prepare(`${ROW_SQL} WHERE r.id = ?`).get(id);
     return row ? toRow(row as unknown as Raw) : undefined;

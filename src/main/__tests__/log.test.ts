@@ -279,6 +279,30 @@ describe('ReceptionLogger', () => {
     db.close();
   });
 
+  it('names a blip from the last reception on the frequency whose display showed the scanner object', () => {
+    const db = new LogDb(':memory:');
+    const rows: ReceptionRow[] = [];
+    const log = new ReceptionLogger(db, (r) => rows.push(r), { closeDebounceMs: 100, minDurationMs: 0, mergeWindowMs: 0 });
+    const wtr = { id: 1, frequencyHz: 119_775_000, direction: 'T', licensee: 'NATS', product: '', emission: '', mode: '', widthHz: 25_000, lat: null, lon: null, ngr: '', licenceNo: '', distanceKm: 1 };
+    const sweeping = ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'];
+    // A proper reception: the scan screen names the object.
+    log.onSnapshot(snap({ rf: true }), 0);
+    log.onSnapshot(snap({ rf: false }), 100);
+    log.onSnapshot(snap({ rf: false }), 300);
+    // A blip: the display never left the sweeping screen, and only the register has a name.
+    log.onSnapshot({ ...snap({ rf: true, lcd: sweeping }), licences: [wtr] }, 1000);
+    expect(db.recent()[0]).toMatchObject({ name: 'TC NW Deps', scanlist: 'Civil Airband', objectType: 'CONV', source: 'MEM', scannerName: '', licensee: 'NATS', wtr: 'NATS' });
+    // The display catches up: the live object replaces the remembered one.
+    log.onSnapshot(snap({ rf: true }), 1200);
+    expect(db.recent()[0]).toMatchObject({ name: 'TC NW Deps', source: '', scannerName: 'TC NW Deps' });
+    log.onSnapshot(snap({ rf: false }), 1500);
+    log.onSnapshot(snap({ rf: false }), 1700);
+    // A frequency never seen with an object stays as the lookups left it.
+    log.onSnapshot({ ...snap({ rf: true, hz: 121_025_000, lcd: sweeping }), licences: [wtr] }, 3000);
+    expect(db.recent()[0]).toMatchObject({ frequencyHz: 121_025_000, name: '', source: 'WTR' });
+    db.close();
+  });
+
   it('keeps transients out of the database and merges a resumed conversation into one row', () => {
     const db = new LogDb(':memory:');
     const rows: ReceptionRow[] = [];

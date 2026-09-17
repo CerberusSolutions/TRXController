@@ -52,7 +52,8 @@ then RadioReference, then the repeater list; a RadioReference talkgroup name sti
 register knows no talkgroups). Untick a lookup to ignore it while it is offline or returning
 junk. The log's **Src** column (and the `source` column of the CSV export) says which
 lookup did: blank for the scanner's data, `WTR`, `RRDB` (RadioReference), `UKR` (repeater list)
-or `RID` (radioid.net). The log's **Detail** view shows what every source said, one column each
+or `RID` (radioid.net), and `MEM` when a reception too brief to show the object on the display was
+named from an earlier reception on the same frequency. The log's **Detail** view shows what every source said, one column each
 (Scanner, List, WTR, RRDB, UKR, Sys), and the CSV carries the same columns, so a row where the
 scanner and the register disagree is easy to spot and reprogram. Drag a column divider in the
 log header to resize it; double-click the divider to reset.

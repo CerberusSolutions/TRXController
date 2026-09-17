@@ -8,6 +8,7 @@ export const SOURCE_PILL: Readonly<Record<Exclude<LookupSource, ''>, string>> = 
   WTR: 'bg-amber/15 text-amber',
   UKR: 'bg-green/15 text-green',
   RID: 'bg-panel-2 text-ink-2',
+  MEM: 'bg-panel-2 text-ink-3',
 };
 
 /**
