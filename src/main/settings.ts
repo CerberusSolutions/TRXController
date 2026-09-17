@@ -2,9 +2,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { RrSettings, Settings, WindowState } from '../shared/ipc';
+import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR } };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -44,6 +45,7 @@ export function sanitize(s: Settings): Settings {
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),
     rr: sanitizeRr(s.rr),
+    lookups: normaliseLookups(s.lookups),
   };
 }
 

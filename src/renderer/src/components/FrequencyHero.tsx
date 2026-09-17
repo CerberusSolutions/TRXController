@@ -1,4 +1,5 @@
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
+import { lookupRank, type LookupPref } from '../../../shared/sources';
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
@@ -45,7 +46,7 @@ interface ListedRow {
 
 const km = (d: number | null): string => (d === null ? '' : d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d)} km`);
 
-function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: RepeaterMatch[], detected: string | null, detectedHz: number | null): ListedRow[] {
+function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: RepeaterMatch[], detected: string | null, detectedHz: number | null, prefs: readonly LookupPref[]): ListedRow[] {
   const out: ListedRow[] = [];
   for (const sys of rr?.systems ?? []) {
     const tg = sys.talkgroup;
@@ -91,7 +92,12 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
       }`,
     });
   }
-  return out;
+  // The user's lookup order decides which comes first; within a lookup, nearest / best match first as built.
+  return out
+    .map((row, i) => ({ row, i, rank: lookupRank(prefs, row.source) }))
+    .filter((x) => x.rank !== Infinity)
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map((x) => x.row);
 }
 
 /**
@@ -112,7 +118,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, licences, repeaters, rr } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences, repeaters, rr, lookups } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
 
@@ -144,11 +150,11 @@ export default function FrequencyHero() {
   // name on screen on the polls where the display shows the TGID line instead.
   const radioUser = snapshotUser && snapshotUser.id === radioId ? snapshotUser : held?.radioUser && held.radioUser.id === radioId ? held.radioUser : null;
   const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
-  // Everything that lists this frequency, in one block: RadioReference first (the most specific),
-  // then Ofcom licences, then amateur repeaters (the one whose CTCSS matches the detected tone
-  // first, since several share a channel). Each source is filtered to the user's area upstream.
+  // Everything that lists this frequency, in one block, in the user's lookup order (Data menu);
+  // repeaters with the one whose CTCSS matches the detected tone first, since several share a
+  // channel. Each source is filtered to the user's area upstream.
   const detectedHz = ctcssHz(detected);
-  const listed = listedRows(rr, licences, rankRepeaters(repeaters, detected), detected, detectedHz);
+  const listed = listedRows(rr, licences, rankRepeaters(repeaters, detected), detected, detectedHz, lookups);
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -231,7 +237,7 @@ export default function FrequencyHero() {
       <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="RadioReference, the Ofcom WTR and the ETCC repeater list, nearest first">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
               Listed
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">

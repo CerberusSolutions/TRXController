@@ -19,7 +19,7 @@ import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
-import type { LookupSource } from '../../shared/sources';
+import { lookupRank, type LookupId, type LookupSource } from '../../shared/sources';
 
 export interface OpenReception extends NewReception {
   endedAt: null;
@@ -206,23 +206,34 @@ export function describe(s: ScannerSnapshot): Description {
   const details = screen ?? search;
   const idOr = (v: number | undefined): number | null => (v === undefined || v === NO_ID ? null : v);
   const tag = h?.objectTag ?? '';
+  // The user's lookup order (Data menu): a lookup switched off ranks Infinity and contributes nothing.
+  const rank = (id: LookupId): number => lookupRank(s.lookups, id);
+  const rrOn = rank('RRDB') !== Infinity;
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
-  const rrSys = s.rr?.systems[0];
+  const rrSys = rrOn ? s.rr?.systems[0] : undefined;
   // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
-  const rrName = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '';
+  const rrTalkgroup = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || '';
+  const rrChannel = rrOn ? s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '' : '';
   const scannerName = (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '';
+  // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
+  // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
+  const wtr = rank('WTR') !== Infinity ? s.licences?.[0]?.licensee || '' : '';
+  const rpt = rank('UKR') !== Infinity && s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : '';
+  const licSrc: LookupSource = wtr && rpt ? (rank('WTR') <= rank('UKR') ? 'WTR' : 'UKR') : wtr ? 'WTR' : rpt ? 'UKR' : '';
+  const licensee = licSrc === 'WTR' ? wtr : licSrc === 'UKR' ? rpt : '';
+  // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
+  // talkgroups), else RadioReference's channel description unless a licensee ranked above it will
+  // show in its place.
+  const rrName = rrTalkgroup || (rrChannel && !(licensee && rank(licSrc as LookupId) < rank('RRDB')) ? rrChannel : '');
   const name = scannerName || rrName;
   const system = h?.systemTag || rrSys?.name || '';
-  // Amateur bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in for the licensee.
-  const wtr = s.licences?.[0]?.licensee || '';
-  const licensee = wtr || (s.repeaters?.length ? repeaterLabel(rankRepeaters(s.repeaters, details?.detectedTone)[0]!) : '');
   // What the log should credit: the lookup behind the name, or behind the system when the scanner
   // named the object itself, or behind the licensee when that is all there is to show.
   const source: LookupSource =
     (scannerName === '' && rrName !== '') || (!h?.systemTag && system !== '')
       ? 'RRDB'
       : name === '' && system === '' && licensee !== ''
-        ? wtr ? 'WTR' : 'UKR'
+        ? licSrc
         : '';
   return {
     mode: status.rxModeName,

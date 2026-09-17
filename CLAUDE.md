@@ -180,6 +180,13 @@ captured on 14 Sep 2026.
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.
+- Lookup order: `settings.lookups` (`LookupPref[]`, Data menu "Lookup order", default WTR >
+  RRDB > UKR, each with an `enabled` tick) is carried on every snapshot as `lookups` so
+  `describe()` and the hero rank the sources the same way: the scanner's own name always
+  wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); a
+  RadioReference channel description is used only when no higher-ranked licensee will show;
+  the licensee is the higher-ranked of WTR / UKR with a match. A lookup switched off is neither
+  queried (main skips the WTR / repeater queries and RadioReference requests) nor shown.
 - Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `WTR`, `UKR`), the
   lookup behind the name, or behind the system when the scanner named the object, or behind
   the licensee when that is all the row will show. The tracker carries it with those fields

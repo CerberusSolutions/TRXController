@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { PortInfo, ScannerSnapshot } from '../../../shared/ipc';
 import { useBand } from './band';
 import { holdDetails, type HeldDetails } from '../lib/format';
+import { DEFAULT_LOOKUPS } from '../../../shared/sources';
 
 function emptySnapshot(): ScannerSnapshot {
   return {
@@ -16,6 +17,7 @@ function emptySnapshot(): ScannerSnapshot {
     rr: null,
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
+    lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })),
   };
 }
 

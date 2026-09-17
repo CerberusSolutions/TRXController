@@ -22,6 +22,7 @@ import type { LinkStatus, ScannerSnapshot } from '../../shared/ipc';
 import { ScannerLink } from './link';
 import { resumeScan as resumeScanMacro, tuneTo as tuneToMacro, type MacroHost } from './macros';
 import type { Transport, TransportFactory } from './transport';
+import { DEFAULT_LOOKUPS } from '../../shared/sources';
 
 export interface SessionOptions {
   /** Delay between the end of one poll cycle and the start of the next. */
@@ -294,6 +295,7 @@ export function emptySnapshot(): ScannerSnapshot {
     rr: null,
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
+    lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })),
   };
 }
 

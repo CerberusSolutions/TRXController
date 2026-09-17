@@ -2,7 +2,7 @@
  * Types shared between main, preload and renderer. Pure types plus channel
  * names; no runtime dependencies on Node or Electron.
  */
-import type { LookupSource } from './sources';
+import type { LookupPref, LookupSource } from './sources';
 import type { ActiveChannel, Lcd, Status, Version } from '@trxcontroller/rcip';
 
 export type LinkStatus = 'disconnected' | 'connecting' | 'connected' | 'unresponsive' | 'error';
@@ -56,6 +56,8 @@ export interface ScannerSnapshot {
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
+  /** The lookup order in force when this snapshot was built, so the tracker and hero rank sources the same way. */
+  lookups: LookupPref[];
 }
 
 /** One logged reception (a period with squelch open on one frequency). */
@@ -259,6 +261,8 @@ export interface RrSettings {
 export interface Settings {
   /** RadioReference account and region. */
   rr: RrSettings;
+  /** Which lookups fill in names, in order of preference; the scanner's own programming always comes first. */
+  lookups: LookupPref[];
   /** Observer location for distance sorting, decimal degrees. */
   lat: number | null;
   lon: number | null;

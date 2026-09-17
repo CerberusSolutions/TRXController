@@ -81,11 +81,30 @@ describe('describe()', () => {
     // No scanner name: the licensee is what the log will show.
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr] })).toMatchObject({ name: '', licensee: 'FCC Recycling (UK) Limited', source: 'WTR' });
     expect(describeSnapshot({ ...snap({ lcd: idle }), repeaters: [rpt] })).toMatchObject({ name: '', licensee: 'GB3BS · BRISTOL', source: 'UKR' });
-    // RadioReference fills the name, or the system behind a scanner-named object.
-    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: 'University of Buckingham', source: 'RRDB' });
+    // RadioReference fills the name (unless a higher-ranked licensee will show instead), or the system behind a scanner-named object.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rr })).toMatchObject({ name: 'University of Buckingham', source: 'RRDB' });
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: '', licensee: 'FCC Recycling (UK) Limited', source: 'WTR' });
     expect(describeSnapshot({ ...snap({}), rr: trunked })).toMatchObject({ name: 'TC NW Deps', system: 'WM Morrison HQ', source: 'RRDB' });
     expect(describeSnapshot({ ...snap({ header: true }), rr: trunked })).toMatchObject({ name: 'Fire Dispatch', system: 'County P25', source: '' });
     expect(describeSnapshot(snap({ lcd: idle }))).toMatchObject({ name: '', licensee: '', source: '' });
+  });
+
+  it('names a blank channel from the highest-ranked lookup that knows it, ignoring lookups switched off', () => {
+    const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: '', widthHz: 12_500, lat: null, lon: null, ngr: '', licenceNo: '', distanceKm: 2 };
+    const conv = { frequencyHz: 456_350_000, conventional: [{ descr: 'Addenbrookes Hospital (Cambridge)', alpha: 'ADDENBR', tone: '', mode: 'FM', callsign: '', tags: [], county: 'Cambs', distanceKm: 3 }], systems: [], fetchedAt: 1, pending: false, error: null };
+    const trunked = { ...conv, conventional: [], systems: [{ sid: 1, name: 'Cambs DMR', city: '', site: null, distanceKm: 3, talkgroup: { tgDec: 19, alpha: 'ADD', descr: 'Addenbrookes Porters', mode: 'D', enc: 0, category: '' } }] };
+    const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
+    const order = (...ids: ('WTR' | 'RRDB' | 'UKR')[]) => ids.map((id) => ({ id, enabled: true }));
+    // Default order: the register beats RadioReference's channel description.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv })).toMatchObject({ name: '', licensee: 'RESOUND LIMITED', source: 'WTR' });
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv, lookups: order('RRDB', 'WTR', 'UKR') })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', licensee: 'RESOUND LIMITED', source: 'RRDB' });
+    // A talkgroup name is trunked knowledge the register does not have: it wins whatever the order.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: trunked })).toMatchObject({ name: 'Addenbrookes Porters', system: 'Cambs DMR', source: 'RRDB' });
+    // Switched off: neither named nor credited, and the next lookup takes over.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: conv, lookups: [{ id: 'WTR', enabled: false }, { id: 'RRDB', enabled: true }] })).toMatchObject({ name: 'Addenbrookes Hospital (Cambridge)', licensee: '', source: 'RRDB' });
+    expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr: trunked, lookups: [{ id: 'WTR', enabled: true }, { id: 'RRDB', enabled: false }] })).toMatchObject({ name: '', system: '', licensee: 'RESOUND LIMITED', source: 'WTR' });
+    // The scanner's own name is never displaced by any order.
+    expect(describeSnapshot({ ...snap({}), licences: [wtr], rr: conv, lookups: order('RRDB', 'WTR', 'UKR') })).toMatchObject({ name: 'TC NW Deps', source: '' });
   });
 
   it('does not treat the sweeping screen as a channel', () => {
