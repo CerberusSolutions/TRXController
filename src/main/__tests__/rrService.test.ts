@@ -1,6 +1,3 @@
-import { mkdtempSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LogDb } from '../log/db';
 import { RrService, pickSite } from '../identities/rrService';
@@ -30,7 +27,8 @@ function fake(responses = RESP, calls: string[] = []): FetchLike {
 }
 
 function make(over: Partial<RrSettings> = {}, opts: { appKey?: string; responses?: Record<string, string>; calls?: string[]; location?: { lat: number | null; lon: number | null; radiusKm: number | null } } = {}) {
-  const db = new LogDb(join(mkdtempSync(join(tmpdir(), 'rr-')), 'log.sqlite'));
+  // In memory: a file per service instance was slow enough on the Windows CI runner to time the tests out.
+  const db = new LogDb(':memory:');
   const settings: RrSettings = { username: 'steve', password: 'enc:secret', coid: 40, stid: 410, countryName: 'United Kingdom', stateName: 'England', ...over };
   let changes = 0;
   const svc = new RrService({
@@ -46,9 +44,13 @@ function make(over: Partial<RrSettings> = {}, opts: { appKey?: string; responses
   return { db, svc, settings, changes: () => changes };
 }
 
-const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 150));
+/** Wait until the service has finished with the given frequencies (nothing queued or in flight), rather than sleeping a fixed time. */
+async function settled(svc: RrService, ...hz: number[]): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (hz.some((h) => svc.info(h)?.pending) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+}
 
-describe('RrService', () => {
+describe('RrService', { timeout: 20_000 }, () => {
   it('is disabled without a key, login or region', () => {
     expect(make({}, { appKey: '' }).svc.enabled).toBe(false);
     expect(make({ password: '' }).svc.enabled).toBe(false);
@@ -65,7 +67,7 @@ describe('RrService', () => {
     expect(svc.request(417_725_000)).toBe(true);
     expect(svc.request(417_725_000)).toBe(false); // already queued
     expect(svc.info(417_725_000)?.pending).toBe(true);
-    await settle();
+    await settled(svc, 417_725_000);
     expect(calls).toEqual(['searchStateFreq', 'getCountyInfo', 'getTrsDetails', 'getTrsSites', 'getTrsTalkgroupCats', 'getTrsTalkgroups']);
     expect(changes()).toBeGreaterThan(0);
     expect(db.rrStats()).toEqual({ freqs: 1, systems: 1, talkgroups: 1 });
@@ -96,7 +98,7 @@ describe('RrService', () => {
     // From Aylesbury: Croughton is ~45 km, Lakenheath ~110 km, Buckinghamshire's centre ~15 km.
     const near = make({}, { location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
     near.svc.request(417_725_000);
-    await settle();
+    await settled(near.svc, 417_725_000);
     const info = near.svc.info(417_725_000, { nac: '3A1' });
     // The NAC names Lakenheath, which is out of range, so the system is dropped; the county entry stays.
     expect(info?.systems).toEqual([]);
@@ -109,7 +111,7 @@ describe('RrService', () => {
     // From Leeds everything on this frequency is far away.
     const farAway = make({}, { location: { lat: 53.8, lon: -1.55, radiusKm: 60 } });
     farAway.svc.request(417_725_000);
-    await settle();
+    await settled(farAway.svc, 417_725_000);
     expect(farAway.svc.info(417_725_000)).toMatchObject({ systems: [], conventional: [] });
   });
 
@@ -119,23 +121,23 @@ describe('RrService', () => {
     const bradford = { ...unplacedSite, getTrsDetails: RESP.getTrsDetails!.replace('<lat>0</lat><lon>0</lon><range>0</range>', '<lat>53.79</lat><lon>-1.75</lon><range>12</range>') };
     const bucks = make({}, { responses: bradford, location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
     bucks.svc.request(417_725_000);
-    await settle();
+    await settled(bucks.svc, 417_725_000);
     expect(bucks.svc.info(417_725_000)?.systems).toEqual([]);
     const leeds = make({}, { responses: bradford, location: { lat: 53.8, lon: -1.55, radiusKm: 60 } });
     leeds.svc.request(417_725_000);
-    await settle();
+    await settled(leeds.svc, 417_725_000);
     expect(leeds.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK' });
     expect(leeds.svc.info(417_725_000)?.systems[0]!.distanceKm).toBeGreaterThan(10);
     // Neither the site nor the system is placed: with a location set it is dropped, unless the NAC heard is that site's.
     const unknown = make({}, { responses: unplacedSite, location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
     unknown.svc.request(417_725_000);
-    await settle();
+    await settled(unknown.svc, 417_725_000);
     expect(unknown.svc.info(417_725_000)?.systems).toEqual([]);
     expect(unknown.svc.info(417_725_000, { nac: '167' })?.systems[0]).toMatchObject({ name: 'USAF Bases UK', site: { nac: '167' }, distanceKm: null });
     // No location: nothing to judge by, so it stays.
     const anywhere = make({}, { responses: unplacedSite, location: { lat: null, lon: null, radiusKm: null } });
     anywhere.svc.request(417_725_000);
-    await settle();
+    await settled(anywhere.svc, 417_725_000);
     expect(anywhere.svc.info(417_725_000)?.systems[0]).toMatchObject({ name: 'USAF Bases UK', distanceKm: null });
   });
 
@@ -144,7 +146,7 @@ describe('RrService', () => {
     const { svc } = make({}, { responses: {}, calls });
     svc.request(145_500_000);
     svc.request(145_512_500);
-    await settle();
+    await settled(svc, 145_500_000, 145_512_500);
     expect(calls).toEqual(['searchStateFreq']);
     expect(svc.info(145_500_000)?.error).toBe('Invalid username or password');
     expect(svc.status().lastError).toBe('Invalid username or password');
