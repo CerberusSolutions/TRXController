@@ -1,3 +1,4 @@
+import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
 import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
@@ -31,9 +32,7 @@ function ModePills({ modes }: { modes: string }) {
   );
 }
 
-type Source = 'RR' | 'WTR' | 'RPT';
-const SOURCE_PILL: Readonly<Record<Source, string>> = { RR: 'bg-cyan/15 text-cyan', WTR: 'bg-amber/15 text-amber', RPT: 'bg-green/15 text-green' };
-const SOURCE_NAME: Readonly<Record<Source, string>> = { RR: 'RadioReference', WTR: 'Ofcom Wireless Telegraphy Register', RPT: 'RSGB ETCC repeater list' };
+type Source = 'RRDB' | 'WTR' | 'UKR';
 
 interface ListedRow {
   key: string;
@@ -52,7 +51,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     const tg = sys.talkgroup;
     out.push({
       key: `rr-s${sys.sid}`,
-      source: 'RR',
+      source: 'RRDB',
       name: sys.name,
       detail: [sys.site?.descr, tg ? `${tg.descr || tg.alpha}${tg.category ? ` (${tg.category})` : ''}${tg.enc ? ' · enc' : ''}` : '', km(sys.distanceKm)].filter(Boolean).join(' · '),
       title: `RadioReference system ${sys.sid}${sys.city ? ` · ${sys.city}` : ''}${sys.site ? ` · site ${sys.site.descr} (${sys.site.location}) NAC ${sys.site.nac}` : ''}${tg ? ` · TG ${tg.tgDec} ${tg.alpha}` : ''}`,
@@ -62,7 +61,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     const match = rrToneMatches(c.tone, detected);
     out.push({
       key: `rr-c${i}`,
-      source: 'RR',
+      source: 'RRDB',
       name: c.descr || c.alpha,
       detail: [c.county, km(c.distanceKm), c.tone ? `${c.tone}${match === true ? ' ✓' : ''}` : '', c.mode, c.tags[0]].filter(Boolean).join(' · '),
       title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
@@ -81,7 +80,7 @@ function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: Repeater
     const match = toneMatches(r, detectedHz);
     out.push({
       key: `rpt-${r.id}`,
-      source: 'RPT',
+      source: 'UKR',
       name: r.callsign,
       pills: r.modes,
       detail: [r.where ? r.where.charAt(0) + r.where.slice(1).toLowerCase() : '', km(r.distanceKm), r.ctcss !== null ? `${r.ctcss.toFixed(1)} Hz${match ? ' ✓' : ''}` : '', r.side === 'input' ? 'input' : '']

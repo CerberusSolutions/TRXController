@@ -4,6 +4,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { LookupSource } from '../../shared/sources';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 import { distanceKm } from '../identities/wtr';
 
@@ -133,18 +134,19 @@ export class LogDb {
     if (!cols.includes('calls')) this.db.exec('ALTER TABLE receptions ADD COLUMN calls INTEGER NOT NULL DEFAULT 1');
     if (!cols.includes('tone')) this.db.exec("ALTER TABLE receptions ADD COLUMN tone TEXT NOT NULL DEFAULT ''");
     if (!cols.includes('licensee')) this.db.exec("ALTER TABLE receptions ADD COLUMN licensee TEXT NOT NULL DEFAULT ''");
+    if (!cols.includes('source')) this.db.exec("ALTER TABLE receptions ADD COLUMN source TEXT NOT NULL DEFAULT ''");
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, tone, licensee, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, licensee, source, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
-        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.rssiPeak, r.calls ?? 1,
+        r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '', r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -155,7 +157,7 @@ export class LogDb {
     const map: Record<string, string> = {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
-      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', rssiPeak: 'rssi_peak', calls: 'calls',
+      tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -501,6 +503,7 @@ interface Raw {
   squelch: string;
   tone: string;
   licensee: string;
+  source: string;
   rssi_peak: number;
   calls: number;
   hits: number;
@@ -526,6 +529,7 @@ function toRow(r: Raw): ReceptionRow {
     squelch: r.squelch,
     tone: r.tone ?? '',
     licensee: r.licensee ?? '',
+    source: (r.source ?? '') as LookupSource,
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),

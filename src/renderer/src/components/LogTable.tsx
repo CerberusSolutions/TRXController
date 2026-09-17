@@ -3,6 +3,7 @@ import type { ReceptionRow } from "../../../shared/ipc";
 import { rowMatches, useLog } from "../store/log";
 import { useScanner } from "../store/scanner";
 import { logToCsv } from "../lib/csv";
+import { SOURCE_NAME, SOURCE_PILL, rowSource } from "../lib/sources";
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -34,7 +35,7 @@ function fmtDuration(r: ReceptionRow, now: number): string {
 }
 
 const COLS =
-  "grid-cols-[4.25rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_minmax(6.75rem,0.7fr)_minmax(6.75rem,0.7fr)_3rem_2.5rem]";
+  "grid-cols-[4.25rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_2.75rem_minmax(6.75rem,0.7fr)_minmax(6.75rem,0.7fr)_3rem_2.5rem]";
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -112,21 +113,22 @@ export default function LogTable() {
           (header stays aligned and pinned) instead of the fixed columns overflowing the panel. */}
       <div className="min-h-0 flex-1 overflow-auto">
         <div
-          className={`sticky top-0 z-10 grid ${COLS} min-w-[50rem] gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3`}
+          className={`sticky top-0 z-10 grid ${COLS} min-w-[53rem] gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3`}
         >
           <span>Time</span>
           <span>Dur</span>
           <span>Frequency</span>
           <span>Mode</span>
           <span className="truncate">Name</span>
-          <span className="truncate">System / list</span>
+          <span className="truncate" title="System from the scanner or RadioReference, else the scanlist">Sys / list</span>
+          <span title="Where the name came from: blank for the scanner's own programming, else the lookup that supplied it">Src</span>
           <span className="truncate">Type</span>
           <span className="whitespace-nowrap">TGID/RID · Tone</span>
           <span className="text-right">RSSI</span>
           <span className="text-right">Hits</span>
         </div>
 
-        <div className="min-w-[50rem] select-text font-mono text-[12.5px]">
+        <div className="min-w-[53rem] select-text font-mono text-[12.5px]">
           {visible.length === 0 && (
             <p className="px-2 py-6 text-center font-sans text-sm text-ink-3">
               {rows.length === 0
@@ -188,6 +190,19 @@ export default function LogTable() {
               </span>
                 <span className="truncate font-sans text-ink-2">
                   {r.system || r.scanlist}
+                </span>
+                <span>
+                  {(() => {
+                    const src = rowSource(r);
+                    return src ? (
+                      <span
+                        className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[src]}`}
+                        title={`Name from the ${SOURCE_NAME[src]}`}
+                      >
+                        {src}
+                      </span>
+                    ) : null;
+                  })()}
                 </span>
                 <span className="truncate text-ink-3" title={r.objectType}>{r.objectType}</span>
                 <span

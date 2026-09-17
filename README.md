@@ -46,6 +46,12 @@ npm run build && npm start    # run the built app
 The same links and steps are on the app's help screen (the `?` button; shown on first run).
 Put downloads in `data/` (git-ignored).
 
+The scanner's own programming always wins: a lookup only fills in a name or system the scanner
+did not have. The log's **Src** column (and the `source` column of the CSV export) says which
+lookup did: blank for the scanner's data, `WTR`, `RRDB` (RadioReference), `UKR` (repeater list)
+or `RID` (radioid.net). A row with a blank source and a different licensee in the CSV is a
+channel worth reprogramming on the scanner.
+
 ## Windows installer
 
 ```

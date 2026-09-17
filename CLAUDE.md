@@ -180,6 +180,13 @@ captured on 14 Sep 2026.
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.
+- Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `WTR`, `UKR`), the
+  lookup behind the name, or behind the system when the scanner named the object, or behind
+  the licensee when that is all the row will show. The tracker carries it with those fields
+  (`sourceAfter`), not value by value, so a scanner name arriving a poll later clears it. The
+  log's Src column adds `RID` when the row's only name is the radio ID's callsign
+  (`rowSource` in `src/renderer/src/lib/sources.ts`); the hero's Listed pills use the same
+  initials and colours. The CSV export has a `source` column.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab

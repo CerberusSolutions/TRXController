@@ -2,6 +2,7 @@
  * Types shared between main, preload and renderer. Pure types plus channel
  * names; no runtime dependencies on Node or Electron.
  */
+import type { LookupSource } from './sources';
 import type { ActiveChannel, Lcd, Status, Version } from '@trxcontroller/rcip';
 
 export type LinkStatus = 'disconnected' | 'connecting' | 'connected' | 'unresponsive' | 'error';
@@ -83,6 +84,8 @@ export interface ReceptionRow {
   tone: string;
   /** Nearest Ofcom licensee for the frequency at the time, if the WTR is imported. */
   licensee: string;
+  /** Lookup that supplied the name (or the system, when the scanner named the object): see `LookupSource`. Blank = the scanner's own programming. */
+  source: LookupSource;
   rssiPeak: number;
   /** Squelch openings merged into this row (a conversation with gaps). */
   calls: number;

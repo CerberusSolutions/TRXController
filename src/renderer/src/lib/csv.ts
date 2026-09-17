@@ -20,7 +20,7 @@ function localStamp(ms: number): string {
 
 export const LOG_CSV_HEADER = [
   'first_heard', 'last_heard', 'duration_s', 'calls', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type',
-  'tgid', 'radio_id', 'callsign', 'radio_name', 'tone', 'squelch', 'site', 'licensee', 'rssi_peak', 'hits',
+  'tgid', 'radio_id', 'callsign', 'radio_name', 'tone', 'squelch', 'site', 'licensee', 'source', 'rssi_peak', 'hits',
 ];
 
 /** The log table as CSV, one line per row as displayed (oldest last, like the table). */
@@ -47,6 +47,7 @@ export function logToCsv(rows: readonly ReceptionRow[], now = Date.now()): strin
       r.squelch,
       r.site,
       r.licensee ?? '',
+      r.source ?? '',
       r.rssiPeak,
       r.hits,
     ]),
