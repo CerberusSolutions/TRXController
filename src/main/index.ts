@@ -22,12 +22,15 @@ const CHROME = {
   light: { background: '#eef1f5', overlay: '#ffffff', symbol: '#475467' },
 } as const;
 
+const IS_MAC = process.platform === 'darwin';
+
 function applyChrome(): void {
   const c = nativeTheme.shouldUseDarkColors ? CHROME.dark : CHROME.light;
   for (const w of BrowserWindow.getAllWindows()) {
     if (w.isDestroyed()) continue;
     w.setBackgroundColor(c.background);
-    w.setTitleBarOverlay({ color: c.overlay, symbolColor: c.symbol, height: 46 });
+    // macOS draws its own traffic lights; the overlay is a Windows / Linux thing.
+    if (!IS_MAC) w.setTitleBarOverlay({ color: c.overlay, symbolColor: c.symbol, height: 46 });
   }
 }
 
@@ -378,11 +381,17 @@ function createWindow(): void {
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? CHROME.dark.background : CHROME.light.background,
     title: 'TRXController',
-    // Frameless with the native window controls drawn over our own top bar.
-    titleBarStyle: 'hidden',
-    titleBarOverlay: nativeTheme.shouldUseDarkColors
-      ? { color: CHROME.dark.overlay, symbolColor: CHROME.dark.symbol, height: 46 }
-      : { color: CHROME.light.overlay, symbolColor: CHROME.light.symbol, height: 46 },
+    // Frameless with the native window controls drawn over our own top bar:
+    // Windows puts minimise / maximise / close at the top right (the overlay),
+    // macOS its traffic lights at the top left, vertically centred in the 46 px bar.
+    ...(IS_MAC
+      ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 15 } }
+      : {
+          titleBarStyle: 'hidden' as const,
+          titleBarOverlay: nativeTheme.shouldUseDarkColors
+            ? { color: CHROME.dark.overlay, symbolColor: CHROME.dark.symbol, height: 46 }
+            : { color: CHROME.light.overlay, symbolColor: CHROME.light.symbol, height: 46 },
+        }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,

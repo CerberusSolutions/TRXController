@@ -39,8 +39,13 @@ export default function TopBar() {
   return (
     <header
       className="app-drag flex h-[46px] items-center gap-4 border-b border-edge bg-panel px-4"
-      // Leave room for the native minimise / maximise / close overlay on Windows.
-      style={{ paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }}
+      // Leave room for the native window controls: the minimise / maximise / close overlay
+      // at the top right on Windows, the traffic lights at the top left on macOS.
+      style={
+        window.trx?.platform === 'darwin'
+          ? { paddingLeft: '84px' }
+          : { paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }
+      }
     >
       <div className="flex items-baseline gap-2">
         <span className="text-lg font-semibold tracking-tight">TRX</span>

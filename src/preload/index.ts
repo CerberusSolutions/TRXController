@@ -21,6 +21,8 @@ import {
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
 const api = {
+  /** 'win32' or 'darwin': the renderer leaves room for the native window controls accordingly. */
+  platform: process.platform,
   versions: {
     electron: process.versions.electron,
     node: process.versions.node,

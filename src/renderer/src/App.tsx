@@ -19,7 +19,7 @@ export default function App() {
     const offUpdate = window.trx?.onUpdate ? window.trx.onUpdate((u) => useUi.getState().setUpdate(u)) : () => undefined;
     if (isFirstRun()) useUi.getState().openHelp();
     const onKey = (e: KeyboardEvent): void => {
-      if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === 'd') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'd') {
         e.preventDefault();
         useUi.getState().toggleDiagnostics();
       }

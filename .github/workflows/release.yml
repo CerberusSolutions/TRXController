@@ -1,22 +1,45 @@
-# Build the Windows installer and attach it to a GitHub Release.
+# Build the Windows installer and the macOS (Apple silicon) app and attach them to a GitHub Release.
 #
 # Trigger: push a tag named after the version in package.json, e.g.
 #   git tag v0.2.0 && git push origin v0.2.0
-# The job refuses to run if the tag and package.json disagree, so the release
-# page, the installer file name and the version shown in the app always match.
+# The jobs refuse to run if the tag and package.json disagree, so the release
+# page, the installer file names and the version shown in the app always match.
+#
+# Run by hand (Actions › Release › Run workflow) to build from a branch without
+# publishing; give it an existing tag (e.g. v0.2.7) to attach the builds to that
+# release, which is how a platform can be added to a release already out.
 name: Release
 
 on:
   push:
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      attach_to:
+        description: 'Existing release tag to attach the builds to (e.g. v0.2.7); blank = artifacts only'
+        required: false
+        default: ''
 
 permissions:
   contents: write
 
 jobs:
-  windows:
-    runs-on: windows-latest
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            script: dist
+            artifact: TRXController-Setup
+            files: release/*.exe
+          - os: macos-latest
+            script: dist:mac
+            artifact: TRXController-mac-arm64
+            files: |
+              release/*.dmg
+              release/*.zip
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,10 +48,11 @@ jobs:
           cache: npm
 
       - name: Check the tag matches package.json
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') || inputs.attach_to != ''
         shell: bash
         run: |
           tag="${GITHUB_REF_NAME#v}"
+          if [ -n "${{ inputs.attach_to }}" ]; then tag="${{ inputs.attach_to }}"; tag="${tag#v}"; fi
           pkg="$(node -p "require('./package.json').version")"
           if [ "$tag" != "$pkg" ]; then
             echo "Tag v$tag does not match package.json version $pkg" >&2
@@ -41,28 +65,39 @@ jobs:
 
       # electron-builder would try to publish on its own when it sees a tag;
       # the release step below does that instead.
-      - name: Build the installer
-        run: npm run dist -- --publish never
+      - name: Build
+        run: npm run ${{ matrix.script }} -- --publish never
         env:
           # RadioReference application key (repository secret). Builds without it work, minus RadioReference.
           RR_KEY: ${{ secrets.RR_KEY }}
+          # The macOS app is unsigned: stop electron-builder looking for a certificate.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Keep the installer as a workflow artifact
+      - name: Keep the build as a workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TRXController-Setup
-          path: release/*.exe
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.files }}
           if-no-files-found: error
 
       - name: Publish the GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: release/*.exe
+          files: ${{ matrix.files }}
           generate_release_notes: true
           body: |
-            Windows installer for TRXController (beta). Unsigned, so SmartScreen will warn on first run:
-            choose "More info" then "Run anyway".
+            **Windows**: `TRXController-Setup-<version>.exe`. Unsigned, so SmartScreen will warn on first run:
+            choose "More info" then "Run anyway". Installs per user under `%LOCALAPPDATA%\Programs\TRXController`;
+            log, settings and imported data live in `%APPDATA%\TRXController`.
 
-            Installs per user under `%LOCALAPPDATA%\Programs\TRXController`; log, settings and imported
-            data live in `%APPDATA%\TRXController`.
+            **macOS (Apple silicon)**: `TRXController-<version>-mac-arm64.dmg`. Unsigned and not notarised, so on
+            first launch right-click the app and choose Open (or run `xattr -dr com.apple.quarantine /Applications/TRXController.app`).
+            Data lives in `~/Library/Application Support/TRXController`.
+
+      - name: Attach to an existing release
+        if: inputs.attach_to != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.attach_to }}
+          files: ${{ matrix.files }}

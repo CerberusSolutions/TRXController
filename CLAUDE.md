@@ -8,7 +8,11 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 
 ## Stack decisions (do not reinvent)
 
-- Electron + Vite (via `electron-vite`) + React + TypeScript. Windows is the only target.
+- Electron + Vite (via `electron-vite`) + React + TypeScript. Windows is the primary target; a
+  macOS Apple-silicon build (unsigned, not notarised) is packaged too. Platform differences are
+  confined to: window chrome in `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the
+  title-bar overlay elsewhere), the top bar's padding (`window.trx.platform`), the help / status
+  text (data folder, Cmd vs Ctrl), and the update link (`.dmg` on macOS).
 - Tailwind CSS v4 (`@tailwindcss/vite` plugin, `@import "tailwindcss"` in `src/renderer/src/index.css`).
 - `serialport` lives in the **main process only**. The renderer never touches the port;
   it talks to main over IPC exposed by the preload (`contextBridge`).
@@ -95,6 +99,9 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   use the scanner; `--listen` sends nothing and prints anything that arrives unprompted.
 - `npm run dev` starts Electron with hot reload
 - `npm run build` then `npm start` runs the built app
+- `npm run dist:mac` (on a Mac) builds `release/TRXController-<version>-mac-arm64.dmg` + zip:
+  `mac:` target in `electron-builder.yml`, `identity: null`, the universal darwin serialport
+  prebuild kept, icon converted from `build/icon.png`. Gatekeeper needs right-click › Open.
 - `npm run dist` builds the Windows installer into `release/` (electron-builder, NSIS,
   per-user, config in `electron-builder.yml`, icon in `build/`). `npm run dist:dir` stops at
   `release/win-unpacked`, which also works on Linux; the NSIS step needs Wine there, so build
@@ -106,10 +113,12 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   keep it around 85-90 MB. Do not strip Chromium DLLs to go lower.
 - Releases: `.\scripts\release.ps1 [patch|minor|major]` (clean tree, checkout main, pull,
   `npm version`, `git push --follow-tags`, stops at the first failure). The `v*` tag runs
-  `.github/workflows/release.yml` on `windows-latest`, which checks the tag against
-  package.json, tests, builds with `--publish never` and attaches `release/*.exe` to a GitHub
-  Release via softprops/action-gh-release. `ci.yml` runs test / typecheck / build on pushes
-  and PRs.
+  `.github/workflows/release.yml` as a matrix on `windows-latest` and `macos-latest`, which
+  checks the tag against package.json, tests, builds with `--publish never` and attaches the
+  exe / dmg / zip to a GitHub Release via softprops/action-gh-release. Run by hand with the
+  `attach_to` input (e.g. `v0.2.7`) to add builds to a release already published without a
+  version bump; blank leaves them as workflow artifacts. `ci.yml` runs test / typecheck /
+  build on pushes and PRs.
 
 ## UI preview without a scanner
 

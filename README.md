@@ -1,6 +1,6 @@
 # TRXController
 
-A modern Windows remote-control and logging app for the Whistler TRX-1 / TRX-1E / TRX-2
+A modern remote-control and logging app (Windows, and macOS on Apple silicon) for the Whistler TRX-1 / TRX-1E / TRX-2
 digital scanners, replacing Whistler's own remote control software.
 
 - Protocol spec: `docs/Whistler_Remote_Control_Protocol_v1_7.pdf`
@@ -11,7 +11,7 @@ digital scanners, replacing Whistler's own remote control software.
 ## Stack
 
 Electron + Vite + React + TypeScript, Tailwind, `serialport` in the main process,
-Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows only.
+Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows first; a macOS (Apple silicon) build is provided as well.
 
 ## Getting started
 
@@ -54,6 +54,14 @@ npm run dist:dir    # release/win-unpacked/ only, for a quick check without inst
 ```
 
 Run `npm run dist` on Windows (the NSIS step needs Wine anywhere else; `dist:dir` works on Linux).
+
+## macOS (Apple silicon)
+
+`npm run dist:mac` on a Mac produces `release/TRXController-<version>-mac-arm64.dmg` (and a zip).
+The app is unsigned and not notarised, so on first launch right-click it and choose Open, or run
+`xattr -dr com.apple.quarantine /Applications/TRXController.app`. Data lives in
+`~/Library/Application Support/TRXController`. The scanner should appear as `/dev/tty.usbserial…`
+or `/dev/tty.usbmodem…` with no driver install; pick it in the top bar. Cmd+Shift+D toggles diagnostics.
 electron-builder config is `electron-builder.yml`; the icon is `build/icon.ico`. The installer
 is unsigned, so SmartScreen shows a warning the first time it runs. The app installs under
 `%LOCALAPPDATA%\Programs\TRXController` and keeps its log, settings and imported data in
@@ -62,7 +70,7 @@ The last port used is reopened at launch.
 
 ## Releases on GitHub
 
-Pushing a version tag builds the installer on a Windows runner and attaches it to a GitHub
+Pushing a version tag builds the Windows installer and the macOS app on their own runners and attaches them to a GitHub
 Release (`.github/workflows/release.yml`), so users download it from the Releases page:
 
 ```
