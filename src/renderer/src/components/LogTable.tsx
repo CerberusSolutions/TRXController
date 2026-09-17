@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReceptionRow } from "../../../shared/ipc";
 import { rowMatches, useLog } from "../store/log";
 import { useScanner } from "../store/scanner";
@@ -34,8 +34,323 @@ function fmtDuration(r: ReceptionRow, now: number): string {
   return `${h}h${String(m - h * 60).padStart(2, '0')}`;
 }
 
-const COLS =
-  "grid-cols-[4.25rem_4.25rem_5.5rem_2.75rem_minmax(6rem,1.4fr)_minmax(5rem,1fr)_2.75rem_minmax(6.75rem,0.7fr)_minmax(6.75rem,0.7fr)_3rem_2.5rem]";
+/** Simple is the everyday table; Detail shows what every source said, one column each. */
+type View = "simple" | "detail";
+const VIEW_KEY = "trx.logView";
+const WIDTHS_KEY = "trx.logColumns";
+
+interface RenderCtx {
+  now: number;
+  canTune: boolean;
+  tuning: boolean;
+  tune: (hz: number) => void;
+}
+
+interface Column {
+  key: string;
+  label: string;
+  /** Header tooltip. */
+  title?: string;
+  /** Default grid track (fixed rem, or minmax + fr for the ones that take spare width). */
+  track: string;
+  /** Narrowest the user may drag it, px. */
+  minPx: number;
+  align?: "right";
+  /** Extra classes on the header cell. */
+  headClass?: string;
+  render: (r: ReceptionRow, ctx: RenderCtx) => ReactNode;
+}
+
+const dash = <span className="text-ink-3">—</span>;
+const REM = 16;
+
+// ---- cell renderers shared by both views -------------------------------------------------
+
+const timeCell: Column = {
+  key: "time",
+  label: "Time",
+  track: "4.25rem",
+  minPx: 3.5 * REM,
+  render: (r) => {
+    const open = r.endedAt === null;
+    return (
+      <span className="whitespace-nowrap">
+        {open && <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green align-middle" />}
+        {fmtTime(r.startedAt)}
+        {fmtDate(r.startedAt) && <span className="ml-1 text-[10px] text-ink-3">{fmtDate(r.startedAt)}</span>}
+      </span>
+    );
+  },
+};
+
+const durCell: Column = {
+  key: "dur",
+  label: "Dur",
+  track: "4.25rem",
+  minPx: 3 * REM,
+  render: (r, { now }) => (
+    <span
+      className="text-ink-3"
+      title={`First heard ${fmtTime(r.startedAt)}${r.endedAt ? `, last heard ${fmtTime(r.endedAt)}` : ""}${r.calls > 1 ? `, ${r.calls} calls` : ""}`}
+    >
+      {fmtDuration(r, now)}
+      {r.calls > 1 && <span className="ml-1 text-ink-2">×{r.calls}</span>}
+    </span>
+  ),
+};
+
+const freqCell: Column = {
+  key: "freq",
+  label: "Frequency",
+  track: "5.5rem",
+  minPx: 5 * REM,
+  render: (r, { canTune, tuning, tune }) => (
+    <button
+      type="button"
+      className={`text-left text-amber-2 ${canTune && !tuning ? "cursor-pointer hover:underline hover:decoration-amber-2/60 hover:underline-offset-2" : "cursor-default"}`}
+      disabled={!canTune || tuning}
+      title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode)` : undefined}
+      onClick={() => {
+        if (canTune && !tuning) tune(r.frequencyHz);
+      }}
+    >
+      {(r.frequencyHz / 1e6).toFixed(6)}
+    </button>
+  ),
+};
+
+const modeCell: Column = {
+  key: "mode",
+  label: "Mode",
+  track: "2.75rem",
+  minPx: 2.5 * REM,
+  render: (r) => <span className="text-cyan">{r.signalType || r.mode}</span>,
+};
+
+const typeCell: Column = {
+  key: "type",
+  label: "Type",
+  track: "minmax(5rem,0.6fr)",
+  minPx: 3 * REM,
+  render: (r) => (
+    <span className="truncate text-ink-3" title={r.objectType}>
+      {r.objectType}
+    </span>
+  ),
+};
+
+const idsCell: Column = {
+  key: "ids",
+  label: "TGID/RID · Tone",
+  track: "minmax(6.75rem,0.7fr)",
+  minPx: 4 * REM,
+  headClass: "whitespace-nowrap",
+  render: (r) => (
+    <span
+      className="truncate text-ink-3"
+      title={
+        r.tgid !== null || r.radioId !== null
+          ? `TGID ${r.tgid ?? "—"} · RID ${r.radioId ?? "—"}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ", " + r.radioName : ""})` : ""}${r.tone ? ` · ${r.tone}` : ""}`
+          : r.tone
+            ? `Detected ${r.tone}${r.squelch ? ` (programmed ${r.squelch})` : ""}`
+            : undefined
+      }
+    >
+      {r.tgid !== null ? r.tgid : ""}
+      {r.tgid !== null && r.radioId !== null ? "/" : ""}
+      {r.radioId !== null ? (
+        // The callsign goes in the Name column when the row has no channel name, so show the number here;
+        // a row with a real channel name has nowhere else for the callsign.
+        r.radioCallsign && r.name ? (
+          <span className="text-ink-2">{r.radioCallsign}</span>
+        ) : (
+          r.radioId
+        )
+      ) : (
+        ""
+      )}
+      {r.tgid === null && r.radioId === null && r.tone ? (
+        <span className="text-ink-2">{r.tone.replace("CTCSS ", "CT ").replace("DCS ", "DCS ")}</span>
+      ) : (
+        ""
+      )}
+    </span>
+  ),
+};
+
+const rssiCell: Column = {
+  key: "rssi",
+  label: "RSSI",
+  track: "3rem",
+  minPx: 2.5 * REM,
+  align: "right",
+  render: (r) => <span className="text-right">{r.rssiPeak}</span>,
+};
+
+const hitsCell: Column = {
+  key: "hits",
+  label: "Hits",
+  track: "2.5rem",
+  minPx: 2.5 * REM,
+  align: "right",
+  render: (r) => <span className="text-right text-ink-3">{r.hits}</span>,
+};
+
+// ---- Simple view -------------------------------------------------------------------------
+
+const nameCell: Column = {
+  key: "name",
+  label: "Name",
+  track: "minmax(6rem,1.4fr)",
+  minPx: 4 * REM,
+  render: (r) => (
+    <span
+      className="truncate font-sans text-[13px] text-ink"
+      title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (radioid.net)`}
+    >
+      {r.name ||
+        (r.radioCallsign ? (
+          `${r.radioCallsign}${r.radioName ? " " + r.radioName : ""}`
+        ) : r.licensee ? (
+          <span className="text-ink-2">{r.licensee}</span>
+        ) : (
+          dash
+        ))}
+    </span>
+  ),
+};
+
+const sysListCell: Column = {
+  key: "syslist",
+  label: "Sys / list",
+  title: "System from the scanner or RadioReference, else the scanlist",
+  track: "minmax(5rem,1fr)",
+  minPx: 3.5 * REM,
+  render: (r) => <span className="truncate font-sans text-ink-2">{r.system || r.scanlist}</span>,
+};
+
+const srcCell: Column = {
+  key: "src",
+  label: "Src",
+  title: "Where the name came from: blank for the scanner's own programming, else the lookup that supplied it",
+  track: "2.75rem",
+  minPx: 2.75 * REM,
+  render: (r) => {
+    const src = rowSource(r);
+    return src ? (
+      <span>
+        <span className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[src]}`} title={`Name from the ${SOURCE_NAME[src]}`}>
+          {src}
+        </span>
+      </span>
+    ) : (
+      <span />
+    );
+  },
+};
+
+// ---- Detail view: one column per source --------------------------------------------------
+
+/** Rows logged before the per-source fields existed only know the chosen name and its source. */
+const fromLegacy = (r: ReceptionRow, source: ReceptionRow["source"]): string => (r.source === source ? (source === "" ? r.name : r.licensee) : "");
+
+const scannerCell: Column = {
+  key: "scanner",
+  label: "Scanner",
+  title: "The object name programmed in the scanner",
+  track: "minmax(6rem,1.2fr)",
+  minPx: 4 * REM,
+  render: (r) => {
+    const v = r.scannerName || fromLegacy(r, "");
+    return (
+      <span className="truncate font-sans text-[13px] text-ink" title={v || undefined}>
+        {v || dash}
+      </span>
+    );
+  },
+};
+
+const listCell: Column = {
+  key: "list",
+  label: "List",
+  title: "The scanlist the object is in (or the search)",
+  track: "minmax(5rem,0.8fr)",
+  minPx: 3 * REM,
+  render: (r) => (
+    <span className="truncate font-sans text-ink-2" title={r.scanlist || undefined}>
+      {r.scanlist}
+    </span>
+  ),
+};
+
+function lookupCell(key: "wtr" | "rrdb" | "ukr", label: string, title: string, track: string, value: (r: ReceptionRow) => string, extra?: (r: ReceptionRow) => string): Column {
+  const pill = key === "wtr" ? "WTR" : key === "rrdb" ? "RRDB" : "UKR";
+  return {
+    key,
+    label,
+    title,
+    track,
+    minPx: 4 * REM,
+    render: (r) => {
+      const v = value(r);
+      const more = extra?.(r) ?? "";
+      const chosen = rowSource(r) === pill;
+      return (
+        <span className={`truncate font-sans ${chosen ? "text-ink" : "text-ink-2"}`} title={[v, more].filter(Boolean).join(" · ") || undefined}>
+          {v || (more ? <span className="text-ink-3">{more}</span> : "")}
+        </span>
+      );
+    },
+  };
+}
+
+const wtrCell = lookupCell("wtr", "WTR", `Nearest licensee in the ${SOURCE_NAME.WTR}`, "minmax(6rem,1.2fr)", (r) => r.wtr || fromLegacy(r, "WTR"));
+const rrdbCell = lookupCell(
+  "rrdb",
+  "RRDB",
+  `Talkgroup or channel name from the ${SOURCE_NAME.RRDB} (its system when it has no name)`,
+  "minmax(6rem,1.2fr)",
+  (r) => r.rrName || fromLegacy(r, "RRDB"),
+  (r) => r.rrSystem,
+);
+const ukrCell = lookupCell("ukr", "UKR", `Repeater from the ${SOURCE_NAME.UKR}`, "minmax(4.5rem,0.6fr)", (r) => r.rpt || fromLegacy(r, "UKR"));
+
+const sysCell: Column = {
+  key: "sys",
+  label: "Sys",
+  title: "Trunked system, from the scanner or RadioReference",
+  track: "minmax(5rem,0.8fr)",
+  minPx: 3 * REM,
+  render: (r) => (
+    <span className="truncate font-sans text-ink-2" title={r.system || undefined}>
+      {r.system}
+    </span>
+  ),
+};
+
+const SIMPLE: Column[] = [timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, typeCell, idsCell, rssiCell, hitsCell];
+const DETAIL: Column[] = [timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, typeCell, idsCell, rssiCell, hitsCell];
+
+// ---- persistence (per machine; a convenience, never state that matters) ------------------
+
+type Widths = Record<string, number>;
+
+function loadJson<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveJson(key: string, value: unknown): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    /* private mode etc. */
+  }
+}
 
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
@@ -52,6 +367,53 @@ export default function LogTable() {
   );
   const tuning = tuneState?.phase === "tuning";
 
+  const [view, setView] = useState<View>(() => (loadJson<string>(VIEW_KEY, "simple") === "detail" ? "detail" : "simple"));
+  // Column widths the user has dragged, px, keyed by column, kept per view. Untouched columns keep their default track.
+  const [widths, setWidths] = useState<Record<View, Widths>>(() => loadJson(WIDTHS_KEY, { simple: {}, detail: {} }));
+  const columns = view === "detail" ? DETAIL : SIMPLE;
+  const headerRef = useRef<HTMLDivElement>(null);
+
+  const chooseView = (v: View): void => {
+    setView(v);
+    saveJson(VIEW_KEY, v);
+  };
+  const setWidth = useCallback(
+    (key: string, px: number | null) => {
+      setWidths((all) => {
+        const mine = { ...all[view] };
+        if (px === null) delete mine[key];
+        else mine[key] = Math.round(px);
+        const next = { ...all, [view]: mine };
+        saveJson(WIDTHS_KEY, next);
+        return next;
+      });
+    },
+    [view],
+  );
+
+  // Drag a header divider to resize the column on its left; double-click it to go back to the default.
+  const startResize = (e: React.MouseEvent, col: Column, index: number): void => {
+    e.preventDefault();
+    const cell = headerRef.current?.children[index] as HTMLElement | undefined;
+    if (!cell) return;
+    const startX = e.clientX;
+    const startW = cell.getBoundingClientRect().width;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    const onMove = (ev: MouseEvent): void => setWidth(col.key, Math.max(col.minPx, startW + ev.clientX - startX));
+    const onUp = (): void => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const template = columns.map((c) => (widths[view][c.key] ? `${widths[view][c.key]}px` : c.track)).join(" ");
+  const minWidth = view === "detail" ? "66rem" : "53rem";
+
   // Tick once a second only while a reception is open, to grow its duration.
   useEffect(() => {
     if (!hasOpen) return;
@@ -63,6 +425,7 @@ export default function LogTable() {
     () => rows.filter((r) => rowMatches(r, filter)),
     [rows, filter],
   );
+  const ctx: RenderCtx = { now, canTune, tuning, tune: (hz) => void tune(hz) };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -87,10 +450,24 @@ export default function LogTable() {
                 : `Tune failed: ${tuneState.message ?? ""}`}
           </span>
         )}
+        <div className="ml-auto flex overflow-hidden rounded-md border border-edge text-[11px]" role="radiogroup" aria-label="Log columns">
+          {(["simple", "detail"] as const).map((v) => (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={view === v}
+              className={`px-2 py-1 ${view === v ? "bg-panel-2 text-ink" : "text-ink-3 hover:text-ink"}`}
+              title={v === "simple" ? "The name each row was given and where it came from" : "What every source said: scanner, WTR, RadioReference, repeater list"}
+              onClick={() => chooseView(v)}
+            >
+              {v === "simple" ? "Simple" : "Detail"}
+            </button>
+          ))}
+        </div>
         <button
-          className="ml-auto rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40"
+          className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40"
           disabled={visible.length === 0 || !window.trx?.logExportCsv}
-          title="Save the rows shown (after the filter) as a CSV file"
+          title="Save the rows shown (after the filter) as a CSV file, with every source's column"
           onClick={() => {
             const stamp = new Date().toISOString().slice(0, 16).replace("T", "-").replace(":", "");
             void window.trx.logExportCsv(logToCsv(visible), `trx-log-${stamp}.csv`);
@@ -113,22 +490,29 @@ export default function LogTable() {
           (header stays aligned and pinned) instead of the fixed columns overflowing the panel. */}
       <div className="min-h-0 flex-1 overflow-auto">
         <div
-          className={`sticky top-0 z-10 grid ${COLS} min-w-[53rem] gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3`}
+          ref={headerRef}
+          className="sticky top-0 z-10 grid gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3"
+          style={{ gridTemplateColumns: template, minWidth }}
         >
-          <span>Time</span>
-          <span>Dur</span>
-          <span>Frequency</span>
-          <span>Mode</span>
-          <span className="truncate">Name</span>
-          <span className="truncate" title="System from the scanner or RadioReference, else the scanlist">Sys / list</span>
-          <span title="Where the name came from: blank for the scanner's own programming, else the lookup that supplied it">Src</span>
-          <span className="truncate">Type</span>
-          <span className="whitespace-nowrap">TGID/RID · Tone</span>
-          <span className="text-right">RSSI</span>
-          <span className="text-right">Hits</span>
+          {columns.map((c, i) => (
+            <span key={c.key} className={`relative min-w-0 ${c.align === "right" ? "text-right" : ""}`}>
+              <span className={`block truncate ${c.headClass ?? ""}`} title={c.title}>
+                {c.label}
+              </span>
+              {/* Divider handle in the column gap: drag to resize this column, double-click to reset it. */}
+              <span
+                className="absolute top-0 -right-1.5 z-10 h-full w-3 cursor-col-resize"
+                onMouseDown={(e) => startResize(e, c, i)}
+                onDoubleClick={() => setWidth(c.key, null)}
+                title="Drag to resize · double-click to reset"
+              >
+                <span className="mx-auto block h-full w-px bg-edge" />
+              </span>
+            </span>
+          ))}
         </div>
 
-        <div className="min-w-[53rem] select-text font-mono text-[12.5px]">
+        <div className="select-text font-mono text-[12.5px]" style={{ minWidth }}>
           {visible.length === 0 && (
             <p className="px-2 py-6 text-center font-sans text-sm text-ink-3">
               {rows.length === 0
@@ -141,103 +525,14 @@ export default function LogTable() {
             return (
               <div
                 key={r.id}
-                className={`grid ${COLS} items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
+                className={`grid items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
+                style={{ gridTemplateColumns: template }}
               >
-                <span className="whitespace-nowrap">
-                  {open && (
-                    <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-green align-middle" />
-                  )}
-                  {fmtTime(r.startedAt)}
-                  {fmtDate(r.startedAt) && (
-                    <span className="ml-1 text-[10px] text-ink-3">
-                      {fmtDate(r.startedAt)}
-                    </span>
-                  )}
-                </span>
-                <span
-                  className="text-ink-3"
-                  title={`First heard ${fmtTime(r.startedAt)}${r.endedAt ? `, last heard ${fmtTime(r.endedAt)}` : ""}${r.calls > 1 ? `, ${r.calls} calls` : ""}`}
-                >
-                  {fmtDuration(r, now)}
-                  {r.calls > 1 && (
-                    <span className="ml-1 text-ink-2">×{r.calls}</span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className={`text-left text-amber-2 ${canTune && !tuning ? "cursor-pointer hover:underline hover:decoration-amber-2/60 hover:underline-offset-2" : "cursor-default"}`}
-                  disabled={!canTune || tuning}
-                  title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode)` : undefined}
-                  onClick={() => {
-                    if (canTune && !tuning) void tune(r.frequencyHz);
-                  }}
-                >
-                  {(r.frequencyHz / 1e6).toFixed(6)}
-                </button>
-                <span className="text-cyan">{r.signalType || r.mode}</span>
-                <span
-                  className="truncate font-sans text-[13px] text-ink"
-                  title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (radioid.net)`}
-                >
-                {r.name ||
-                  (r.radioCallsign ? (
-                    `${r.radioCallsign}${r.radioName ? " " + r.radioName : ""}`
-                  ) : r.licensee ? (
-                    <span className="text-ink-2">{r.licensee}</span>
-                  ) : (
-                    <span className="text-ink-3">—</span>
-                  ))}
-              </span>
-                <span className="truncate font-sans text-ink-2">
-                  {r.system || r.scanlist}
-                </span>
-                <span>
-                  {(() => {
-                    const src = rowSource(r);
-                    return src ? (
-                      <span
-                        className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[src]}`}
-                        title={`Name from the ${SOURCE_NAME[src]}`}
-                      >
-                        {src}
-                      </span>
-                    ) : null;
-                  })()}
-                </span>
-                <span className="truncate text-ink-3" title={r.objectType}>{r.objectType}</span>
-                <span
-                  className="truncate text-ink-3"
-                  title={
-                    r.tgid !== null || r.radioId !== null
-                      ? `TGID ${r.tgid ?? "—"} · RID ${r.radioId ?? "—"}${r.radioCallsign ? ` (${r.radioCallsign}${r.radioName ? ", " + r.radioName : ""})` : ""}${r.tone ? ` · ${r.tone}` : ""}`
-                      : r.tone
-                        ? `Detected ${r.tone}${r.squelch ? ` (programmed ${r.squelch})` : ""}`
-                        : undefined
-                  }
-                >
-                  {r.tgid !== null ? r.tgid : ""}
-                  {r.tgid !== null && r.radioId !== null ? "/" : ""}
-                  {r.radioId !== null ? (
-                    // The callsign goes in the Name column when the row has no channel name, so show the number here;
-                    // a row with a real channel name has nowhere else for the callsign.
-                    r.radioCallsign && r.name ? (
-                      <span className="text-ink-2">{r.radioCallsign}</span>
-                    ) : (
-                      r.radioId
-                    )
-                  ) : (
-                    ""
-                  )}
-                  {r.tgid === null && r.radioId === null && r.tone ? (
-                    <span className="text-ink-2">
-                      {r.tone.replace("CTCSS ", "CT ").replace("DCS ", "DCS ")}
-                    </span>
-                  ) : (
-                    ""
-                  )}
-                </span>
-                <span className="text-right">{r.rssiPeak}</span>
-                <span className="text-right text-ink-3">{r.hits}</span>
+                {columns.map((c) => (
+                  <span key={c.key} className={`min-w-0 truncate ${c.align === "right" ? "text-right" : ""}`}>
+                    {c.render(r, ctx)}
+                  </span>
+                ))}
               </div>
             );
           })}

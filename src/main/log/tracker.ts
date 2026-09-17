@@ -43,7 +43,8 @@ export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequenc
 
 /** Fields merged value by value; `source` travels with the name, system and licensee instead (see `sourceAfter`). */
 const FIELDS: Exclude<keyof Description, 'source'>[] = [
-  'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee', 'rssiPeak',
+  'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee',
+  'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rssiPeak',
 ];
 
 /**
@@ -249,6 +250,12 @@ export function describe(s: ScannerSnapshot): Description {
     tone: details?.detectedTone ?? '',
     licensee,
     source,
+    // Every source's own answer, for the log's Detail view and the CSV, whatever the order chose.
+    scannerName,
+    wtr,
+    rrName: rrTalkgroup || rrChannel,
+    rrSystem: rrSys?.name ?? '',
+    rpt,
     rssiPeak: status.rssi,
   };
 }

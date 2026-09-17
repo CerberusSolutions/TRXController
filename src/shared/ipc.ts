@@ -88,6 +88,15 @@ export interface ReceptionRow {
   licensee: string;
   /** Lookup that supplied the name (or the system, when the scanner named the object): see `LookupSource`. Blank = the scanner's own programming. */
   source: LookupSource;
+  /** What each source said at the time, whichever the lookup order chose: the scanner's own object name, */
+  scannerName: string;
+  /** the nearest Ofcom licensee, */
+  wtr: string;
+  /** RadioReference's talkgroup or channel name and its system, */
+  rrName: string;
+  rrSystem: string;
+  /** and the repeater from the RSGB list. */
+  rpt: string;
   rssiPeak: number;
   /** Squelch openings merged into this row (a conversation with gaps). */
   calls: number;
