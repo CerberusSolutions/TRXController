@@ -255,6 +255,16 @@ captured on 14 Sep 2026.
   key (it is loading scanlists), via `MacroHost.stalled`; tune / scan failure messages clear
   themselves after 8 s.
 
+## Scan timeout
+
+- `settings.scanTimeoutS` (Data dialog "Scan timeout": Off / 10 / 20 / 30 s / 1 / 2 min) is how long
+  the scanner may sit on one carrier in Scan mode before the app presses ► (`Key.RIGHT`, which
+  resumes scanning on the TRX) for it. `ScanTimeout` (`src/main/scanner/scanTimeout.ts`) is the pure
+  timing: only Scan mode (0x0a), only while the squelch stays open on one frequency, never while the
+  link is stalled, once per stop (nothing fires again until the squelch closes or the frequency
+  changes). Wired in main's `onSnapshot`; a nudge is logged as `[scan] … held for N s: resuming`.
+  Searches and Tune Mode are left alone: sitting on a signal is what they are for.
+
 ## Band tab (channel occupancy)
 
 - `src/renderer/src/store/band.ts` accumulates one bin per frequency the scanner visits

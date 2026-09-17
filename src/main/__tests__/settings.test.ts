@@ -13,6 +13,14 @@ describe('sanitize', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, port: '' }).port).toBeNull();
   });
 
+  it('keeps the scan timeout to a sensible number of seconds, or off', () => {
+    expect(sanitize({ ...DEFAULT_SETTINGS, scanTimeoutS: 30 }).scanTimeoutS).toBe(30);
+    expect(sanitize({ ...DEFAULT_SETTINGS, scanTimeoutS: 12.6 }).scanTimeoutS).toBe(13);
+    expect(sanitize({ ...DEFAULT_SETTINGS, scanTimeoutS: 1 }).scanTimeoutS).toBeNull();
+    expect(sanitize({ ...DEFAULT_SETTINGS, scanTimeoutS: 'soon' as never }).scanTimeoutS).toBeNull();
+    expect(sanitize({ ...DEFAULT_SETTINGS, scanTimeoutS: undefined as never }).scanTimeoutS).toBeNull();
+  });
+
   it('keeps the distance units to km or miles', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, units: 'mi' }).units).toBe('mi');
     expect(sanitize({ ...DEFAULT_SETTINGS, units: 'furlongs' as never }).units).toBe('km');

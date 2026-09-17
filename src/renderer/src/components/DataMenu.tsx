@@ -119,6 +119,42 @@ function LookupOrder() {
   );
 }
 
+/** How long the scanner may sit on one carrier in Scan mode before the app presses ► for it. */
+function ScanTimeoutForm() {
+  const { settings, saveSettings } = useIdentities();
+  const value = settings.scanTimeoutS ?? 0;
+  const choices: [number, string][] = [
+    [0, 'Off'],
+    [10, '10 s'],
+    [20, '20 s'],
+    [30, '30 s'],
+    [60, '1 min'],
+    [120, '2 min'],
+  ];
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2">
+      <div className="flex overflow-hidden rounded-md border border-edge text-[11px]" role="radiogroup" aria-label="Scan timeout">
+        {choices.map(([secs, label]) => (
+          <button
+            key={secs}
+            role="radio"
+            aria-checked={value === secs}
+            className={`px-2 py-1 ${value === secs ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink'}`}
+            onClick={() => void saveSettings({ scanTimeoutS: secs === 0 ? null : secs })}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-ink-3">
+        {value === 0
+          ? 'The scanner stays on a carrier as long as its own delay settings allow.'
+          : `After ${value} s on one carrier in Scan mode the app presses ► so scanning resumes; a dead carrier or a stuck beacon then costs ${value} s, not the session.`}
+      </p>
+    </div>
+  );
+}
+
 /** What the user has confirmed by hand, with a way to withdraw one or all. */
 function ConfirmedList() {
   const confirmations = useLog((s) => s.confirmations);
@@ -358,6 +394,10 @@ export default function DataDialog() {
 
             <Section title="Confirmed identities">
               <ConfirmedList />
+            </Section>
+
+            <Section title="Scan timeout">
+              <ScanTimeoutForm />
             </Section>
 
             <Section title="Your location (for nearest licensee and repeater)">

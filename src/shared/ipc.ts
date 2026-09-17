@@ -317,6 +317,8 @@ export interface Settings {
   radiusKm: number | null;
   /** How distances are shown (always stored in km). */
   units: Units;
+  /** Seconds the scanner may sit on one carrier in Scan mode before ► is pressed for it; null = never. */
+  scanTimeoutS: number | null;
   /** Serial port of the last successful connection, reopened at launch. */
   port: string | null;
   /** False after the user disconnects, so the app stops reconnecting on its own. */

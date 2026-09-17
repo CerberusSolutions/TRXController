@@ -78,6 +78,10 @@ differs sinks. The unfolded row also shows the traffic heard on that frequency b
 receptions, first and last heard, which radio IDs and which names, so the users sharing a channel
 can be told apart and confirmed one code at a time.
 
+Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
+number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
+Searches and Tune Mode are never nudged.
+
 ## Windows installer
 
 ```

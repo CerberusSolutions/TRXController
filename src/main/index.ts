@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { isKeyCode } from '@trxcontroller/rcip';
+import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
@@ -15,6 +15,7 @@ import { ReceptionLogger } from './log/logger';
 import { describe as describeSnapshot, snapshotRadioId } from './log/tracker';
 import { RrService } from './identities/rrService';
 import { ScannerSession } from './scanner/session';
+import { ScanTimeout } from './scanner/scanTimeout';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
 
 let win: BrowserWindow | null = null;
@@ -128,6 +129,8 @@ function publicSettings(s: Settings): Settings {
   return { ...s, rr: { ...s.rr, password: '' } };
 }
 
+const scanTimeout = new ScanTimeout();
+
 const session = new ScannerSession(serialTransportFactory, {
   onSnapshot: (raw: ScannerSnapshot) => {
     // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
@@ -135,6 +138,12 @@ const session = new ScannerSession(serialTransportFactory, {
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
+    // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
+    const limit = settings?.get().scanTimeoutS ?? null;
+    if (scanTimeout.update(s, limit === null ? null : limit * 1000)) {
+      console.log(`[scan] ${(s.status!.frequencyHz / 1e6).toFixed(4)} MHz held for ${limit} s: resuming`);
+      session.pressKey(Key.RIGHT).catch((e: unknown) => console.log(`[scan] resume key failed: ${(e as Error).message}`));
+    }
   },
   onCcDump: (line) => broadcast(IPC.ccdump, line),
   log: (msg) => console.log(`[scanner] ${msg}`),
