@@ -176,7 +176,8 @@ captured on 14 Sep 2026.
   lat/lon (`pickSite`: NAC, else nearest), else by the system's own centre plus its range
   (many UK sites carry no coordinates; 0,0 counts as none), conventional entries by their
   county's centre plus its range (`getCountyInfo` once per county, cached in `rr_counties`).
-  No location, or nothing placed: keep. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
+  No location: keep everything. With one, a system nobody can place is dropped unless the site's
+  NAC matches the one heard (a county entry without a centre is kept). Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.
