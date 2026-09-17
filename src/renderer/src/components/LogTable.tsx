@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ReceptionRow } from "../../../shared/ipc";
+import { formatPlace, type Units } from "../../../shared/geo";
 import { rowMatches, useLog } from "../store/log";
+import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
 import { logToCsv } from "../lib/csv";
 import { SOURCE_NAME, SOURCE_PILL, rowSource } from "../lib/sources";
@@ -44,6 +46,10 @@ interface RenderCtx {
   canTune: boolean;
   tuning: boolean;
   tune: (hz: number) => void;
+  units: Units;
+  /** Rows whose candidate list is unfolded beneath them. */
+  expanded: ReadonlySet<number>;
+  toggle: (id: number) => void;
 }
 
 interface Column {
@@ -65,6 +71,39 @@ const dash = <span className="text-ink-3">—</span>;
 const REM = 16;
 
 // ---- cell renderers shared by both views -------------------------------------------------
+
+/** "+" on rows that have candidates to unfold: everything the lookups offered for the frequency. */
+const moreCell: Column = {
+  key: "more",
+  label: "",
+  title: "Click + on a row to see every candidate the lookups offered for its frequency",
+  track: "1.1rem",
+  minPx: 1.1 * REM,
+  render: (r, { expanded, toggle }) => {
+    const n = r.candidates?.length ?? 0;
+    if (n === 0) return <span />;
+    const open = expanded.has(r.id);
+    return (
+      <button
+        type="button"
+        className={`w-full text-center leading-none ${open ? "text-ink" : "text-ink-3 hover:text-ink"}`}
+        title={open ? "Hide the candidates" : `${n} candidate${n === 1 ? "" : "s"} from the lookups: click to show`}
+        onClick={() => toggle(r.id)}
+      >
+        {open ? "−" : "+"}
+      </button>
+    );
+  },
+};
+
+const distCell: Column = {
+  key: "dist",
+  label: "Dist",
+  title: "Distance and bearing from your location (Data menu) to the row's licensee, repeater or listed site",
+  track: "5.75rem",
+  minPx: 4 * REM,
+  render: (r, { units }) => <span className="text-ink-2">{formatPlace(r, units)}</span>,
+};
 
 const timeCell: Column = {
   key: "time",
@@ -329,8 +368,30 @@ const sysCell: Column = {
   ),
 };
 
-const SIMPLE: Column[] = [timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, typeCell, idsCell, rssiCell, hitsCell];
-const DETAIL: Column[] = [timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, typeCell, idsCell, rssiCell, hitsCell];
+const SIMPLE: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
+const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
+
+/** The unfolded candidate list under a row: one line per lookup answer, ranked as the hero listed them at the time. */
+function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
+  return (
+    <ul className="border-b border-edge/60 bg-panel-2/40 py-1 pr-2 pl-9 font-mono text-[12px] leading-snug">
+      {r.candidates.map((c, i) => (
+        <li key={i} className="flex min-w-0 items-center gap-2 py-px">
+          <span className={`w-9 shrink-0 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[c.source]}`} title={SOURCE_NAME[c.source]}>
+            {c.source}
+          </span>
+          <span className={`shrink-0 truncate font-sans text-[12.5px] ${i === 0 ? "text-ink" : "text-ink-2"}`}>{c.name}</span>
+          {c.pills && <span className="shrink-0 text-[10px] text-ink-3">{c.pills}</span>}
+          <span className="min-w-0 flex-1 truncate text-ink-3" title={c.detail || undefined}>
+            {c.detail}
+            {c.match === true && !c.detail.includes("✓") ? " ✓" : ""}
+          </span>
+          <span className="shrink-0 text-ink-2">{formatPlace(c, units) || <span className="text-ink-3">not placed</span>}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 // ---- persistence (per machine; a convenience, never state that matters) ------------------
 
@@ -367,6 +428,16 @@ export default function LogTable() {
     (s) => (s.snapshot.link.status === "connected" || s.snapshot.link.status === "unresponsive") && !s.snapshot.link.stall,
   );
   const tuning = tuneState?.phase === "tuning";
+  const units = useIdentities((s) => s.settings.units ?? "km");
+  const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set());
+  const toggle = useCallback((id: number) => {
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   const [view, setView] = useState<View>(() => (loadJson<string>(VIEW_KEY, "simple") === "detail" ? "detail" : "simple"));
   // Column widths the user has dragged, px, keyed by column, kept per view. Untouched columns keep their default track.
@@ -413,7 +484,7 @@ export default function LogTable() {
   };
 
   const template = columns.map((c) => (widths[view][c.key] ? `${widths[view][c.key]}px` : c.track)).join(" ");
-  const minWidth = view === "detail" ? "66rem" : "53rem";
+  const minWidth = view === "detail" ? "73rem" : "60rem";
 
   // Tick once a second only while a reception is open, to grow its duration.
   useEffect(() => {
@@ -426,7 +497,7 @@ export default function LogTable() {
     () => rows.filter((r) => rowMatches(r, filter)),
     [rows, filter],
   );
-  const ctx: RenderCtx = { now, canTune, tuning, tune: (hz) => void tune(hz) };
+  const ctx: RenderCtx = { now, canTune, tuning, tune: (hz) => void tune(hz), units, expanded, toggle };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -523,17 +594,20 @@ export default function LogTable() {
           )}
           {visible.map((r) => {
             const open = r.endedAt === null;
+            const unfolded = expanded.has(r.id) && r.candidates.length > 0;
             return (
-              <div
-                key={r.id}
-                className={`grid items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
-                style={{ gridTemplateColumns: template }}
-              >
-                {columns.map((c) => (
-                  <span key={c.key} className={`min-w-0 truncate ${c.align === "right" ? "text-right" : ""}`}>
-                    {c.render(r, ctx)}
-                  </span>
-                ))}
+              <div key={r.id}>
+                <div
+                  className={`grid items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
+                  style={{ gridTemplateColumns: template }}
+                >
+                  {columns.map((c) => (
+                    <span key={c.key} className={`min-w-0 truncate ${c.align === "right" ? "text-right" : ""}`}>
+                      {c.render(r, ctx)}
+                    </span>
+                  ))}
+                </div>
+                {unfolded && <Candidates r={r} units={units} />}
               </div>
             );
           })}

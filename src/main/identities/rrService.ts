@@ -12,7 +12,7 @@
 import type { RrConventional, RrInfo, RrSettings, RrStatus, RrSystemInfo } from '../../shared/ipc';
 import type { LogDb } from '../log/db';
 import { RrClient, RrError, type FetchLike, type RrFreqHit, type RrSite, type RrSystemSummary } from './radioreference';
-import { distanceKm } from './wtr';
+import { distanceKm, placeFrom } from '../../shared/geo';
 
 /** Re-ask about a frequency after this long. */
 export const FREQ_TTL_MS = 30 * 24 * 3600 * 1000;
@@ -153,10 +153,10 @@ export class RrService {
     for (const h of cached.hits) {
       if (h.sid !== null) continue;
       const county = h.ctid !== null ? this.db.rrGetCounty(h.ctid) : null;
-      const d = here && county && county.lat !== null && county.lon !== null ? distanceKm(here.lat, here.lon, county.lat, county.lon) : null;
+      const place = placeFrom(here, county?.lat, county?.lon);
       // A county entry is local if its centre is within the radius plus the county's own coverage range.
-      if (far(d, county?.rangeKm ?? 0)) continue;
-      conventional.push({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags, county: county?.name ?? '', distanceKm: d });
+      if (far(place.distanceKm, county?.rangeKm ?? 0)) continue;
+      conventional.push({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags, county: county?.name ?? '', ...place });
     }
     conventional.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
 
@@ -168,16 +168,17 @@ export class RrService {
       const sys = this.db.rrGetSystem(h.sid);
       if (!sys) {
         // Details not fetched (yet): with a location set there is nothing to place it by, so it waits.
-        if (!here) systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, talkgroup: null });
+        if (!here) systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, bearingDeg: null, talkgroup: null });
         continue;
       }
       const site = pickSite(sys.sites, hz, ctx.nac ?? null, here);
       // Distance to the site when RadioReference places it, else to the system's own centre
       // (allowing its coverage range); many UK sites carry no coordinates but the system does.
-      const siteD = here && site && site.lat !== null && site.lon !== null ? distanceKm(here.lat, here.lon, site.lat, site.lon) : null;
-      const sysD = here && sys.system.lat !== null && sys.system.lon !== null ? distanceKm(here.lat, here.lon, sys.system.lat, sys.system.lon) : null;
-      const d = siteD ?? sysD;
-      if (siteD !== null ? far(siteD) : far(sysD, sys.system.rangeKm ?? 0)) continue;
+      const sitePlace = placeFrom(here, site?.lat, site?.lon);
+      const sysPlace = placeFrom(here, sys.system.lat, sys.system.lon);
+      const place = sitePlace.distanceKm !== null ? sitePlace : sysPlace;
+      const d = place.distanceKm;
+      if (sitePlace.distanceKm !== null ? far(sitePlace.distanceKm) : far(sysPlace.distanceKm, sys.system.rangeKm ?? 0)) continue;
       // A region-wide search returns every system in England on the frequency, so with a location
       // set a system nobody can place is more likely far away than near: it is dropped unless the
       // site's NAC matches the one heard, which places it well enough on its own.
@@ -189,7 +190,7 @@ export class RrService {
         name: sys.system.name,
         city: sys.system.city,
         site: site ? { descr: site.descr, location: site.location, nac: site.nac } : null,
-        distanceKm: d,
+        ...place,
         talkgroup: tg ? { tgDec: tg.tgDec, alpha: tg.alpha, descr: tg.descr, mode: tg.mode, enc: tg.enc, category: tg.category } : null,
       });
     }

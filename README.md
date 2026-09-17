@@ -58,6 +58,13 @@ named from an earlier reception on the same frequency. The log's **Detail** view
 scanner and the register disagree is easy to spot and reprogram. Drag a column divider in the
 log header to resize it; double-click the divider to reset.
 
+With a location set, every match carries its distance and bearing from you ("3.2 km 047°"), in km or
+miles (the toggle beside the radius in Data). The hero's Listed block and the log's **Dist** column
+show it, and each log row keeps every candidate the lookups offered for its frequency at the time:
+click **+** at the left of a row to unfold them, ranked as the Listed block had them (placed entries
+first, then your lookup order). The CSV export carries `distance_km`, `bearing_deg` and the whole
+`candidates` list, so the right match can be picked by hand when several users share a channel.
+
 ## Windows installer
 
 ```

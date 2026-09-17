@@ -5,8 +5,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
+import { placeFrom } from '../../shared/geo';
+import { normaliseCandidates } from '../../shared/listed';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
-import { distanceKm } from '../identities/wtr';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
 
@@ -138,19 +139,24 @@ export class LogDb {
     for (const c of ['scanner_name', 'wtr', 'rr_name', 'rr_system', 'rpt']) {
       if (!cols.includes(c)) this.db.exec(`ALTER TABLE receptions ADD COLUMN ${c} TEXT NOT NULL DEFAULT ''`);
     }
+    if (!cols.includes('distance_km')) this.db.exec('ALTER TABLE receptions ADD COLUMN distance_km REAL');
+    if (!cols.includes('bearing_deg')) this.db.exec('ALTER TABLE receptions ADD COLUMN bearing_deg INTEGER');
+    if (!cols.includes('candidates')) this.db.exec("ALTER TABLE receptions ADD COLUMN candidates TEXT NOT NULL DEFAULT '[]'");
   }
 
   insert(r: NewReception): ReceptionRow {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt,
+           distance_km, bearing_deg, candidates, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
         r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
-        r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rssiPeak, r.calls ?? 1,
+        r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '',
+        r.distanceKm ?? null, r.bearingDeg ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -162,13 +168,14 @@ export class LogDb {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
       tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source',
-      scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt', rssiPeak: 'rssi_peak', calls: 'calls',
+      scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt',
+      distanceKm: 'distance_km', bearingDeg: 'bearing_deg', candidates: 'candidates', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
       if (!col || v === undefined) continue;
       cols.push(`${col} = ?`);
-      vals.push(v as number | string | null);
+      vals.push(k === 'candidates' ? JSON.stringify(v ?? []) : (v as number | string | null));
     }
     if (cols.length) {
       this.db.prepare(`UPDATE receptions SET ${cols.join(', ')} WHERE id = ?`).run(...vals, id);
@@ -290,10 +297,8 @@ export class LogDb {
     const out: RepeaterMatch[] = [];
     for (const r of rows) {
       const rep = toRepeater(r);
-      const distance =
-        opts.lat != null && opts.lon != null && rep.lat !== null && rep.lon !== null ? distanceKm(opts.lat, opts.lon, rep.lat, rep.lon) : null;
       const side: RepeaterMatch['side'] = Math.abs(rep.outputHz - hz) <= WTR_TOLERANCE_HZ ? 'output' : 'input';
-      out.push({ ...rep, distanceKm: distance, side });
+      out.push({ ...rep, ...placeFrom(here(opts), rep.lat, rep.lon), side });
     }
     out.sort((a, b) => (a.side === b.side ? 0 : a.side === 'output' ? -1 : 1) || (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9) || a.callsign.localeCompare(b.callsign));
     return out.slice(0, opts.limit ?? 5);
@@ -336,10 +341,9 @@ export class LogDb {
     const out: WtrMatch[] = [];
     for (const r of rows) {
       const lic = toWtr(r);
-      const distance =
-        opts.lat != null && opts.lon != null && lic.lat !== null && lic.lon !== null ? distanceKm(opts.lat, opts.lon, lic.lat, lic.lon) : null;
-      if (opts.radiusKm != null && distance !== null && distance > opts.radiusKm) continue;
-      out.push({ ...lic, distanceKm: distance });
+      const place = placeFrom(here(opts), lic.lat, lic.lon);
+      if (opts.radiusKm != null && place.distanceKm !== null && place.distanceKm > opts.radiusKm) continue;
+      out.push({ ...lic, ...place });
     }
     out.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9) || a.licensee.localeCompare(b.licensee));
     return out.slice(0, opts.limit ?? 5);
@@ -442,6 +446,11 @@ export class LogDb {
   }
 }
 
+/** The user's location from lookup options, or null when either coordinate is missing. */
+function here(opts: { lat?: number | null; lon?: number | null }): { lat: number; lon: number } | null {
+  return opts.lat != null && opts.lon != null ? { lat: opts.lat, lon: opts.lon } : null;
+}
+
 interface RawWtr {
   id: number;
   frequency_hz: number;
@@ -529,11 +538,23 @@ interface Raw {
   rr_name: string;
   rr_system: string;
   rpt: string;
+  distance_km: number | null;
+  bearing_deg: number | null;
+  candidates: string;
   rssi_peak: number;
   calls: number;
   hits: number;
   radio_callsign: string | null;
   radio_name: string | null;
+}
+
+function parseCandidates(json: string | null | undefined): ReceptionRow['candidates'] {
+  if (!json) return [];
+  try {
+    return normaliseCandidates(JSON.parse(json));
+  } catch {
+    return [];
+  }
 }
 
 function toRow(r: Raw): ReceptionRow {
@@ -560,6 +581,9 @@ function toRow(r: Raw): ReceptionRow {
     rrName: r.rr_name ?? '',
     rrSystem: r.rr_system ?? '',
     rpt: r.rpt ?? '',
+    distanceKm: r.distance_km === null || r.distance_km === undefined ? null : Number(r.distance_km),
+    bearingDeg: r.bearing_deg === null || r.bearing_deg === undefined ? null : Number(r.bearing_deg),
+    candidates: parseCandidates(r.candidates),
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),

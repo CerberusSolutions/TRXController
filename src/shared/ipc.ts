@@ -2,6 +2,8 @@
  * Types shared between main, preload and renderer. Pure types plus channel
  * names; no runtime dependencies on Node or Electron.
  */
+import type { Units } from './geo';
+import type { Candidate } from './listed';
 import type { LookupPref, LookupSource } from './sources';
 import type { ActiveChannel, Lcd, Status, Version } from '@trxcontroller/rcip';
 
@@ -97,6 +99,14 @@ export interface ReceptionRow {
   rrSystem: string;
   /** and the repeater from the RSGB list. */
   rpt: string;
+  /**
+   * Where the row's identity lies relative to the user (the licensee's licence, the repeater, or
+   * RadioReference's site / county when RadioReference named it), km and degrees; null when unplaced.
+   */
+  distanceKm: number | null;
+  bearingDeg: number | null;
+  /** Everything the lookups offered for the frequency at the time, ranked as the hero listed them. */
+  candidates: Candidate[];
   rssiPeak: number;
   /** Squelch openings merged into this row (a conversation with gaps). */
   calls: number;
@@ -161,6 +171,8 @@ export interface Repeater {
 /** A repeater matched to a heard frequency. */
 export interface RepeaterMatch extends Repeater {
   distanceKm: number | null;
+  /** Bearing from the user's location, degrees from true north; null when unplaced. */
+  bearingDeg: number | null;
   /** Which of the repeater's frequencies the scanner is on. */
   side: 'output' | 'input';
 }
@@ -187,6 +199,8 @@ export interface WtrLicence {
 /** A licence matched to a heard frequency, with distance from the user's location if known. */
 export interface WtrMatch extends WtrLicence {
   distanceKm: number | null;
+  /** Bearing from the user's location, degrees from true north; null when unplaced. */
+  bearingDeg: number | null;
 }
 
 /** A conventional channel RadioReference lists on a frequency. */
@@ -202,8 +216,9 @@ export interface RrConventional {
   tags: string[];
   /** County the entry is listed under, once its details are cached. */
   county: string;
-  /** Distance from the user's location to that county's centre, when both are known. */
+  /** Distance and bearing from the user's location to that county's centre, when both are known. */
   distanceKm: number | null;
+  bearingDeg: number | null;
 }
 
 /** A trunked system RadioReference lists as using the frequency, with the site and talkgroup resolved for the current reception. */
@@ -213,8 +228,9 @@ export interface RrSystemInfo {
   city: string;
   /** Site whose frequency list contains the heard frequency (and whose NAC matches when one was detected). */
   site: { descr: string; location: string; nac: string } | null;
-  /** Distance from the user's location to that site, when both are known. */
+  /** Distance and bearing from the user's location to that site, when both are known. */
   distanceKm: number | null;
+  bearingDeg: number | null;
   /** The talkgroup the scanner reported, if the system's list has it. */
   talkgroup: { tgDec: number; alpha: string; descr: string; mode: string; enc: number; category: string } | null;
 }
@@ -277,6 +293,8 @@ export interface Settings {
   lon: number | null;
   /** Only licences within this distance are matched; null = no limit. */
   radiusKm: number | null;
+  /** How distances are shown (always stored in km). */
+  units: Units;
   /** Serial port of the last successful connection, reopened at launch. */
   port: string | null;
   /** False after the user disconnects, so the app stops reconnecting on its own. */

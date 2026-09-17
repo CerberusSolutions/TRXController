@@ -74,7 +74,7 @@ describe('RrService', () => {
 
     const info = svc.info(417_725_000, { tgid: 63305, nac: '167' });
     expect(info?.pending).toBe(false);
-    expect(info?.conventional).toEqual([{ descr: 'Conv user', alpha: 'CONV', tone: '167 NAC', mode: 'P25', callsign: '', tags: [], county: 'Buckinghamshire', distanceKm: null }]);
+    expect(info?.conventional).toEqual([{ descr: 'Conv user', alpha: 'CONV', tone: '167 NAC', mode: 'P25', callsign: '', tags: [], county: 'Buckinghamshire', distanceKm: null, bearingDeg: null }]);
     expect(info?.systems).toEqual([
       {
         sid: 9876,
@@ -82,6 +82,7 @@ describe('RrService', () => {
         city: '',
         site: { descr: 'Croughton', location: 'RAF Croughton', nac: '167' },
         distanceKm: null,
+        bearingDeg: null,
         talkgroup: { tgDec: 63305, alpha: 'SEC 1', descr: 'Security Dispatch', mode: 'DE', enc: 1, category: 'Security' },
       },
     ]);

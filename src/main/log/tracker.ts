@@ -18,6 +18,7 @@
 import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
+import { candidatesFor, storedCandidates } from '../../shared/listed';
 import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
 import { lookupRank, type LookupId, type LookupSource } from '../../shared/sources';
 
@@ -41,11 +42,27 @@ export interface TrackerOptions {
 
 export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequencyHz' | 'calls'>;
 
-/** Fields merged value by value; `source` travels with the name, system and licensee instead (see `sourceAfter`). */
-const FIELDS: Exclude<keyof Description, 'source'>[] = [
+/**
+ * Fields merged value by value; `source` travels with the name, system and licensee instead (see
+ * `sourceAfter`), and the placement (`distanceKm`, `bearingDeg`) with the licensee and name too,
+ * so a row is never placed by one identity and named by another.
+ */
+const FIELDS: Exclude<keyof Description, 'source' | 'distanceKm' | 'bearingDeg' | 'candidates'>[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee',
   'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rssiPeak',
 ];
+
+/** The placement travels with the identity exactly as `sourceAfter` moves the source; an unplaced row takes any placement offered. */
+function placementAfter(base: Description, fresh: Description): { distanceKm: number | null; bearingDeg: number | null } {
+  const takeFresh = fresh.name !== '' || fresh.system !== '' || (fresh.licensee !== '' && base.name === '' && base.system === '') || base.distanceKm === null;
+  return takeFresh && fresh.distanceKm !== null ? { distanceKm: fresh.distanceKm, bearingDeg: fresh.bearingDeg } : { distanceKm: base.distanceKm, bearingDeg: base.bearingDeg };
+}
+
+/** The candidate list grows as lookups answer (RadioReference lands a while after the squelch opens); a shorter fresh list never replaces a longer one. */
+function candidatesAfter(base: Description, fresh: Description): Description['candidates'] {
+  if (fresh.candidates.length === 0 || fresh.candidates.length < base.candidates.length) return base.candidates;
+  return JSON.stringify(fresh.candidates) === JSON.stringify(base.candidates) ? base.candidates : fresh.candidates;
+}
 
 /**
  * The source after `fresh` has been merged into `base` (blanks in `fresh` never replace
@@ -145,6 +162,17 @@ export class ReceptionTracker {
       cur.source = source;
       changed = true;
     }
+    const place = placementAfter(cur, fresh);
+    if (place.distanceKm !== cur.distanceKm || place.bearingDeg !== cur.bearingDeg) {
+      cur.distanceKm = place.distanceKm;
+      cur.bearingDeg = place.bearingDeg;
+      changed = true;
+    }
+    const candidates = candidatesAfter(cur, fresh);
+    if (candidates !== cur.candidates) {
+      cur.candidates = candidates;
+      changed = true;
+    }
     return changed;
   }
 
@@ -167,6 +195,8 @@ export class ReceptionTracker {
         calls: prev.calls + 1,
         rssiPeak: Math.max(prev.rssiPeak, cur.rssiPeak),
         source: sourceAfter(prev, cur),
+        ...placementAfter(prev, cur),
+        candidates: candidatesAfter(prev, cur),
       };
       // Blanks in the new opening must not erase what the earlier one knew.
       for (const f of FIELDS) {
@@ -212,6 +242,7 @@ export function describe(s: ScannerSnapshot): Description {
   const rrOn = rank('RRDB') !== Infinity;
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
   const rrSys = rrOn ? s.rr?.systems[0] : undefined;
+  const rrConv = rrOn ? s.rr?.conventional[0] : undefined;
   // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
   const rrTalkgroup = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || '';
   const rrChannel = rrOn ? s.rr?.conventional[0]?.descr || s.rr?.conventional[0]?.alpha || '' : '';
@@ -226,7 +257,7 @@ export function describe(s: ScannerSnapshot): Description {
   // Whether the chosen licensee, and RadioReference's channel, could be placed relative to the user:
   // an entry nobody can place never outranks one that is, whatever the order.
   const licPlaced = licSrc === 'WTR' ? s.licences![0]!.distanceKm !== null : licSrc === 'UKR' ? bestRpt!.distanceKm !== null : false;
-  const rrPlaced = (s.rr?.conventional[0]?.distanceKm ?? null) !== null;
+  const rrPlaced = (rrConv?.distanceKm ?? null) !== null;
   const licenseeWins = licensee !== '' && (rank(licSrc as LookupId) < rank('RRDB') || (licPlaced && !rrPlaced));
   // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
   // talkgroups), else RadioReference's channel description unless the licensee will show in its place.
@@ -241,6 +272,14 @@ export function describe(s: ScannerSnapshot): Description {
       : name === '' && system === '' && licensee !== ''
         ? licSrc
         : '';
+  // Where the row's identity lies: the licensee's licence or repeater, or RadioReference's site /
+  // county when RadioReference supplied the name; whichever placed the row when the other is unknown.
+  const licPlace = licSrc === 'WTR' ? s.licences![0]! : licSrc === 'UKR' ? bestRpt! : null;
+  const rrPlace = rrTalkgroup || (system !== '' && !h?.systemTag) ? rrSys : rrName !== '' ? rrConv : (rrSys ?? rrConv);
+  const first = source === 'RRDB' ? rrPlace : licPlace;
+  const second = source === 'RRDB' ? licPlace : rrPlace;
+  const placed = first?.distanceKm != null ? first : second?.distanceKm != null ? second : (first ?? second);
+  const candidates = storedCandidates(candidatesFor({ rr: s.rr, licences: s.licences, repeaters: s.repeaters, detectedTone: details?.detectedTone }, s.lookups));
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
@@ -261,6 +300,9 @@ export function describe(s: ScannerSnapshot): Description {
     rrName: rrTalkgroup || rrChannel,
     rrSystem: rrSys?.name ?? '',
     rpt,
+    distanceKm: placed?.distanceKm ?? null,
+    bearingDeg: placed?.bearingDeg ?? null,
+    candidates,
     rssiPeak: status.rssi,
   };
 }
