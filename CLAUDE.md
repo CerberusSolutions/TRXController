@@ -171,14 +171,23 @@ captured on 14 Sep 2026.
   menu; password encrypted with `safeStorage`, blanked in `settingsGet`) and a region
   (`stid`), plus the app key `__RR_APP_KEY__` injected at build time from `RR_KEY`
   (`electron.vite.config.ts`; `secrets.RR_KEY` in release.yml). Never commit or print the key.
-  Snapshots carry `rr: RrInfo` (conventional entries; systems with the site matched by
-  frequency then NAC, and the talkgroup for the current TGID); the hero shows a
-  "RadioRef" block; `describe()` fills a blank log name / system from it. Details in
-  `docs/radioreference-api.md`.
+  A region-wide search returns every system and channel in England on a frequency, so
+  results are filtered to the user's WTR location / radius: systems by the matched site's
+  lat/lon (`pickSite`: NAC, else nearest), conventional entries by their county's centre plus
+  its range (`getCountyInfo` once per county, cached in `rr_counties`). No location: keep
+  all. Descriptions are the names; alpha tags are short codes shown secondary. Snapshots
+  carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
+  block with a source pill per row; `describe()` fills a blank log name / system from the
+  nearest system / channel. Details in `docs/radioreference-api.md`.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
-  that shares the panel under the hero with the raw scanner display.
+  that shares the panel under the hero with the raw scanner display. The CSV button saves
+  the rows as shown (after the filter) through a save dialog (`log:export-csv`,
+  `src/renderer/src/lib/csv.ts`, UTF-8 with BOM for Excel).
+- "Scan" (Main Menu > Scan) counts as done as soon as the scanner goes silent after the
+  key (it is loading scanlists), via `MacroHost.stalled`; tune / scan failure messages clear
+  themselves after 8 s.
 
 ## Band tab (channel occupancy)
 

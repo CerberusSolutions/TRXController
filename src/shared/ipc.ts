@@ -177,13 +177,19 @@ export interface WtrMatch extends WtrLicence {
 
 /** A conventional channel RadioReference lists on a frequency. */
 export interface RrConventional {
+  /** RadioReference's description, the readable name ("National Ice Centre - Security"). */
   descr: string;
+  /** The short alpha tag ("NtmIceCH2"); secondary, never used as a name on its own when a description exists. */
   alpha: string;
   /** Tone / code as RadioReference writes it, e.g. "94.8 PL", "023 DPL", "167 NAC", "CC 1". */
   tone: string;
   mode: string;
   callsign: string;
   tags: string[];
+  /** County the entry is listed under, once its details are cached. */
+  county: string;
+  /** Distance from the user's location to that county's centre, when both are known. */
+  distanceKm: number | null;
 }
 
 /** A trunked system RadioReference lists as using the frequency, with the site and talkgroup resolved for the current reception. */
@@ -193,6 +199,8 @@ export interface RrSystemInfo {
   city: string;
   /** Site whose frequency list contains the heard frequency (and whose NAC matches when one was detected). */
   site: { descr: string; location: string; nac: string } | null;
+  /** Distance from the user's location to that site, when both are known. */
+  distanceKm: number | null;
   /** The talkgroup the scanner reported, if the system's list has it. */
   talkgroup: { tgDec: number; alpha: string; descr: string; mode: string; enc: number; category: string } | null;
 }
@@ -308,6 +316,7 @@ export const IPC = {
   logRecent: 'log:recent',
   logClear: 'log:clear',
   logUpsert: 'log:upsert',
+  logExportCsv: 'log:export-csv',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',

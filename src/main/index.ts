@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isKeyCode } from '@trxcontroller/rcip';
 import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
@@ -187,6 +188,18 @@ function registerIpc(): void {
   ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
+  ipcMain.handle(IPC.logExportCsv, async (_e, csv: unknown, suggestedName: unknown): Promise<string | null> => {
+    if (typeof csv !== 'string') throw new Error('Bad CSV');
+    const res = await dialog.showSaveDialog({
+      title: 'Export log as CSV',
+      defaultPath: join(app.getPath('documents'), typeof suggestedName === 'string' && suggestedName ? suggestedName : 'trx-log.csv'),
+      filters: [{ name: 'CSV', extensions: ['csv'] }],
+    });
+    if (res.canceled || !res.filePath) return null;
+    // A BOM so Excel opens it as UTF-8 (callsigns and names are plain ASCII, but places are not always).
+    await writeFile(res.filePath, '\uFEFF' + csv, 'utf8');
+    return res.filePath;
+  });
   ipcMain.handle(IPC.logClear, () => {
     logger?.flush();
     db?.clear();
@@ -337,6 +350,10 @@ function openLog(): void {
     appKey: __RR_APP_KEY__,
     getSettings: () => settings!.get().rr,
     decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+    getLocation: () => {
+      const s = settings!.get();
+      return { lat: s.lat, lon: s.lon, radiusKm: s.radiusKm };
+    },
     fetchImpl: net.fetch as unknown as FetchLike,
     // A lookup landed: show it on the current frequency and let the log absorb the names.
     onChange: () => broadcast(IPC.snapshot, enrich(session.getSnapshot())),

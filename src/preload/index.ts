@@ -48,6 +48,8 @@ const api = {
   },
   logRecent: (limit?: number): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit),
   logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
+  /** Save CSV text through a file dialog; resolves to the path, or null if cancelled. */
+  logExportCsv: (csv: string, suggestedName: string): Promise<string | null> => ipcRenderer.invoke(IPC.logExportCsv, csv, suggestedName),
   onLogUpsert: (cb: (row: ReceptionRow) => void): (() => void) => {
     const listener = (_e: unknown, row: ReceptionRow): void => cb(row);
     ipcRenderer.on(IPC.logUpsert, listener);

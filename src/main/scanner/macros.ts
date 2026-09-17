@@ -18,6 +18,8 @@ export interface MacroHost {
   lcd(): Lcd | null;
   /** Poll the display again. */
   refresh(): Promise<void>;
+  /** True while the scanner has stopped answering (it is loading scanlists after a mode change). */
+  stalled?(): boolean;
 }
 
 export class MacroError extends Error {
@@ -175,5 +177,8 @@ export async function tuneTo(host: MacroHost, hz: number): Promise<void> {
 export async function resumeScan(host: MacroHost): Promise<void> {
   await gotoMainMenu(host);
   await selectMenuItem(host, 'Scan');
-  await waitFor(host, 'scanning to start', (l) => !isMenuScreen(l));
+  // Selecting Scan makes the scanner load its scanlists, during which it answers
+  // nothing for up to a minute or more: the display we hold is still the menu, but
+  // the silence itself says the key was taken. Either counts as started.
+  await waitFor(host, 'scanning to start', (l) => !isMenuScreen(l) || host.stalled?.() === true);
 }

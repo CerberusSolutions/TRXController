@@ -144,6 +144,7 @@ export class ScannerSession {
         press: (code) => this.pressKey(code),
         lcd: () => this.snapshot.lcd,
         refresh: () => this.pollOnce(true),
+        stalled: () => (this.link?.stats.consecutiveTimeouts ?? 0) >= 1,
       });
     } finally {
       this.macroRunning = false;

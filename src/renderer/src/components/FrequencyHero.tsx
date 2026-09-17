@@ -3,6 +3,7 @@ import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { ctcssHz, rankRepeaters, toneMatches } from '../../../shared/repeaters';
 import { conventionalLabel, rrToneMatches } from '../../../shared/rr';
 import { useScanner } from '../store/scanner';
+import type { RepeaterMatch, RrInfo, WtrMatch } from '../../../shared/ipc';
 import SignalMeter from './SignalMeter';
 
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
@@ -28,6 +29,70 @@ function ModePills({ modes }: { modes: string }) {
       ))}
     </span>
   );
+}
+
+type Source = 'RR' | 'WTR' | 'RPT';
+const SOURCE_PILL: Readonly<Record<Source, string>> = { RR: 'bg-cyan/15 text-cyan', WTR: 'bg-amber/15 text-amber', RPT: 'bg-green/15 text-green' };
+const SOURCE_NAME: Readonly<Record<Source, string>> = { RR: 'RadioReference', WTR: 'Ofcom Wireless Telegraphy Register', RPT: 'RSGB ETCC repeater list' };
+
+interface ListedRow {
+  key: string;
+  source: Source;
+  name: string;
+  detail: string;
+  title: string;
+  pills?: string;
+}
+
+const km = (d: number | null): string => (d === null ? '' : d < 10 ? `${d.toFixed(1)} km` : `${Math.round(d)} km`);
+
+function listedRows(rr: RrInfo | null, licences: WtrMatch[], repeaters: RepeaterMatch[], detected: string | null, detectedHz: number | null): ListedRow[] {
+  const out: ListedRow[] = [];
+  for (const sys of rr?.systems ?? []) {
+    const tg = sys.talkgroup;
+    out.push({
+      key: `rr-s${sys.sid}`,
+      source: 'RR',
+      name: sys.name,
+      detail: [sys.site?.descr, tg ? `${tg.descr || tg.alpha}${tg.category ? ` (${tg.category})` : ''}${tg.enc ? ' · enc' : ''}` : '', km(sys.distanceKm)].filter(Boolean).join(' · '),
+      title: `RadioReference system ${sys.sid}${sys.city ? ` · ${sys.city}` : ''}${sys.site ? ` · site ${sys.site.descr} (${sys.site.location}) NAC ${sys.site.nac}` : ''}${tg ? ` · TG ${tg.tgDec} ${tg.alpha}` : ''}`,
+    });
+  }
+  (rr?.conventional ?? []).forEach((c, i) => {
+    const match = rrToneMatches(c.tone, detected);
+    out.push({
+      key: `rr-c${i}`,
+      source: 'RR',
+      name: c.descr || c.alpha,
+      detail: [c.county, km(c.distanceKm), c.tone ? `${c.tone}${match === true ? ' ✓' : ''}` : '', c.mode, c.tags[0]].filter(Boolean).join(' · '),
+      title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
+    });
+  });
+  for (const l of licences) {
+    out.push({
+      key: `wtr-${l.id}`,
+      source: 'WTR',
+      name: l.licensee,
+      detail: [km(l.distanceKm), l.mode, l.direction === 'R' ? 'mob' : l.direction === 'T' ? 'base' : ''].filter(Boolean).join(' · '),
+      title: `${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`,
+    });
+  }
+  for (const r of repeaters) {
+    const match = toneMatches(r, detectedHz);
+    out.push({
+      key: `rpt-${r.id}`,
+      source: 'RPT',
+      name: r.callsign,
+      pills: r.modes,
+      detail: [r.where ? r.where.charAt(0) + r.where.slice(1).toLowerCase() : '', km(r.distanceKm), r.ctcss !== null ? `${r.ctcss.toFixed(1)} Hz${match ? ' ✓' : ''}` : '', r.side === 'input' ? 'input' : '']
+        .filter(Boolean)
+        .join(' · '),
+      title: `${r.channel || r.band}${r.inputHz ? ` · input ${(r.inputHz / 1e6).toFixed(4)}` : ''} · ${r.locator || 'no locator'}${r.side === 'input' ? ' · you are hearing its input (a mobile)' : ''}${
+        match ? ' · CTCSS matches the detected tone' : detectedHz !== null && r.ctcss !== null ? ' · CTCSS differs from the detected tone' : ''
+      }`,
+    });
+  }
+  return out;
 }
 
 /**
@@ -80,12 +145,11 @@ export default function FrequencyHero() {
   // name on screen on the polls where the display shows the TGID line instead.
   const radioUser = snapshotUser && snapshotUser.id === radioId ? snapshotUser : held?.radioUser && held.radioUser.id === radioId ? held.radioUser : null;
   const location = radioUser ? [radioUser.city, radioUser.state, radioUser.country].filter(Boolean).join(', ') : '';
-  // Amateur bands are not in the WTR, so the repeater list stands in: the one whose CTCSS
-  // matches the detected tone first (several share a channel), then nearest.
+  // Everything that lists this frequency, in one block: RadioReference first (the most specific),
+  // then Ofcom licences, then amateur repeaters (the one whose CTCSS matches the detected tone
+  // first, since several share a channel). Each source is filtered to the user's area upstream.
   const detectedHz = ctcssHz(detected);
-  const rankedRepeaters = licences.length === 0 && repeaters.length > 0 ? rankRepeaters(repeaters, detected) : [];
-  // RadioReference knows this frequency: its names come first, since they are the most specific.
-  const rrRows = rr ? [...rr.systems.map((sys) => ({ kind: 'system' as const, sys })), ...rr.conventional.map((c) => ({ kind: 'conv' as const, c }))] : [];
+  const listed = listedRows(rr, licences, rankRepeaters(repeaters, detected), detected, detectedHz);
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -166,84 +230,27 @@ export default function FrequencyHero() {
       </div>
 
       <div className="mt-3 h-[3.9rem] overflow-hidden border-t border-edge pt-2">
-        {rrRows.length > 0 ? (
+        {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="From the RadioReference database">
-              RadioRef
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="RadioReference, the Ofcom WTR and the ETCC repeater list, nearest first">
+              Listed
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
-              {rrRows.slice(0, 3).map((row, i) =>
-                row.kind === 'system' ? (
-                  <li key={`s${row.sys.sid}`} className="flex min-w-0 gap-2" title={`RadioReference system ${row.sys.sid}${row.sys.city ? ` · ${row.sys.city}` : ''}${row.sys.site ? ` · site ${row.sys.site.descr} (${row.sys.site.location}) NAC ${row.sys.site.nac}` : ''}${row.sys.talkgroup ? ` · TG ${row.sys.talkgroup.tgDec} ${row.sys.talkgroup.descr}${row.sys.talkgroup.category ? ` [${row.sys.talkgroup.category}]` : ''}` : ''}`}>
-                    <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.sys.name}</span>
-                    <span className="min-w-0 truncate text-ink-3">
-                      {row.sys.site ? row.sys.site.descr : ''}
-                      {row.sys.talkgroup ? ` · ${row.sys.talkgroup.alpha || row.sys.talkgroup.descr}` : ''}
-                      {row.sys.talkgroup?.category ? ` (${row.sys.talkgroup.category})` : ''}
-                      {row.sys.talkgroup?.enc ? ' · enc' : ''}
-                    </span>
-                  </li>
-                ) : (
-                  <li key={`c${i}`} className="flex min-w-0 gap-2" title={`${conventionalLabel(row.c)}${row.c.callsign ? ` · ${row.c.callsign}` : ''}${row.c.tags.length ? ` · ${row.c.tags.join(', ')}` : ''}`}>
-                    <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.c.alpha || row.c.descr}</span>
-                    <span className="min-w-0 truncate text-ink-3">
-                      {row.c.alpha && row.c.descr && row.c.alpha !== row.c.descr ? row.c.descr : ''}
-                      {row.c.tone ? ` · ${row.c.tone}${rrToneMatches(row.c.tone, detected) === true ? ' ✓' : ''}` : ''}
-                      {row.c.mode ? ` · ${row.c.mode}` : ''}
-                      {row.c.tags.length ? ` · ${row.c.tags[0]}` : ''}
-                    </span>
-                  </li>
-                ),
-              )}
-            </ul>
-          </div>
-        ) : licences.length > 0 ? (
-          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Licensed</span>
-            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
-              {licences.slice(0, 3).map((l, i) => (
-                <li key={l.id} className="flex min-w-0 gap-2" title={`${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`}>
-                  <span className={`truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{l.licensee}</span>
-                  <span className="shrink-0 text-ink-3">
-                    {l.distanceKm !== null ? `${l.distanceKm < 10 ? l.distanceKm.toFixed(1) : Math.round(l.distanceKm)} km` : '—'}
-                    {l.mode ? ` · ${l.mode}` : ''}
-                    {l.direction === 'R' ? ' · mob' : l.direction === 'T' ? ' · base' : ''}
+              {listed.slice(0, 3).map((row, i) => (
+                <li key={row.key} className="flex min-w-0 items-center gap-2" title={row.title}>
+                  <span className={`shrink-0 rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[row.source]}`} title={SOURCE_NAME[row.source]}>
+                    {row.source}
                   </span>
+                  <span className={`shrink-0 truncate text-ink${i === 0 ? ' font-bold' : ''}`}>{row.name}</span>
+                  {row.pills && <ModePills modes={row.pills} />}
+                  <span className="min-w-0 truncate text-ink-3">{row.detail}</span>
                 </li>
               ))}
             </ul>
           </div>
-        ) : rankedRepeaters.length > 0 ? (
-          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">Repeater</span>
-            <ul className="min-w-0 space-y-0.5 font-mono text-[11.5px] leading-tight">
-              {rankedRepeaters.slice(0, 3).map((r, i) => {
-                const match = toneMatches(r, detectedHz);
-                return (
-                  <li
-                    key={r.id}
-                    className="flex min-w-0 items-center gap-2"
-                    title={`${r.channel || r.band}${r.inputHz ? ` · input ${(r.inputHz / 1e6).toFixed(4)}` : ''} · ${r.locator || 'no locator'}${
-                      r.side === 'input' ? ' · you are hearing its input (a mobile)' : ''
-                    }${match ? ' · CTCSS matches the detected tone' : detectedHz !== null && r.ctcss !== null ? ' · CTCSS differs from the detected tone' : ''}`}
-                  >
-                    <span className={`shrink-0 ${i === 0 ? 'font-bold text-ink' : 'text-ink'}`}>{r.callsign}</span>
-                    <ModePills modes={r.modes} />
-                    <span className="min-w-0 truncate text-ink-3">
-                      {r.where ? `${r.where.charAt(0) + r.where.slice(1).toLowerCase()}` : ''}
-                      {r.distanceKm !== null ? ` · ${r.distanceKm < 10 ? r.distanceKm.toFixed(1) : Math.round(r.distanceKm)} km` : ''}
-                      {r.ctcss !== null ? ` · ${r.ctcss.toFixed(1)} Hz` : ''}
-                      {match ? ' ✓' : ''}
-                      {r.side === 'input' ? ' · input' : ''}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
         ) : (
           <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
-            {!online ? '' : rr?.pending ? 'Asking RadioReference…' : rr?.error ? `RadioReference: ${rr.error}` : 'No Ofcom licence or repeater on this frequency'}
+            {!online ? '' : rr?.pending ? 'Asking RadioReference…' : rr?.error ? `RadioReference: ${rr.error}` : 'Not listed by RadioReference, Ofcom or the repeater list'}
           </p>
         )}
       </div>

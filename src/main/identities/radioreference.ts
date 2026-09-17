@@ -261,6 +261,15 @@ export interface RrSite {
   lon: number | null;
   freqs: { freqMHz: number; use: string; colorCode: string; lcn: number | null }[];
 }
+/** A county (RadioReference's term for the tier under a region), with its centre and coverage range. */
+export interface RrCounty {
+  ctid: number;
+  name: string;
+  lat: number | null;
+  lon: number | null;
+  /** RadioReference gives `range` in miles; stored in km. */
+  rangeKm: number | null;
+}
 export interface RrTalkgroup {
   tgDec: number;
   alpha: string;
@@ -396,6 +405,12 @@ export class RrClient {
     return arr(await this.call('searchStateFreq', { stid, freq: freqMHz, tone: '' }))
       .map(readFreqHit)
       .filter((h): h is RrFreqHit => h !== null);
+  }
+
+  async getCountyInfo(ctid: number): Promise<RrCounty> {
+    const o = obj(await this.call('getCountyInfo', { ctid }));
+    const range = dec(o['range']);
+    return { ctid, name: str(o['countyName']), lat: dec(o['lat']), lon: dec(o['lon']), rangeKm: range === null ? null : range * 1.609344 };
   }
 
   async getTrsDetails(sid: number): Promise<RrSystemSummary> {

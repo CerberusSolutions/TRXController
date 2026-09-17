@@ -4,7 +4,7 @@
  */
 import { DatabaseSync } from 'node:sqlite';
 import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, WtrLicence, WtrMatch } from '../../shared/ipc';
-import type { RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
+import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 import { distanceKm } from '../identities/wtr';
 
 export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
@@ -100,6 +100,14 @@ export class LogDb {
         fetched_at INTEGER NOT NULL,
         system     TEXT NOT NULL,
         sites      TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS rr_counties (
+        ctid       INTEGER PRIMARY KEY,
+        fetched_at INTEGER NOT NULL,
+        name       TEXT NOT NULL DEFAULT '',
+        lat        REAL,
+        lon        REAL,
+        range_km   REAL
       );
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
@@ -386,13 +394,25 @@ export class LogDb {
     return { tgDec: Number(r.tg_dec), alpha: r.alpha, descr: r.descr, mode: r.mode, enc: Number(r.enc), slot: r.slot, category: r.category, tags: r.tags ? r.tags.split(' · ') : [] };
   }
 
+  rrGetCounty(ctid: number): RrCounty | null {
+    const r = this.db.prepare('SELECT * FROM rr_counties WHERE ctid = ?').get(ctid) as
+      | { ctid: number; name: string; lat: number | null; lon: number | null; range_km: number | null }
+      | undefined;
+    if (!r) return null;
+    return { ctid: Number(r.ctid), name: r.name, lat: r.lat === null ? null : Number(r.lat), lon: r.lon === null ? null : Number(r.lon), rangeKm: r.range_km === null ? null : Number(r.range_km) };
+  }
+
+  rrPutCounty(c: RrCounty, now = Date.now()): void {
+    this.db.prepare('INSERT OR REPLACE INTO rr_counties (ctid, fetched_at, name, lat, lon, range_km) VALUES (?, ?, ?, ?, ?, ?)').run(c.ctid, now, c.name, c.lat, c.lon, c.rangeKm);
+  }
+
   rrStats(): { freqs: number; systems: number; talkgroups: number } {
     const n = (sql: string): number => Number((this.db.prepare(sql).get() as { n: number }).n);
     return { freqs: n('SELECT COUNT(*) AS n FROM rr_freqs'), systems: n('SELECT COUNT(*) AS n FROM rr_systems'), talkgroups: n('SELECT COUNT(*) AS n FROM rr_talkgroups') };
   }
 
   rrClear(): void {
-    this.db.exec('DELETE FROM rr_freqs; DELETE FROM rr_systems; DELETE FROM rr_talkgroups');
+    this.db.exec('DELETE FROM rr_freqs; DELETE FROM rr_systems; DELETE FROM rr_talkgroups; DELETE FROM rr_counties');
   }
 
   close(): void {

@@ -12,9 +12,10 @@ function soap(body: string): string {
   return `<?xml version="1.0"?><SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ns1="http://api.radioreference.com/soap2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><SOAP-ENV:Body>${body}</SOAP-ENV:Body></SOAP-ENV:Envelope>`;
 }
 const RESP: Record<string, string> = {
-  searchStateFreq: soap('<ns1:searchStateFreqResponse><return><item><out>417.725</out><in xsi:nil="true"/><descr>USAF Bases UK</descr><alpha></alpha><tone></tone><mode>P25</mode><sid>9876</sid><aid>0</aid><ctid>0</ctid></item><item><out>417.725</out><descr>Conv user</descr><alpha>CONV</alpha><tone>167 NAC</tone><mode>P25</mode><sid>0</sid><aid>0</aid><ctid>0</ctid></item></return></ns1:searchStateFreqResponse>'),
+  searchStateFreq: soap('<ns1:searchStateFreqResponse><return><item><out>417.725</out><in xsi:nil="true"/><descr>USAF Bases UK</descr><alpha></alpha><tone></tone><mode>P25</mode><sid>9876</sid><aid>0</aid><ctid>0</ctid></item><item><out>417.725</out><descr>Conv user</descr><alpha>CONV</alpha><tone>167 NAC</tone><mode>P25</mode><sid>0</sid><aid>0</aid><ctid>2450</ctid></item></return></ns1:searchStateFreqResponse>'),
   getTrsDetails: soap('<ns1:getTrsDetailsResponse><return><sName>USAF Bases UK</sName><sType>16</sType><sFlavor>3</sFlavor><sVoice>2</sVoice><sCity></sCity><sysid><item><sysid>3A2</sysid><ct></ct><wacn>BEE00</wacn></item></sysid></return></ns1:getTrsDetailsResponse>'),
-  getTrsSites: soap('<ns1:getTrsSitesResponse><return><item><siteId>1</siteId><siteNumber>1</siteNumber><siteDescr>Lakenheath</siteDescr><siteLocation>RAF Lakenheath</siteLocation><nac>3A1</nac><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item></siteFreqs></item><item><siteId>2</siteId><siteNumber>2</siteNumber><siteDescr>Croughton</siteDescr><siteLocation>RAF Croughton</siteLocation><nac>167</nac><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item><item><lcn>2</lcn><freq>419.475</freq><use></use></item></siteFreqs></item></return></ns1:getTrsSitesResponse>'),
+  getTrsSites: soap('<ns1:getTrsSitesResponse><return><item><siteId>1</siteId><siteNumber>1</siteNumber><siteDescr>Lakenheath</siteDescr><siteLocation>RAF Lakenheath</siteLocation><nac>3A1</nac><lat>52.41</lat><lon>0.56</lon><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item></siteFreqs></item><item><siteId>2</siteId><siteNumber>2</siteNumber><siteDescr>Croughton</siteDescr><siteLocation>RAF Croughton</siteLocation><nac>167</nac><lat>51.99</lat><lon>-1.19</lon><siteFreqs><item><lcn>1</lcn><freq>417.725</freq><use>c</use></item><item><lcn>2</lcn><freq>419.475</freq><use></use></item></siteFreqs></item></return></ns1:getTrsSitesResponse>'),
+  getCountyInfo: soap('<ns1:getCountyInfoResponse><return><ctid>2450</ctid><countyName>Buckinghamshire</countyName><lat>51.8</lat><lon>-0.8</lon><range>25</range></return></ns1:getCountyInfoResponse>'),
   getTrsTalkgroupCats: soap('<ns1:getTrsTalkgroupCatsResponse><return><item><tgCid>7</tgCid><tgCname>Security</tgCname></item></return></ns1:getTrsTalkgroupCatsResponse>'),
   getTrsTalkgroups: soap('<ns1:getTrsTalkgroupsResponse><return><item><tgDec>63305</tgDec><tgAlpha>SEC 1</tgAlpha><tgDescr>Security Dispatch</tgDescr><tgMode>DE</tgMode><enc>1</enc><tgCid>7</tgCid></item></return></ns1:getTrsTalkgroupsResponse>'),
 };
@@ -28,7 +29,7 @@ function fake(responses = RESP, calls: string[] = []): FetchLike {
   }) as FetchLike;
 }
 
-function make(over: Partial<RrSettings> = {}, opts: { appKey?: string; responses?: Record<string, string>; calls?: string[] } = {}) {
+function make(over: Partial<RrSettings> = {}, opts: { appKey?: string; responses?: Record<string, string>; calls?: string[]; location?: { lat: number | null; lon: number | null; radiusKm: number | null } } = {}) {
   const db = new LogDb(join(mkdtempSync(join(tmpdir(), 'rr-')), 'log.sqlite'));
   const settings: RrSettings = { username: 'steve', password: 'enc:secret', coid: 40, stid: 410, countryName: 'United Kingdom', stateName: 'England', ...over };
   let changes = 0;
@@ -38,6 +39,7 @@ function make(over: Partial<RrSettings> = {}, opts: { appKey?: string; responses
     getSettings: () => settings,
     decrypt: (c) => c.replace(/^enc:/, ''),
     fetchImpl: fake(opts.responses, opts.calls),
+    getLocation: () => opts.location ?? { lat: null, lon: null, radiusKm: null },
     onChange: () => changes++,
     spacingMs: 5,
   });
@@ -64,26 +66,50 @@ describe('RrService', () => {
     expect(svc.request(417_725_000)).toBe(false); // already queued
     expect(svc.info(417_725_000)?.pending).toBe(true);
     await settle();
-    expect(calls).toEqual(['searchStateFreq', 'getTrsDetails', 'getTrsSites', 'getTrsTalkgroupCats', 'getTrsTalkgroups']);
+    expect(calls).toEqual(['searchStateFreq', 'getCountyInfo', 'getTrsDetails', 'getTrsSites', 'getTrsTalkgroupCats', 'getTrsTalkgroups']);
     expect(changes()).toBeGreaterThan(0);
     expect(db.rrStats()).toEqual({ freqs: 1, systems: 1, talkgroups: 1 });
+    expect(db.rrGetCounty(2450)).toMatchObject({ name: 'Buckinghamshire', lat: 51.8, lon: -0.8 });
+    expect(db.rrGetCounty(2450)?.rangeKm).toBeCloseTo(40.2, 0);
 
     const info = svc.info(417_725_000, { tgid: 63305, nac: '167' });
     expect(info?.pending).toBe(false);
-    expect(info?.conventional).toEqual([{ descr: 'Conv user', alpha: 'CONV', tone: '167 NAC', mode: 'P25', callsign: '', tags: [] }]);
+    expect(info?.conventional).toEqual([{ descr: 'Conv user', alpha: 'CONV', tone: '167 NAC', mode: 'P25', callsign: '', tags: [], county: 'Buckinghamshire', distanceKm: null }]);
     expect(info?.systems).toEqual([
       {
         sid: 9876,
         name: 'USAF Bases UK',
         city: '',
         site: { descr: 'Croughton', location: 'RAF Croughton', nac: '167' },
+        distanceKm: null,
         talkgroup: { tgDec: 63305, alpha: 'SEC 1', descr: 'Security Dispatch', mode: 'DE', enc: 1, category: 'Security' },
       },
     ]);
     // Another talkgroup on the same system needs no network.
     expect(svc.info(417_725_000, { tgid: 1, nac: '3A1' })?.systems[0]).toMatchObject({ site: { descr: 'Lakenheath' }, talkgroup: null });
     expect(svc.request(417_725_000)).toBe(false); // cached and fresh
-    expect(calls).toHaveLength(5);
+    expect(calls).toHaveLength(6);
+  });
+
+  it('keeps only systems and channels near the user once a location is set', async () => {
+    // From Aylesbury: Croughton is ~45 km, Lakenheath ~110 km, Buckinghamshire's centre ~15 km.
+    const near = make({}, { location: { lat: 51.82, lon: -0.81, radiusKm: 60 } });
+    near.svc.request(417_725_000);
+    await settle();
+    const info = near.svc.info(417_725_000, { nac: '3A1' });
+    // The NAC names Lakenheath, which is out of range, so the system is dropped; the county entry stays.
+    expect(info?.systems).toEqual([]);
+    expect(info?.conventional[0]).toMatchObject({ descr: 'Conv user', county: 'Buckinghamshire' });
+    expect(info?.conventional[0]!.distanceKm).toBeGreaterThan(0);
+    // Without a NAC the nearest site on the frequency (Croughton) is picked and is within range.
+    expect(near.svc.info(417_725_000)!.systems[0]).toMatchObject({ name: 'USAF Bases UK', site: { descr: 'Croughton' } });
+    expect(near.svc.info(417_725_000)!.systems[0]!.distanceKm).toBeGreaterThan(30);
+
+    // From Leeds everything on this frequency is far away.
+    const farAway = make({}, { location: { lat: 53.8, lon: -1.55, radiusKm: 60 } });
+    farAway.svc.request(417_725_000);
+    await settle();
+    expect(farAway.svc.info(417_725_000)).toMatchObject({ systems: [], conventional: [] });
   });
 
   it('backs off a failed frequency and empties the queue on a login fault', async () => {
