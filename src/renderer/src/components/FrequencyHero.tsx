@@ -3,6 +3,7 @@ import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { formatPlace } from '../../../shared/geo';
 import { candidatesFor } from '../../../shared/listed';
+import { detectedCode } from '../../../shared/rr';
 import { useIdentities } from '../store/identities';
 import { useScanner } from '../store/scanner';
 import SignalMeter from './SignalMeter';
@@ -50,7 +51,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, licences, repeaters, rr, lookups } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences, repeaters, rr, lookups, confirmed } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
   const units = useIdentities((s) => s.settings.units);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
@@ -68,6 +69,8 @@ export default function FrequencyHero() {
   // RadioID lines, so the held copy shows both at once until the signal drops.
   const details = held;
   const detected = details?.detectedTone ?? null;
+  // What the lookups' tones / colour codes are matched against: the tone, else the DMR colour code.
+  const code = detectedCode(details);
   // The header carries the IDs on trunked / scanned objects; in Tune Mode and
   // the searches they only appear on the display.
   const tgid = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : (details?.tgid ?? null);
@@ -86,7 +89,10 @@ export default function FrequencyHero() {
   // Everything that lists this frequency, in one block, ranked as the log stores it: placed
   // entries first, then the user's lookup order (Data menu), repeaters with the one whose CTCSS
   // matches the detected tone first. Each source is filtered to the user's area upstream.
-  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: detected }, lookups);
+  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: code }, lookups);
+  // An identity the user confirmed for this frequency (and tone / talkgroup) outranks everything shown.
+  const conf = confirmed && confirmed.frequencyHz === hz ? confirmed : null;
+  const scannerName = (id.source === 'active' || id.source === 'lcd') && id.name !== '—' ? id.name : '';
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -153,8 +159,20 @@ export default function FrequencyHero() {
       </div>
 
       <div className="mt-5 h-[4.25rem]">
-        {id.source === 'none' ? (
+        {id.source === 'none' && !conf ? (
           <p className="text-xl text-ink-3">{online ? status.modeName : link.status === 'disconnected' ? 'Not connected' : 'Waiting for scanner'}</p>
+        ) : conf && id.source !== 'scanning' ? (
+          <>
+            <p className="flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-tight text-ink" title={`${SOURCE_NAME.CONF}${conf.detail ? ` · ${conf.detail}` : ''}`}>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`}>CONF</span>
+              <span className="truncate">{conf.name}</span>
+            </p>
+            <p className="mt-0.5 truncate text-base text-ink-2">
+              {scannerName && scannerName !== conf.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
+              {conf.system || id.system || id.detail}
+              {(conf.system || id.system) && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
+            </p>
+          </>
         ) : (
           <>
             <p className={`truncate text-3xl font-semibold tracking-tight ${id.source === 'scanning' ? 'text-ink-3' : 'text-ink'}`}>{id.name}</p>

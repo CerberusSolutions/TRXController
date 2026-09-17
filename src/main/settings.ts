@@ -6,7 +6,7 @@ import { normaliseUnits } from '../shared/geo';
 import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -43,6 +43,7 @@ export function sanitize(s: Settings): Settings {
     lon: num(s.lon, -180, 180),
     radiusKm: num(s.radiusKm, 1, 5000),
     units: normaliseUnits(s.units),
+    scanTimeoutS: typeof s.scanTimeoutS === 'number' && Number.isFinite(s.scanTimeoutS) && s.scanTimeoutS >= 3 && s.scanTimeoutS <= 600 ? Math.round(s.scanTimeoutS) : null,
     port: typeof s.port === 'string' && s.port.trim() !== '' ? s.port.trim() : null,
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),

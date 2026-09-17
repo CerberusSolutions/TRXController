@@ -221,6 +221,30 @@ captured on 14 Sep 2026.
   grows while a reception is open (RadioReference answers late) and survives a merge. The log's **+**
   column unfolds a row's candidates beneath it; the **Dist** column shows the row's placement; the CSV
   has `distance_km`, `bearing_deg` and a `candidates` column (one line, ` | ` separated, always km).
+- Confirmed identities (`src/shared/confirm.ts`, `confirmations` table): the user unfolds a log row
+  and confirms a candidate, or types a name (`LogTable`'s `Candidates`; `log:confirm` /
+  `log:unconfirm` / `log:confirmations` IPC). A confirmation is keyed by frequency plus the row's
+  tone (colour code / CTCSS / NAC, '' = any) and, on a trunked object, its talkgroup;
+  `pickConfirmation` takes the most specific one that does not contradict a reception. It outranks
+  everything, the scanner's own programming included: `LogDb.confirm` renames every logged reception
+  it fits (source `CONF`, the per-source columns untouched, so the Detail view still shows the
+  disagreement), `ReceptionLogger.confirm` overlays it on every new event after `remember`, and
+  `enrich()` puts the one for the current frequency / tone / talkgroup on the snapshot as `confirmed`
+  (the hero shows it with a CONF pill and "Scanner: X" beneath when the scanner disagrees). Withdrawing
+  one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
+  The Data dialog lists them with a remove link.
+- Code matching: `detectedCode` (`src/shared/rr.ts`) is the reception's tone ("CTCSS 94.8", "DCS 023",
+  "NAC 293") else its DMR colour code as "CC 12"; it is what `tone` on a row holds and what the
+  lookups' tones are matched against (`rrToneMatches` for RadioReference, CTCSS for repeaters). A
+  candidate whose code matches ranks first whatever the order and placement, one whose code differs
+  last (`matchScore` in `candidatesFor`); `describe()` picks RadioReference's channel by the same
+  score and lets a matching channel name the row over any licensee, a mismatching one lose to any.
+  Confirmations are keyed by the same code, so they are the learned code table.
+- Traffic analysis: `LogDb.traffic(hz)` (`log:traffic`) groups the frequency's receptions by tone /
+  colour code and talkgroup: rows, calls, first / last heard, distinct radio IDs (most recent first,
+  a handful plus the count) and the names the rows carry. The log's unfolded row shows it under the
+  candidates, the row's own group highlighted, so the users sharing a channel can be told apart and
+  confirmed one code at a time.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
@@ -230,6 +254,16 @@ captured on 14 Sep 2026.
 - "Scan" (Main Menu > Scan) counts as done as soon as the scanner goes silent after the
   key (it is loading scanlists), via `MacroHost.stalled`; tune / scan failure messages clear
   themselves after 8 s.
+
+## Scan timeout
+
+- `settings.scanTimeoutS` (Data dialog "Scan timeout": Off / 10 / 20 / 30 s / 1 / 2 min) is how long
+  the scanner may sit on one carrier in Scan mode before the app presses ► (`Key.RIGHT`, which
+  resumes scanning on the TRX) for it. `ScanTimeout` (`src/main/scanner/scanTimeout.ts`) is the pure
+  timing: only Scan mode (0x0a), only while the squelch stays open on one frequency, never while the
+  link is stalled, once per stop (nothing fires again until the squelch closes or the frequency
+  changes). Wired in main's `onSnapshot`; a nudge is logged as `[scan] … held for N s: resuming`.
+  Searches and Tune Mode are left alone: sitting on a signal is what they are for.
 
 ## Band tab (channel occupancy)
 

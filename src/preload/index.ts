@@ -10,6 +10,7 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type TrafficGroup,
   type UpdateInfo,
   type WtrMatch,
   type RepeaterMatch,
@@ -17,6 +18,7 @@ import {
   type RrRegion,
   type RrStatus,
 } from '../shared/ipc';
+import type { Confirmation, NewConfirmation } from '../shared/confirm';
 
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
@@ -50,6 +52,12 @@ const api = {
   logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
   /** Save CSV text through a file dialog; resolves to the path, or null if cancelled. */
   logExportCsv: (csv: string, suggestedName: string): Promise<string | null> => ipcRenderer.invoke(IPC.logExportCsv, csv, suggestedName),
+  /** Confirm by hand what a frequency (with this tone / talkgroup) is; renames the rows it applies to. */
+  logConfirm: (c: NewConfirmation): Promise<Confirmation> => ipcRenderer.invoke(IPC.logConfirm, c),
+  logUnconfirm: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logUnconfirm, id),
+  logConfirmations: (): Promise<Confirmation[]> => ipcRenderer.invoke(IPC.logConfirmations),
+  /** What has been heard on a frequency, grouped by tone / colour code and talkgroup. */
+  logTraffic: (hz: number): Promise<TrafficGroup[]> => ipcRenderer.invoke(IPC.logTraffic, hz),
   onLogUpsert: (cb: (row: ReceptionRow) => void): (() => void) => {
     const listener = (_e: unknown, row: ReceptionRow): void => cb(row);
     ipcRenderer.on(IPC.logUpsert, listener);

@@ -2,6 +2,7 @@
  * Types shared between main, preload and renderer. Pure types plus channel
  * names; no runtime dependencies on Node or Electron.
  */
+import type { Confirmation } from './confirm';
 import type { Units } from './geo';
 import type { Candidate } from './listed';
 import type { LookupPref, LookupSource } from './sources';
@@ -60,6 +61,8 @@ export interface ScannerSnapshot {
   updatedAt: number;
   /** The lookup order in force when this snapshot was built, so the tracker and hero rank sources the same way. */
   lookups: LookupPref[];
+  /** The identity the user confirmed for status.frequencyHz (and the tone / talkgroup in hand), if any. */
+  confirmed: Confirmation | null;
 }
 
 /** One logged reception (a period with squelch open on one frequency). */
@@ -116,6 +119,25 @@ export interface ReceptionRow {
   radioCallsign: string | null;
   /** Name for radioId from the imported DMR user database, if known. */
   radioName: string | null;
+}
+
+/**
+ * Traffic seen on one frequency, grouped by the tone / colour code and talkgroup the receptions
+ * carried: how the users sharing a channel tell apart.
+ */
+export interface TrafficGroup {
+  tone: string;
+  tgid: number | null;
+  /** Logged receptions (rows) and the squelch openings merged into them. */
+  receptions: number;
+  calls: number;
+  firstAt: number;
+  lastAt: number;
+  /** Distinct radio IDs heard, most recent first, at most a handful; `radioCount` is the full number. */
+  radioIds: number[];
+  radioCount: number;
+  /** Distinct names the rows carry, most frequent first, at most a few. */
+  names: string[];
 }
 
 /** One entry of the DMR user database (radioid.net). */
@@ -295,6 +317,8 @@ export interface Settings {
   radiusKm: number | null;
   /** How distances are shown (always stored in km). */
   units: Units;
+  /** Seconds the scanner may sit on one carrier in Scan mode before ► is pressed for it; null = never. */
+  scanTimeoutS: number | null;
   /** Serial port of the last successful connection, reopened at launch. */
   port: string | null;
   /** False after the user disconnects, so the app stops reconnecting on its own. */
@@ -351,6 +375,10 @@ export const IPC = {
   logClear: 'log:clear',
   logUpsert: 'log:upsert',
   logExportCsv: 'log:export-csv',
+  logConfirm: 'log:confirm',
+  logUnconfirm: 'log:unconfirm',
+  logConfirmations: 'log:confirmations',
+  logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',
   identityLookup: 'identities:lookup',

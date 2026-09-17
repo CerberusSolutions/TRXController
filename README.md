@@ -65,6 +65,23 @@ click **+** at the left of a row to unfold them, ranked as the Listed block had 
 first, then your lookup order). The CSV export carries `distance_km`, `bearing_deg` and the whole
 `candidates` list, so the right match can be picked by hand when several users share a channel.
 
+When you know which one it is, say so: in the unfolded list press **confirm** on the right candidate,
+or type a name none of them offer. The confirmation is keyed to the frequency and the tone or colour
+code the row showed (and the talkgroup on a trunked object), so co-channel users stay apart. It
+outranks every lookup and the scanner's own programming: every logged reception it fits is renamed
+with a green **CONF** pill, new receptions take it as they arrive, and the hero shows it while the
+scanner is on the frequency. **remove** withdraws it. Data > Confirmed identities lists them all.
+
+Codes count: a candidate whose tone or DMR colour code matches the one the scanner shows ("CC 12",
+"CTCSS 94.8", "NAC 293") is listed first and names the row whatever the lookup order; one whose code
+differs sinks. The unfolded row also shows the traffic heard on that frequency by code: how many
+receptions, first and last heard, which radio IDs and which names, so the users sharing a channel
+can be told apart and confirmed one code at a time.
+
+Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
+number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
+Searches and Tune Mode are never nudged.
+
 ## Windows installer
 
 ```

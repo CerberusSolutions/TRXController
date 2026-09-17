@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { ReceptionRow } from "../../../shared/ipc";
+import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
 import { formatPlace, type Units } from "../../../shared/geo";
+import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
 import { rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
@@ -81,13 +82,12 @@ const moreCell: Column = {
   minPx: 1.1 * REM,
   render: (r, { expanded, toggle }) => {
     const n = r.candidates?.length ?? 0;
-    if (n === 0) return <span />;
     const open = expanded.has(r.id);
     return (
       <button
         type="button"
         className={`w-full text-center leading-none ${open ? "text-ink" : "text-ink-3 hover:text-ink"}`}
-        title={open ? "Hide the candidates" : `${n} candidate${n === 1 ? "" : "s"} from the lookups: click to show`}
+        title={open ? "Fold away" : `${n ? `${n} candidate${n === 1 ? "" : "s"} from the lookups` : "No lookup offered a name"}, and the traffic heard on the frequency by code: click to show, then confirm the right one`}
         onClick={() => toggle(r.id)}
       >
         {open ? "−" : "+"}
@@ -278,7 +278,7 @@ const srcCell: Column = {
     const src = rowSource(r);
     return src ? (
       <span>
-        <span className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[src]}`} title={`Name from the ${SOURCE_NAME[src]}`}>
+        <span className={`rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[src]}`} title={src === "CONF" ? SOURCE_NAME.CONF : `Name from the ${SOURCE_NAME[src]}`}>
           {src}
         </span>
       </span>
@@ -371,24 +371,180 @@ const sysCell: Column = {
 const SIMPLE: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 
-/** The unfolded candidate list under a row: one line per lookup answer, ranked as the hero listed them at the time. */
-function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
+function fmtStamp(ms: number): string {
+  return `${fmtDate(ms) ? fmtDate(ms) + " " : ""}${fmtTime(ms)}`;
+}
+
+/**
+ * What has been heard on the row's frequency, by tone / colour code and talkgroup: the users sharing
+ * a channel tell apart by code, so this is what to confirm against.
+ */
+function Traffic({ r }: { r: ReceptionRow }) {
+  const [groups, setGroups] = useState<TrafficGroup[] | null>(null);
+  const rows = useLog((s) => s.rows);
+  // Refetched when the log changes (a new reception on the frequency), cheaply: one grouped query.
+  const version = useMemo(() => rows.filter((x) => x.frequencyHz === r.frequencyHz).map((x) => `${x.id}:${x.calls}:${x.endedAt}:${x.name}`).join(), [rows, r.frequencyHz]);
+  useEffect(() => {
+    let live = true;
+    void window.trx?.logTraffic?.(r.frequencyHz).then((g) => {
+      if (live) setGroups(g);
+    });
+    return () => {
+      live = false;
+    };
+  }, [r.frequencyHz, version]);
+  if (!groups || groups.length === 0) return null;
+  const mine = (g: TrafficGroup): boolean => g.tone === r.tone && g.tgid === r.tgid;
   return (
-    <ul className="border-b border-edge/60 bg-panel-2/40 py-1 pr-2 pl-9 font-mono text-[12px] leading-snug">
-      {r.candidates.map((c, i) => (
-        <li key={i} className="flex min-w-0 items-center gap-2 py-px">
-          <span className={`w-9 shrink-0 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[c.source]}`} title={SOURCE_NAME[c.source]}>
-            {c.source}
+    <ul className="mt-1 border-t border-edge/40 pt-1">
+      <li className="flex items-center gap-2 py-px font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+        <span className="w-9 shrink-0" />
+        Traffic on {(r.frequencyHz / 1e6).toFixed(4)} by code
+      </li>
+      {groups.map((g, i) => (
+        <li key={i} className={`flex min-w-0 items-center gap-2 py-px ${mine(g) ? "text-ink" : "text-ink-2"}`} title={`${g.calls} squelch openings in ${g.receptions} logged receptions`}>
+          <span className="w-9 shrink-0" />
+          <span className="w-24 shrink-0 truncate" title="Tone / colour code and talkgroup">
+            {[g.tone.replace("CTCSS ", "CT "), g.tgid !== null ? `TG ${g.tgid}` : ""].filter(Boolean).join(" · ") || <span className="text-ink-3">no code</span>}
           </span>
-          <span className={`shrink-0 truncate font-sans text-[12.5px] ${i === 0 ? "text-ink" : "text-ink-2"}`}>{c.name}</span>
-          {c.pills && <span className="shrink-0 text-[10px] text-ink-3">{c.pills}</span>}
-          <span className="min-w-0 flex-1 truncate text-ink-3" title={c.detail || undefined}>
-            {c.detail}
-            {c.match === true && !c.detail.includes("✓") ? " ✓" : ""}
+          <span className="w-14 shrink-0 text-right">{g.receptions} rx</span>
+          <span className="w-32 shrink-0 truncate text-ink-3" title="First heard">
+            {fmtStamp(g.firstAt)}
           </span>
-          <span className="shrink-0 text-ink-2">{formatPlace(c, units) || <span className="text-ink-3">not placed</span>}</span>
+          <span className="w-32 shrink-0 truncate text-ink-3" title="Last heard">
+            {fmtStamp(g.lastAt)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-ink-3" title={g.radioCount ? `${g.radioCount} radio ID${g.radioCount === 1 ? "" : "s"}` : undefined}>
+            {g.radioCount > 0 && (
+              <>
+                RID {g.radioIds.join(", ")}
+                {g.radioCount > g.radioIds.length ? ` +${g.radioCount - g.radioIds.length}` : ""}
+              </>
+            )}
+          </span>
+          <span className="min-w-0 max-w-[16rem] shrink truncate font-sans text-[11.5px]" title={g.names.join(" · ") || undefined}>
+            {g.names.join(" · ")}
+          </span>
         </li>
       ))}
+    </ul>
+  );
+}
+
+/** The key a confirmation made from this row applies to: its tone (colour code, CTCSS, NAC) and, on a trunked object, its talkgroup. */
+function confirmationKey(r: ReceptionRow): Pick<NewConfirmation, "frequencyHz" | "tone" | "tgid"> {
+  const trunked = /^(TGRP|Talkgroup)$/i.test(r.objectType) || r.system !== "";
+  return { frequencyHz: r.frequencyHz, tone: r.tone, tgid: trunked ? r.tgid : null };
+}
+
+function keyText(k: { tone: string; tgid: number | null }): string {
+  return [k.tone, k.tgid !== null ? `TG ${k.tgid}` : ""].filter(Boolean).join(" · ") || "any tone";
+}
+
+/**
+ * The unfolded candidate list under a row: one line per lookup answer, ranked as the hero listed them
+ * at the time, each with a Confirm button; the confirmed one is marked and can be withdrawn; a name
+ * none of them offer can be typed in.
+ */
+function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
+  const confirmations = useLog((s) => s.confirmations);
+  const confirm = useLog((s) => s.confirm);
+  const unconfirm = useLog((s) => s.unconfirm);
+  const [other, setOther] = useState("");
+  const [busy, setBusy] = useState(false);
+  const key = confirmationKey(r);
+  const current: Confirmation | null = pickConfirmation(confirmations, r.frequencyHz, r.tone, r.tgid);
+  const isCurrent = (source: string, name: string): boolean => current !== null && current.source === source && current.name === name;
+  const run = async (task: Promise<void>): Promise<void> => {
+    setBusy(true);
+    try {
+      await task;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const btn = "shrink-0 rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink disabled:opacity-40";
+  const keyHint = `Applies to ${(r.frequencyHz / 1e6).toFixed(4)} MHz with ${keyText(key)}; renames every logged reception it fits and names new ones, over the scanner's own programming`;
+  const confirmedMark = (
+    <span className="shrink-0 font-sans text-[10px] font-bold text-green" title={current ? `Confirmed ${new Date(current.confirmedAt).toLocaleString()} for ${keyText(current)}` : undefined}>
+      ✓ confirmed
+    </span>
+  );
+  const withdraw = current && (
+    <button type="button" className={btn} disabled={busy} title="Withdraw this confirmation: the rows go back to the scanner's name, else the licensee" onClick={() => void run(unconfirm(current.id))}>
+      remove
+    </button>
+  );
+  return (
+    <ul className="border-b border-edge/60 bg-panel-2/40 py-1 pr-2 pl-9 font-mono text-[12px] leading-snug">
+      {current && current.source === "USER" && (
+        <li className="flex min-w-0 items-center gap-2 py-px">
+          <span className={`w-9 shrink-0 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`} title={SOURCE_NAME.CONF}>
+            CONF
+          </span>
+          <span className="shrink-0 truncate font-sans text-[12.5px] text-ink">{current.name}</span>
+          <span className="min-w-0 flex-1 truncate text-ink-3">{current.detail || "typed in by you"}</span>
+          {confirmedMark}
+          {withdraw}
+        </li>
+      )}
+      {r.candidates.map((c, i) => {
+        const mine = isCurrent(c.source, c.name);
+        return (
+          <li key={i} className="flex min-w-0 items-center gap-2 py-px">
+            <span className={`w-9 shrink-0 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL[c.source]}`} title={SOURCE_NAME[c.source]}>
+              {c.source}
+            </span>
+            <span className={`shrink-0 truncate font-sans text-[12.5px] ${i === 0 || mine ? "text-ink" : "text-ink-2"}`}>{c.name}</span>
+            {c.pills && <span className="shrink-0 text-[10px] text-ink-3">{c.pills}</span>}
+            <span className="min-w-0 flex-1 truncate text-ink-3" title={c.detail || undefined}>
+              {c.detail}
+              {c.match === true && !c.detail.includes("✓") ? " ✓" : ""}
+            </span>
+            <span className="shrink-0 text-ink-2">{formatPlace(c, units) || <span className="text-ink-3">not placed</span>}</span>
+            {mine ? (
+              <>
+                {confirmedMark}
+                {withdraw}
+              </>
+            ) : (
+              <button
+                type="button"
+                className={btn}
+                disabled={busy}
+                title={`This is the one. ${keyHint}`}
+                onClick={() => void run(confirm({ ...key, name: c.name, system: c.source === "RRDB" && r.rrSystem ? r.rrSystem : "", source: c.source, detail: c.detail, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg }))}
+              >
+                confirm
+              </button>
+            )}
+          </li>
+        );
+      })}
+      <li className="flex min-w-0 items-center gap-2 py-px">
+        <span className="w-9 shrink-0" />
+        <input
+          className="w-56 rounded border border-edge bg-panel px-1.5 py-px font-sans text-[11px] text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+          placeholder="Something else…"
+          value={other}
+          disabled={busy}
+          onChange={(e) => setOther(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && other.trim()) void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null })).then(() => setOther(""));
+          }}
+        />
+        <button
+          type="button"
+          className={btn}
+          disabled={busy || !other.trim()}
+          title={`Confirm a name none of the lookups offer. ${keyHint}`}
+          onClick={() => void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null })).then(() => setOther(""))}
+        >
+          confirm
+        </button>
+        <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{keyText(key)}</span>
+      </li>
+      <Traffic r={r} />
     </ul>
   );
 }
@@ -594,7 +750,7 @@ export default function LogTable() {
           )}
           {visible.map((r) => {
             const open = r.endedAt === null;
-            const unfolded = expanded.has(r.id) && r.candidates.length > 0;
+            const unfolded = expanded.has(r.id);
             return (
               <div key={r.id}>
                 <div
