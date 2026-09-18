@@ -54,7 +54,8 @@ The same links and steps are on the app's help screen (the `?` button; shown on 
 Put downloads in `data/` (git-ignored).
 
 The scanner's own programming always wins: a lookup only fills in a name or system the scanner
-did not have. Data > Lookup order sets which lookup is asked first (default: the Ofcom register,
+did not have. An object named only by its frequency, with or without a code noted after it ("453.0625",
+"453.0625 CC15", "167.300 94.8"), counts as unnamed, so the lookups name it. Data > Lookup order sets which lookup is asked first (default: the Ofcom register,
 then RadioReference UK, then RadioReference, then the repeater list; a RadioReference talkgroup name
 still wins, since the register knows no talkgroups). Untick a lookup to ignore it while it is offline or returning
 junk. The log's **Src** column (and the `source` column of the CSV export) says which

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LCD_CURSOR_BYTE, describeIcons, isModeFrequencyText, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, parseSearchScreen, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, isFrequencyLabel, isModeFrequencyText, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, parseSearchScreen, renderLcd } from '../lcd';
 import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
@@ -173,6 +173,13 @@ describe('parseSearchScreen', () => {
     expect(isModeFrequencyText('145.637500')).toBe(true);
     expect(isModeFrequencyText('Fire Dispatch')).toBe(false);
     expect(isModeFrequencyText('')).toBe(false);
+  });
+
+  it('knows when a name is only the frequency, with or without the fingerprint noted after it', () => {
+    for (const t of ['453.0625', '145.637500', 'DMRs 145.637500', '453.0625 CC15', '453.0625 CC 15', '167.300 94.8', '453.0625 CC 15 S1', '453.0625MHz', 'NFM 167.3 CTCSS 94.8', '453.0625 D023 TG9', '453.0625 CC:12'])
+      expect(isFrequencyLabel(t), t).toBe(true);
+    for (const t of ['', 'Fire Dispatch', 'Taxis 453', '453.0625 Taxis', 'Bucks Fire 1', 'RBW18', '453', 'TC NW Deps', 'Tune Mode', 'Site 453.0625 Ops'])
+      expect(isFrequencyLabel(t), t).toBe(false);
   });
 });
 

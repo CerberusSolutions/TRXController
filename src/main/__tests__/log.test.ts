@@ -136,6 +136,24 @@ describe('describe()', () => {
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: '', source: 'WTR' });
   });
 
+  it('treats an object named only by its frequency as unnamed, so the lookups name it', () => {
+    const label = (name: string) => ['', 'Imported/New', 'CONV        psDr', name, 'DMR   453.437500'];
+    const wtr = { id: 1, frequencyHz: 453_437_500, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };
+    const entry = {
+      callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', freqMHz: 453.4375, mode: 'DMR', tone: '', colorCode: '15', ran: '', nac: '', code: 'CC 15', direction: 'R', location: 'Steeple Claydon',
+      nationwide: false, distanceKm: 7.1, bearingDeg: 324, lat: null, lon: null, place: 'Steeple Claydon', county: 'Bucks', postcode: '', licence: '', group: 'WTR', tags: '', isTrunk: false,
+    };
+    const rruk = { frequencyHz: 453_437_500, fetchedAt: 1, pending: false, error: null, entries: [entry] };
+    // RRUK names it; the scanner's text is kept for the Detail view.
+    expect(describeSnapshot({ ...snap({ lcd: label('453.4375 CC15') }), rruk })).toMatchObject({ name: 'FCC RECYCLING (UK) LIMITED', source: 'RRUK', scannerName: '453.4375 CC15' });
+    // Only the register knows it: unnamed with the licensee credited, as for a blank object.
+    expect(describeSnapshot({ ...snap({ lcd: label('453.4375') }), licences: [wtr] })).toMatchObject({ name: '', licensee: 'RESOUND LIMITED', source: 'WTR', scannerName: '453.4375' });
+    // Nothing knows it: unnamed.
+    expect(describeSnapshot(snap({ lcd: label('453.4375 94.8') }))).toMatchObject({ name: '', source: '', scannerName: '453.4375 94.8' });
+    // A real name still wins over every lookup.
+    expect(describeSnapshot({ ...snap({ lcd: label('Taxis 453') }), rruk })).toMatchObject({ name: 'Taxis 453', source: '', scannerName: 'Taxis 453' });
+  });
+
   it('names a row from RadioReference UK, by code match first, and keeps its own answer beside the others', () => {
     const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   453.437500'];
     const cc = (n: number) => ['', 'Imported/New', 'CONV        psDr', 'TGID:         19', 'DMR   453.437500', `Slot:1  Color:${n}`];
@@ -473,6 +491,16 @@ describe('ReceptionLogger', () => {
     // A frequency never seen with an object stays as the lookups left it.
     log.onSnapshot({ ...snap({ rf: true, hz: 121_025_000, lcd: sweeping }), licences: [wtr] }, 3000);
     expect(db.recent()[0]).toMatchObject({ frequencyHz: 121_025_000, name: '', source: 'WTR' });
+    log.onSnapshot(snap({ rf: false, hz: 121_025_000, lcd: sweeping }), 3100);
+    log.onSnapshot(snap({ rf: false, hz: 121_025_000, lcd: sweeping }), 3600);
+    // An object named only by its frequency is no name to remember: a later blip stays with the lookups.
+    const labelled = ['', 'Civil Airband', 'CONV        psDr', '121.0250 CT', 'AM    121.025000'];
+    log.onSnapshot(snap({ rf: true, hz: 121_025_000, lcd: labelled }), 4000);
+    expect(db.recent()[0]).toMatchObject({ frequencyHz: 121_025_000, name: '', source: '', scannerName: '121.0250 CT' });
+    log.onSnapshot(snap({ rf: false, hz: 121_025_000, lcd: labelled }), 4100);
+    log.onSnapshot(snap({ rf: false, hz: 121_025_000, lcd: labelled }), 4600);
+    log.onSnapshot({ ...snap({ rf: true, hz: 121_025_000, lcd: sweeping }), licences: [wtr] }, 5000);
+    expect(db.recent()[0]).toMatchObject({ frequencyHz: 121_025_000, name: '', source: 'WTR', scannerName: '' });
     db.close();
   });
 
