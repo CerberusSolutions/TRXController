@@ -1,0 +1,44 @@
+TRXController
+Copyright © 2026 Cerberus Systems. All rights reserved.
+
+This is proprietary, source-available software. It is not open source.
+
+1. Source code
+
+   The source code in this repository is published so that it can be read
+   and reviewed. No licence is granted to copy, modify, compile, distribute,
+   sublicense or otherwise use the source code, in whole or in part, in any
+   other software or for any other purpose, without the prior written
+   permission of Cerberus Systems. Viewing or forking the repository on
+   GitHub does not grant any such permission.
+
+2. Binaries
+
+   The installers and packages that Cerberus Systems publishes on the
+   project's GitHub Releases page may be downloaded, installed and used free
+   of charge for personal, non-commercial use. They may not be sold,
+   bundled with other software, or redistributed in modified form.
+   Commercial use requires written permission from Cerberus Systems.
+
+3. No warranty
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+   OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+   IN NO EVENT SHALL CERBERUS SYSTEMS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+   OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+   ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+   OTHER DEALINGS IN THE SOFTWARE. Use it at your own risk; operating a
+   radio scanner is subject to the laws of your country.
+
+4. Trade marks and third parties
+
+   Whistler, TRX-1, TRX-2 and WS-1080/1088/1095/1098 are trade marks of
+   Whistler Group; RadioReference is a trade mark of RadioReference.com LLC;
+   Ofcom, the RSGB and radioid.net own their respective names and data.
+   Cerberus Systems is not affiliated with or endorsed by any of them.
+   Data you import from those sources stays subject to their own terms.
+   Third-party open-source components bundled in the binaries (Electron,
+   Node.js, serialport and others) remain under their own licences.
+
+For permissions beyond these terms, contact Cerberus Systems.

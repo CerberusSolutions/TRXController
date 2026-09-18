@@ -213,4 +213,10 @@ also kept as a workflow artifact for manual runs (Actions > Release > Run workfl
 Beta, from Cerberus Systems, for the TRX-1 / TRX-1E / TRX-2. Provided as is with no warranty or
 guarantee of any kind. Not affiliated with Whistler.
 
+## Licence
+
+Copyright © 2026 Cerberus Systems. All rights reserved. This is proprietary, source-available
+software, not open source: the code is published to be read, not reused, and the installers on the
+Releases page are free for personal, non-commercial use. See [LICENSE](LICENSE) for the terms.
+
 See `CLAUDE.md` for the design constraints.
