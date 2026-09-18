@@ -40,11 +40,14 @@ export default function TopBar() {
     <header
       className="app-drag flex h-[46px] items-center gap-4 border-b border-edge bg-panel px-4"
       // Leave room for the native window controls: the minimise / maximise / close overlay
-      // at the top right on Windows, the traffic lights at the top left on macOS.
+      // at the top right on Windows, the traffic lights at the top left on macOS. Linux keeps
+      // the window manager's own frame, so nothing overlaps the bar.
       style={
         window.trx?.platform === 'darwin'
           ? { paddingLeft: '84px' }
-          : { paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }
+          : window.trx?.platform === 'linux'
+            ? undefined
+            : { paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }
       }
     >
       <div className="flex items-baseline gap-2">

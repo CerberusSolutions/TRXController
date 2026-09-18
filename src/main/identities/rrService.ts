@@ -31,6 +31,8 @@ export interface RrServiceOptions {
   getSettings: () => RrSettings;
   /** Decrypt the stored password; throws or returns '' if it cannot. */
   decrypt: (cipher: string) => string;
+  /** How the password is kept: 'os' (DPAPI / Keychain), a Linux keyring backend name, or 'basic_text' when there is no keyring. */
+  passwordStore?: () => string;
   /**
    * The user's location and radius (the WTR settings). A region-wide search
    * returns every system and channel in England on a frequency; only those
@@ -57,6 +59,7 @@ export class RrService {
   private readonly log: (msg: string) => void;
   private readonly now: () => number;
   private readonly spacingMs: number;
+  private readonly passwordStore: () => string;
   private readonly queue: number[] = [];
   private readonly failed = new Map<number, { at: number; message: string }>();
   private inFlight: number | null = null;
@@ -77,6 +80,7 @@ export class RrService {
     this.log = opts.log ?? (() => {});
     this.now = opts.now ?? Date.now;
     this.spacingMs = opts.spacingMs ?? CALL_SPACING_MS;
+    this.passwordStore = opts.passwordStore ?? (() => 'os');
   }
 
   /** After the account changes, let every frequency be tried again. */
@@ -110,6 +114,7 @@ export class RrService {
     const stats = this.db.rrStats();
     return {
       appKey: this.appKey !== '',
+      passwordStore: this.passwordStore(),
       username: s.username,
       hasPassword: s.password !== '',
       coid: s.coid,

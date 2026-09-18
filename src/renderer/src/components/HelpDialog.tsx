@@ -4,8 +4,9 @@ import { useUi } from '../store/ui';
 export const PUBLISHER = 'Cerberus Systems';
 
 const IS_MAC = typeof window !== 'undefined' && window.trx?.platform === 'darwin';
+const IS_LINUX = typeof window !== 'undefined' && window.trx?.platform === 'linux';
 /** Where the log, settings and imported data live, as the user would type it. */
-const DATA_DIR = IS_MAC ? '~/Library/Application Support/TRXController' : '%APPDATA%\\TRXController';
+const DATA_DIR = IS_MAC ? '~/Library/Application Support/TRXController' : IS_LINUX ? '~/.config/TRXController' : '%APPDATA%\\TRXController';
 const MOD_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
 
 /** Where the two optional data files come from. Shown verbatim so they can be copied. */
@@ -115,6 +116,14 @@ export default function HelpDialog() {
               <li>
                 Pick its serial port in the top bar. The Whistler port is chosen automatically when it can be told apart; use ⟳ to rescan after plugging
                 in.
+                {IS_LINUX && (
+                  <>
+                    {' '}
+                    On Linux it appears as <span className="font-mono text-ink">/dev/ttyUSB0</span> or <span className="font-mono text-ink">/dev/ttyACM0</span>, and your
+                    user must be in the <span className="font-mono text-ink">dialout</span> group to open it (<span className="font-mono text-ink">sudo usermod -aG dialout $USER</span>,
+                    then log in again).
+                  </>
+                )}
               </li>
               <li>
                 Press <b className="text-ink">Connect</b>. The port is remembered and reopened next time the app starts, and again if the scanner is
@@ -176,8 +185,8 @@ export default function HelpDialog() {
             {update ? (
               update.newer ? (
                 <p>
-                  <b className="text-green">Version {update.latest} is available</b> (you have {update.current}). Download the new installer and
-                  run it; settings, log and imported data are kept.{' '}
+                  <b className="text-green">Version {update.latest} is available</b> (you have {update.current}). Download the new{' '}
+                  {IS_LINUX ? 'AppImage (or the .deb from the release page)' : 'installer'} and run it; settings, log and imported data are kept.{' '}
                   <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href={update.downloadUrl ?? update.url} target="_blank" rel="noreferrer">
                     {update.downloadUrl ? 'Download ' + (update.downloadUrl.split('/').pop() ?? 'the installer') : 'Open the release page'}
                   </a>

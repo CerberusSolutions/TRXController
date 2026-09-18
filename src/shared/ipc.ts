@@ -280,6 +280,8 @@ export interface RrRegion {
 export interface RrStatus {
   /** This build carries an app key (RR_KEY at build time). */
   appKey: boolean;
+  /** Where the password is kept: 'os' (Windows DPAPI / macOS Keychain), a Linux keyring backend, or 'basic_text' when Linux has no keyring. */
+  passwordStore: string;
   username: string;
   hasPassword: boolean;
   coid: number | null;

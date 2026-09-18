@@ -9,10 +9,16 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 ## Stack decisions (do not reinvent)
 
 - Electron + Vite (via `electron-vite`) + React + TypeScript. Windows is the primary target; a
-  macOS Apple-silicon build (unsigned, not notarised) is packaged too. Platform differences are
-  confined to: window chrome in `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the
-  title-bar overlay elsewhere), the top bar's padding (`window.trx.platform`), the help / status
-  text (data folder, Cmd vs Ctrl), and the update link (`.dmg` on macOS).
+  macOS Apple-silicon build (unsigned, not notarised) and Linux packages (AppImage + .deb, x64 and
+  arm64) are packaged too. Platform differences are confined to: window chrome in
+  `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the title-bar overlay on Windows,
+  the window manager's own frame on Linux, which has no overlay), the top bar's padding
+  (`window.trx.platform`), the help / status text (data folder, Cmd vs Ctrl, serial port names and
+  the `dialout` group on Linux), the update link (`.dmg` on macOS, the AppImage for the running
+  architecture on Linux), and the RadioReference password store: `safeStorage` uses DPAPI / the
+  Keychain, or a Linux keyring; on Linux without one the app switches `safeStorage` to its
+  `basic_text` backend (obfuscated, not encrypted) and `RrStatus.passwordStore` lets the Data
+  dialog say so.
 - Tailwind CSS v4 (`@tailwindcss/vite` plugin, `@import "tailwindcss"` in `src/renderer/src/index.css`).
 - `serialport` lives in the **main process only**. The renderer never touches the port;
   it talks to main over IPC exposed by the preload (`contextBridge`).
@@ -102,6 +108,12 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `npm run dist:mac` (on a Mac) builds `release/TRXController-<version>-mac-arm64.dmg` + zip:
   `mac:` target in `electron-builder.yml`, `identity: null`, the universal darwin serialport
   prebuild kept, icon converted from `build/icon.png`. Gatekeeper needs right-click › Open.
+- `npm run dist:linux` (on Linux) builds `release/TRXController-<version>-linux-{x64,arm64}.AppImage`
+  and `.deb`: `linux:` target in `electron-builder.yml`, Linux serialport prebuilds kept, icon from
+  `build/icon.png`. The AppImage runs anywhere (`chmod +x`, then run; `--no-sandbox` inside a
+  container); the .deb is for Ubuntu / Debian / Mint and its post-install script prints the
+  `dialout` reminder. Cross-building arm64 on an x64 runner works (electron-builder downloads the
+  arm64 Electron); CI does both.
 - `npm run dist` builds the Windows installer into `release/` (electron-builder, NSIS,
   per-user, config in `electron-builder.yml`, icon in `build/`). `npm run dist:dir` stops at
   `release/win-unpacked`, which also works on Linux; the NSIS step needs Wine there, so build
@@ -113,9 +125,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   keep it around 85-90 MB. Do not strip Chromium DLLs to go lower.
 - Releases: `.\scripts\release.ps1 [patch|minor|major]` (clean tree, checkout main, pull,
   `npm version`, `git push --follow-tags`, stops at the first failure). The `v*` tag runs
-  `.github/workflows/release.yml` as a matrix on `windows-latest` and `macos-latest`, which
+  `.github/workflows/release.yml` as a matrix on `windows-latest`, `macos-latest` and `ubuntu-latest`, which
   checks the tag against package.json, tests, builds with `--publish never` and attaches the
-  exe / dmg / zip to a GitHub Release via softprops/action-gh-release. Run by hand with the
+  exe / dmg / zip / AppImage / deb to a GitHub Release via softprops/action-gh-release (a third
+  `ubuntu-latest` row runs `dist:linux`). Run by hand with the
   `attach_to` input (e.g. `v0.2.7`) to add builds to a release already published without a
   version bump; blank leaves them as workflow artifacts. `ci.yml` runs test / typecheck /
   build on pushes and PRs.

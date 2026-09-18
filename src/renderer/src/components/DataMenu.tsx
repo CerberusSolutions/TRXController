@@ -300,6 +300,11 @@ function RadioReferenceForm() {
           'Lookups run once the login is saved and a region is set. A premium subscription is required for API access.'
         )}
       </p>
+      {rr.passwordStore === 'basic_text' && (
+        <p className="text-[11px] text-amber">
+          No keyring found, so the password is stored obfuscated rather than encrypted. Install GNOME Keyring or KWallet and save it again for proper encryption.
+        </p>
+      )}
       {rr.lastError && <p className="text-xs text-red">Last lookup failed: {rr.lastError}</p>}
       {rrMessage && <p className={`text-xs ${rrMessage.ok ? 'text-green' : 'text-red'}`}>{rrMessage.text}</p>}
     </div>

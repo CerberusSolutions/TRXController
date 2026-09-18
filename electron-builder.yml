@@ -1,5 +1,6 @@
-# Windows installer and macOS (Apple silicon) app. `npm run dist` builds with electron-vite
-# then packages the Windows target; `npm run dist:mac` the macOS one (on a Mac).
+# Windows installer, macOS (Apple silicon) app and Linux packages. `npm run dist` builds with
+# electron-vite then packages the Windows target; `npm run dist:mac` the macOS one (on a Mac);
+# `npm run dist:linux` the AppImage and .deb (on Linux).
 appId: uk.co.cerberus.trxcontroller
 productName: TRXController
 copyright: Copyright © 2026 Cerberus Systems
@@ -48,6 +49,37 @@ mac:
     - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,linux-*,win32-*}/**"
 dmg:
   artifactName: ${productName}-${version}-mac-arm64.${ext}
+linux:
+  # AppImage runs on any distro without installing; the .deb is for Ubuntu / Debian / Mint.
+  # x64 for PCs, arm64 for a Raspberry Pi sat next to the scanner.
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+  icon: build/icon.png
+  category: Utility
+  # Lets the desktop link the running window to its launcher entry (package.json desktopName).
+  syncDesktopName: true
+  synopsis: Remote control and logging for the Whistler TRX-1 / TRX-2 scanner
+  maintainer: Cerberus Systems <stevew@defiant.co.uk>
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  # Only the Linux serialport prebuilds (arm and arm64 both kept for the Pi target).
+  files:
+    - "!node_modules/@serialport/bindings-cpp/prebuilds/{android-*,darwin-*,win32-*}/**"
+deb:
+  # Serial ports need the user in the dialout group; the package cannot do that for them.
+  afterInstall: build/deb-after-install.sh
+  depends:
+    - libgtk-3-0
+    - libnotify4
+    - libnss3
+    - libxss1
+    - libxtst6
+    - xdg-utils
+    - libatspi2.0-0
+    - libuuid1
+    - libsecret-1-0
 nsis:
   oneClick: false
   perMachine: false

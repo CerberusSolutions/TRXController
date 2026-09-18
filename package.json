@@ -6,6 +6,7 @@
   "description": "Remote control and logging app for the Whistler TRX-1/TRX-1E/TRX-2 scanner",
   "author": "Cerberus Systems",
   "homepage": "https://github.com/CerberusSolutions/TRXController",
+  "desktopName": "trxcontroller.desktop",
   "main": "./out/main/index.js",
   "type": "module",
   "workspaces": [
@@ -22,7 +23,8 @@
     "probe": "tsx scripts/probe.ts",
     "dist": "electron-vite build && electron-builder --win",
     "dist:dir": "electron-vite build && electron-builder --win --dir",
-    "dist:mac": "electron-vite build && electron-builder --mac"
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
     "serialport": "^13.0.0"

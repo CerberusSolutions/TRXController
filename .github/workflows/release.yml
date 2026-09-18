@@ -1,4 +1,5 @@
-# Build the Windows installer and the macOS (Apple silicon) app and attach them to a GitHub Release.
+# Build the Windows installer, the macOS (Apple silicon) app and the Linux AppImage / .deb
+# (x64 and arm64) and attach them to a GitHub Release.
 #
 # Trigger: push a tag named after the version in package.json, e.g.
 #   git tag v0.2.0 && git push origin v0.2.0
@@ -39,6 +40,12 @@ jobs:
             files: |
               release/*.dmg
               release/*.zip
+          - os: ubuntu-latest
+            script: dist:linux
+            artifact: TRXController-linux
+            files: |
+              release/*.AppImage
+              release/*.deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
