@@ -27,8 +27,8 @@ export default function MainPanel() {
 
   const btn = (t: Tab, label: string) => (
     <button
-      className={`rounded-md px-3 py-1 text-[11px] font-semibold uppercase tracking-widest ${
-        tab === t ? 'bg-panel-2 text-ink' : 'text-ink-3 hover:text-ink-2'
+      className={`rounded-md px-3 py-1 text-[11px] font-bold uppercase tracking-widest ${
+        tab === t ? 'bg-panel-2 text-ink' : 'text-ink-2 hover:text-ink'
       }`}
       onClick={() => setTab(t)}
     >

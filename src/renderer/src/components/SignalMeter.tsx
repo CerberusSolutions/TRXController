@@ -12,7 +12,7 @@ export default function SignalMeter({ bars, rssi, active }: Props) {
   const lit = Math.round((Math.max(0, Math.min(5, bars)) / 5) * SEGMENTS);
   return (
     <div className="flex items-center gap-3">
-      <span className="w-6 text-[11px] font-semibold tracking-widest text-ink-3">SIG</span>
+      <span className="w-6 text-[11px] font-bold tracking-widest text-ink-2">SIG</span>
       <div className="flex flex-1 gap-[3px]">
         {Array.from({ length: SEGMENTS }, (_, i) => {
           const on = i < lit && active;

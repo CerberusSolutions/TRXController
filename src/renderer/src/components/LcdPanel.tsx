@@ -28,7 +28,7 @@ export default function LcdPanel({ embedded = false }: { embedded?: boolean }) {
   return (
     <section className={embedded ? 'lcd-fit flex h-full flex-col' : 'rounded-xl border border-edge bg-panel p-4'}>
       <div className="mb-2 flex shrink-0 items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">{embedded ? '6 × 16 as sent by the scanner' : 'Scanner display'}</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">{embedded ? '6 × 16 as sent by the scanner' : 'Scanner display'}</span>
         <div className="flex items-center gap-3">
           <span className="font-mono text-[11px] text-ink-3">{iconText && iconText !== '(none)' ? iconText : ''}</span>
           {diagnostics && (

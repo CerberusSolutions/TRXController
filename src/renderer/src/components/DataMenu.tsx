@@ -10,7 +10,7 @@ import { KM_PER_MILE, type Units } from '../../../shared/geo';
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="border-t border-edge pt-3 first:border-t-0 first:pt-0">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">{title}</p>
+      <p className="text-[11px] font-bold uppercase tracking-widest text-ink-2">{title}</p>
       {children}
     </div>
   );

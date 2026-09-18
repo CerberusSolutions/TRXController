@@ -397,7 +397,7 @@ function Traffic({ r }: { r: ReceptionRow }) {
   const mine = (g: TrafficGroup): boolean => g.tone === r.tone && g.tgid === r.tgid;
   return (
     <ul className="mt-1 border-t border-edge/40 pt-1">
-      <li className="flex items-center gap-2 py-px font-sans text-[10px] font-semibold uppercase tracking-widest text-ink-3">
+      <li className="flex items-center gap-2 py-px font-sans text-[10px] font-bold uppercase tracking-widest text-ink-2">
         <span className="w-9 shrink-0" />
         Traffic on {(r.frequencyHz / 1e6).toFixed(4)} by code
       </li>
@@ -719,7 +719,7 @@ export default function LogTable() {
       <div className="min-h-0 flex-1 overflow-auto">
         <div
           ref={headerRef}
-          className="sticky top-0 z-10 grid gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-semibold uppercase tracking-widest text-ink-3"
+          className="sticky top-0 z-10 grid gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2"
           style={{ gridTemplateColumns: template, minWidth }}
         >
           {columns.map((c, i) => (

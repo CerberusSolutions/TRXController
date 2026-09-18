@@ -42,7 +42,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
   if (!value) return null;
   return (
     <div className={`flex flex-col whitespace-nowrap ${flex ? 'min-w-[6rem] max-w-[26rem] shrink' : 'shrink-0'}`} title={title}>
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3">{label}</span>
+      <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">{label}</span>
       <span className={`font-mono text-sm text-ink-2 ${flex ? 'truncate' : ''}`} style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
         {value}
       </span>
@@ -164,8 +164,9 @@ export default function FrequencyHero() {
         ) : conf && id.source !== 'scanning' ? (
           <>
             <p className="flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-tight text-ink" title={`${SOURCE_NAME.CONF}${conf.detail ? ` · ${conf.detail}` : ''}`}>
-              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`}>CONF</span>
+              {/* Pill after the name, so the name stays put as the scanner moves between confirmed and unconfirmed channels. */}
               <span className="truncate">{conf.name}</span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`}>CONF</span>
             </p>
             <p className="mt-0.5 truncate text-base text-ink-2">
               {scannerName && scannerName !== conf.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
@@ -187,7 +188,7 @@ export default function FrequencyHero() {
       <div className="mt-3 h-[4.6rem] overflow-hidden border-t border-edge pt-2">
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-3" title="RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
               Listed
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[13.5px] leading-tight">
@@ -207,7 +208,7 @@ export default function FrequencyHero() {
             </ul>
           </div>
         ) : (
-          <p className="pt-0.5 text-[10px] font-semibold uppercase tracking-widest text-ink-3/60">
+          <p className="pt-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3/70">
             {!online ? '' : rr?.pending ? 'Asking RadioReference…' : rr?.error ? `RadioReference: ${rr.error}` : 'Not listed by RadioReference, Ofcom or the repeater list'}
           </p>
         )}
