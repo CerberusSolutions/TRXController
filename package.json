@@ -1,7 +1,7 @@
 {
   "name": "trxcontroller",
   "productName": "TRXController",
-  "version": "0.2.9",
+  "version": "0.2.10",
   "private": true,
   "description": "Remote control and logging app for the Whistler TRX-1/TRX-1E/TRX-2 scanner",
   "author": "Cerberus Systems",
