@@ -125,8 +125,10 @@ function toEntry(v: unknown): RrukEntry | null {
     ran,
     nac,
     code: rrukCode({ tone, colorCode, ran, nac }),
-    // The TX/RX flag as the WTR has it: T base transmits here, R base receives (mobiles transmit).
-    direction: cls === 'T' || cls === 'R' || cls === 'TR' ? cls : '',
+    // RRUK's TX/RX flag is from the listener's side: R = you receive it (the base transmits here),
+    // T = mobiles transmit here. Stored the WTR's way round (T base transmits, R base receives) so
+    // both sources agree on "base" / "mob". Seen live on 453.4375 (FCC Recycling): WTR T, RRUK R.
+    direction: cls === 'R' ? 'T' : cls === 'T' ? 'R' : cls === 'TR' ? 'TR' : '',
     location: text(o['location']),
     nationwide,
     distanceKm: nationwide || !Number.isFinite(miles) ? null : miles * KM_PER_MILE,

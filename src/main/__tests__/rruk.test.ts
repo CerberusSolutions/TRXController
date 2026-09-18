@@ -24,7 +24,7 @@ describe('RRUK client', () => {
     const r = parseRrukResponse(EXAMPLE);
     expect(r.user).toBe('ScannerFan99');
     expect(r.entries).toEqual([
-      expect.objectContaining({ callsign: 'PMR446', alpha: 'PMR446 CH1', freqMHz: 446.00625, mode: 'DMR', code: '', direction: 'R', location: 'Nationwide', nationwide: true, distanceKm: null, bearingDeg: null, tags: 'Nationwide - PMR446 Digital', isTrunk: false }),
+      expect.objectContaining({ callsign: 'PMR446', alpha: 'PMR446 CH1', freqMHz: 446.00625, mode: 'DMR', code: '', direction: 'T', location: 'Nationwide', nationwide: true, distanceKm: null, bearingDeg: null, tags: 'Nationwide - PMR446 Digital', isTrunk: false }),
     ]);
   });
 
@@ -36,7 +36,8 @@ describe('RRUK client', () => {
       data: [{ callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', freq: '453.4375', mode: 'DMR', tone: '', colorCode: '12', ran: '', nac: '', class: 'R', location: 'Steeple Claydon', distance: '4.4', bearing: 324, lat: '51.8958', long: '-0.978155', place: 'Steeple Claydon', county: 'Buckinghamshire', postcode: 'HP180AF', licence: '1383591/1', group: 'WTR', tags: '', is_trunk: false }],
     });
     const e = r.entries[0]!;
-    expect(e).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', code: 'CC 12', direction: 'R', nationwide: false, bearingDeg: 324, lat: 51.8958, lon: -0.978155, place: 'Steeple Claydon', county: 'Buckinghamshire', postcode: 'HP180AF', licence: '1383591/1', group: 'WTR' });
+    // class R is RRUK's "you receive it": the base transmits here, so the WTR-style direction is T.
+    expect(e).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', code: 'CC 12', direction: 'T', nationwide: false, bearingDeg: 324, lat: 51.8958, lon: -0.978155, place: 'Steeple Claydon', county: 'Buckinghamshire', postcode: 'HP180AF', licence: '1383591/1', group: 'WTR' });
     expect(e.distanceKm).toBeCloseTo(7.08, 1);
     // "Nationwide" in the location alone is enough.
     expect(parseRrukResponse({ success: true, data: [{ callsign: 'PMR446', alpha: 'PMR446 CH8', location: 'Nationwide', distance: '' }] }).entries[0]).toMatchObject({ nationwide: true, distanceKm: null });
@@ -50,7 +51,7 @@ describe('RRUK client', () => {
     const r = parseRrukResponse(live);
     expect(r.user).toBe('Defiant');
     const e = r.entries[0]!;
-    expect(e).toMatchObject({ callsign: '', alpha: 'FCC RECYCLING (UK) LIMITED', licence: '1383591/1', group: 'WTR', tags: 'WTR', direction: 'R', location: 'Steeple Claydon, Buckinghamshire', nationwide: false, code: '', isTrunk: true });
+    expect(e).toMatchObject({ callsign: '', alpha: 'FCC RECYCLING (UK) LIMITED', licence: '1383591/1', group: 'WTR', tags: 'WTR', direction: 'T', location: 'Steeple Claydon, Buckinghamshire', nationwide: false, code: '', isTrunk: true });
     expect(e.distanceKm).toBeCloseTo(7.08, 1);
   });
 
