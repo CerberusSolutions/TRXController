@@ -38,6 +38,8 @@ describe('RRUK client', () => {
     const e = r.entries[0]!;
     expect(e).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', code: 'CC 12', direction: 'R', nationwide: false, bearingDeg: 324, lat: 51.8958, lon: -0.978155, place: 'Steeple Claydon', county: 'Buckinghamshire', postcode: 'HP180AF', licence: '1383591/1', group: 'WTR' });
     expect(e.distanceKm).toBeCloseTo(7.08, 1);
+    // "Nationwide" in the location alone is enough.
+    expect(parseRrukResponse({ success: true, data: [{ callsign: 'PMR446', alpha: 'PMR446 CH8', location: 'Nationwide', distance: '' }] }).entries[0]).toMatchObject({ nationwide: true, distanceKm: null });
     // Entries with neither a name nor a callsign are dropped; 0,0 coordinates count as none.
     expect(parseRrukResponse({ success: true, data: [{ freq: 1 }, { callsign: 'X', lat: 0, lon: 0 }] }).entries).toEqual([expect.objectContaining({ callsign: 'X', lat: null, lon: null })]);
   });

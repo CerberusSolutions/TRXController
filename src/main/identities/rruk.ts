@@ -93,7 +93,8 @@ function toEntry(v: unknown): RrukEntry | null {
   const o = v as Record<string, unknown>;
   const freq = Number(o['freq']);
   const dist = o['distance'];
-  const nationwide = typeof dist === 'string' && /nationwide/i.test(dist);
+  // Nationwide (PMR446, aero, …): the server says so in the distance, the location, or both.
+  const nationwide = (typeof dist === 'string' && /nationwide/i.test(dist)) || /^\s*nationwide\s*$/i.test(text(o['location']));
   const miles = typeof dist === 'number' ? dist : typeof dist === 'string' && /^\s*[\d.]+/.test(dist) ? parseFloat(dist) : NaN;
   const alpha = text(o['alpha']);
   // Live answers put the Ofcom licence number in `callsign` ("1383591/1") with the licensee in `alpha`;
