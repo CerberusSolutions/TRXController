@@ -11,7 +11,7 @@ digital scanners, replacing Whistler's own remote control software.
 ## Stack
 
 Electron + Vite + React + TypeScript, Tailwind, `serialport` in the main process,
-Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows first; a macOS (Apple silicon) build is provided as well.
+Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows first; macOS (Apple silicon) and Linux (AppImage and .deb, x64 and arm64) builds are provided as well.
 
 ## Getting started
 
@@ -91,22 +91,65 @@ npm run dist:dir    # release/win-unpacked/ only, for a quick check without inst
 
 Run `npm run dist` on Windows (the NSIS step needs Wine anywhere else; `dist:dir` works on Linux).
 
-## Linux (Ubuntu, Debian, Mint, or any distro via AppImage)
+## Installing on Linux (Ubuntu, Debian, Mint, Raspberry Pi, or any distro via AppImage)
+
+Two packages are built for each release: a `.deb` for Ubuntu, Debian and Mint, and an AppImage that
+runs on any distro without installing. Each comes in x64 (`amd64` / `x86_64`) for PCs and arm64 for
+a Raspberry Pi running a 64-bit OS (Pi 3 onwards on Raspberry Pi OS 64-bit or Ubuntu). There is no
+signing step on Linux, so no first-run warning.
+
+**Ubuntu / Debian / Mint (.deb)**
+
+1. Download `TRXController-<version>-linux-amd64.deb` (or `-arm64.deb` on a Pi) from the
+   [releases page](https://github.com/CerberusSolutions/TRXController/releases).
+2. Install it, which also pulls in the few libraries Electron needs:
+
+   ```
+   sudo apt install ./TRXController-<version>-linux-amd64.deb
+   ```
+
+3. Give yourself access to serial ports. They belong to the `dialout` group, so:
+
+   ```
+   sudo usermod -aG dialout $USER
+   ```
+
+   then **log out and back in** (or reboot); group changes only take effect on a new login. The
+   installer prints this reminder too.
+4. Plug the scanner in over USB and switch it on. No driver is needed; it appears as
+   `/dev/ttyUSB0` (or `/dev/ttyACM0`). Launch **TRXController** from the applications menu, pick
+   the port in the top bar and press **Connect**. The port is remembered for next time.
+
+**Any distro (AppImage)**
+
+1. Download `TRXController-<version>-linux-x86_64.AppImage` (or `-arm64.AppImage`).
+2. Make it executable and run it:
+
+   ```
+   chmod +x TRXController-<version>-linux-x86_64.AppImage
+   ./TRXController-<version>-linux-x86_64.AppImage
+   ```
+
+   If it complains about FUSE (older distros, some containers), install `libfuse2` or run it with
+   `--appimage-extract-and-run`.
+3. Do the `dialout` step above, then connect as above.
+
+Everything else is the same as on Windows, with the same Ctrl shortcuts (Ctrl+Shift+D for
+diagnostics). The log, settings and imported data live in `~/.config/TRXController`. The
+RadioReference password is kept in the desktop keyring (GNOME Keyring or KWallet); on a system
+without one it is stored obfuscated rather than encrypted and the Data dialog says so, and saving it
+again after installing a keyring fixes that. To update, install the new `.deb` over the old one (or
+replace the AppImage); data and settings are kept. To remove it, `sudo apt remove trxcontroller`
+(or delete the AppImage) and, for a clean slate, that folder.
+
+Building it yourself, on any Linux machine:
 
 ```
 npm run dist:linux  # release/TRXController-<version>-linux-{x86_64,arm64}.AppImage and -{amd64,arm64}.deb
 ```
 
-To install from the [releases page](https://github.com/CerberusSolutions/TRXController/releases):
-
-- **Ubuntu / Debian / Mint**: `sudo apt install ./TRXController-<version>-linux-amd64.deb` (arm64 for a
-  Raspberry Pi), then launch TRXController from the applications menu.
-- **Any distro**: download the AppImage, `chmod +x` it and run it. No install needed.
-
-The scanner appears as `/dev/ttyUSB0` or `/dev/ttyACM0`. Your user must be in the `dialout` group to
-open it: `sudo usermod -aG dialout $USER`, then log out and in again. The RadioReference password is
-kept in the desktop keyring (GNOME Keyring or KWallet); without one it is stored obfuscated, and the
-Data dialog says so. Settings, log and imported data live in `~/.config/TRXController`.
+electron-builder downloads the arm64 Electron on an x64 machine, so both architectures build
+anywhere. The config is the `linux:` section of `electron-builder.yml`; the icon is `build/icon.png`.
 
 ## Installing on a Mac (Apple silicon)
 
@@ -149,8 +192,8 @@ The last port used is reopened at launch.
 
 ## Releases on GitHub
 
-Pushing a version tag builds the Windows installer and the macOS app on their own runners and attaches them to a GitHub
-Release (`.github/workflows/release.yml`), so users download it from the Releases page:
+Pushing a version tag builds the Windows installer, the macOS app and the Linux AppImage and .deb on their own runners
+and attaches them all to a GitHub Release (`.github/workflows/release.yml`), so users download it from the Releases page:
 
 ```
 .\scripts\release.ps1            # patch: 0.2.1 -> 0.2.2
