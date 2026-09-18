@@ -87,6 +87,11 @@ describe('candidatesFor', () => {
     expect(list[0]).toMatchObject({ match: true, detail: 'Leeds · CC 5 ✓ · DMR · mob', bearingDeg: 90 });
     expect(list[0]!.title).toContain('licence 123/1');
     expect(list[1]).toMatchObject({ detail: 'PMR446 · nationwide · DMR · mob' });
+    // A live Ofcom entry: no callsign to show, the licence in the tooltip only.
+    const ofcom = { ...rruk, entries: [e({ callsign: '', alpha: 'FCC RECYCLING (UK) LIMITED', licence: '1383591/1', location: 'Steeple Claydon, Buckinghamshire', nationwide: false, distanceKm: 7.08, bearingDeg: null, tags: 'WTR', group: 'WTR' })] };
+    const o = candidatesFor({ rr: null, rruk: ofcom, licences: [], repeaters: [], detectedTone: null }, DEFAULT_LOOKUPS)[0]!;
+    expect(o).toMatchObject({ name: 'FCC RECYCLING (UK) LIMITED', detail: 'Steeple Claydon, Buckinghamshire · DMR · mob', distanceKm: 7.08 });
+    expect(o.title).toContain('licence 1383591/1');
     expect(list[1]).not.toHaveProperty('match');
     // Stored and read back, the nationwide flag survives so the row still ranks it as placed.
     expect(normaliseCandidates(JSON.parse(JSON.stringify(storedCandidates(list))))[1]).toMatchObject({ nationwide: true });

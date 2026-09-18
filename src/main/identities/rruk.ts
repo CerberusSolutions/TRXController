@@ -93,10 +93,15 @@ function toEntry(v: unknown): RrukEntry | null {
   const o = v as Record<string, unknown>;
   const freq = Number(o['freq']);
   const dist = o['distance'];
-  const nationwide = typeof dist === 'string' && /nationwide/i.test(dist);
+  // Nationwide (PMR446, aero, …): the server says so in the distance, the location, or both.
+  const nationwide = (typeof dist === 'string' && /nationwide/i.test(dist)) || /^\s*nationwide\s*$/i.test(text(o['location']));
   const miles = typeof dist === 'number' ? dist : typeof dist === 'string' && /^\s*[\d.]+/.test(dist) ? parseFloat(dist) : NaN;
   const alpha = text(o['alpha']);
-  const callsign = text(o['callsign']);
+  // Live answers put the Ofcom licence number in `callsign` ("1383591/1") with the licensee in `alpha`;
+  // a nationwide entry has a real callsign there ("PMR446"). A licence-shaped one is kept as the licence.
+  const rawCallsign = text(o['callsign']);
+  const licenceShaped = /^\d{3,}(\/\d+)?$/.test(rawCallsign);
+  const callsign = licenceShaped ? '' : rawCallsign;
   if (!alpha && !callsign) return null;
   const tone = text(o['tone']);
   const colorCode = text(o['colorCode']);
@@ -131,8 +136,8 @@ function toEntry(v: unknown): RrukEntry | null {
     place: text(o['place'] ?? o['town'] ?? o['location_name']),
     county: text(o['county']),
     postcode: text(o['postcode']),
-    licence: text(o['licence'] ?? o['license']),
-    group: text(o['group']),
+    licence: text(o['licence'] ?? o['license']) || (licenceShaped ? rawCallsign : ''),
+    group: text(o['group']) || (/^[A-Z0-9 ]{2,12}$/.test(text(o['tags'])) ? text(o['tags']) : ''),
     tags: text(o['tags']),
     isTrunk: o['is_trunk'] === true,
   };
