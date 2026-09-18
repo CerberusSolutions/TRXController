@@ -1,5 +1,5 @@
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
-import { NO_ID, formatId, parseScanObjectLine } from '@trxcontroller/rcip';
+import { NO_ID, formatId, isFrequencyLabel, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { formatPlace } from '../../../shared/geo';
 import { candidatesFor } from '../../../shared/listed';
@@ -93,6 +93,11 @@ export default function FrequencyHero() {
   // An identity the user confirmed for this frequency (and tone / talkgroup) outranks everything shown.
   const conf = confirmed && confirmed.frequencyHz === hz ? confirmed : null;
   const scannerName = (id.source === 'active' || id.source === 'lcd') && id.name !== '—' ? id.name : '';
+  // An object the scanner has no name for, or names only by its frequency (with the fingerprint notes a
+  // user adds while identifying it, "453.0625 CC15"), takes the highest-ranked listing's name here, as
+  // the log does; the scanner's text stays beneath so the two can be compared.
+  const unnamed = (id.source === 'active' || id.source === 'lcd') && (scannerName === '' || isFrequencyLabel(scannerName));
+  const top = !conf && unnamed && listed.length > 0 ? listed[0]! : null;
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
@@ -172,6 +177,20 @@ export default function FrequencyHero() {
               {scannerName && scannerName !== conf.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
               {conf.system || id.system || id.detail}
               {(conf.system || id.system) && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
+            </p>
+          </>
+        ) : top ? (
+          <>
+            <p className="flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-tight text-ink" title={top.title}>
+              <span className="truncate">{top.name}</span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL[top.source]}`} title={SOURCE_NAME[top.source]}>
+                {top.source}
+              </span>
+            </p>
+            <p className="mt-0.5 truncate text-base text-ink-2">
+              {scannerName ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
+              {id.system || id.detail}
+              {id.system && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
             </p>
           </>
         ) : (

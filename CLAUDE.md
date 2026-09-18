@@ -214,7 +214,11 @@ captured on 14 Sep 2026.
   RRUK > RRDB > UKR, each with an `enabled` tick; a lookup missing from an older settings file is
   slotted in at its default position) is carried on every snapshot as `lookups` so
   `describe()` and the hero rank the sources the same way: the scanner's own name always
-  wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); the channel
+  wins, unless it is only the frequency, with or without the fingerprint notes a user adds while
+  identifying a channel ("453.0625", "453.0625 CC15", "167.300 94.8": `isFrequencyLabel` in
+  `packages/rcip/src/lcd.ts`), which counts as no name in `describe()`, in the logger's MEM memory
+  and in the hero (which then shows the top listing with its pill and "Scanner: 453.0625 CC15"
+  beneath), while `scannerName` keeps the scanner's text for the Detail view; a RadioReference talkgroup beats any licensee (registers know no talkgroups); the channel
   description in play is RadioReference's or RRUK's, whichever matches the detected code, else is
   placed, else ranks higher (`describe()`'s `desc`), and it is used only when no higher-ranked
   licensee will show;

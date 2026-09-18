@@ -1,4 +1,5 @@
 /** Glue: snapshots in, database rows out, live upserts to the renderer. */
+import { isFrequencyLabel } from '@trxcontroller/rcip';
 import type { ReceptionRow, ScannerSnapshot } from '../../shared/ipc';
 import type { LogDb, NewReception } from './db';
 import { ReceptionTracker, type TrackerEvent, type TrackerOptions } from './tracker';
@@ -40,10 +41,11 @@ export class ReceptionLogger {
    * A reception the display never named (a blip too short for the object screen, or a search
    * landing on a programmed frequency) takes the scanner's object from the last reception on
    * that frequency which showed it, marked MEM so it is never mistaken for a live reading. A
-   * live object arriving later replaces it, since the tracker then carries `scannerName`.
+   * live object arriving later replaces it, since the tracker then carries `scannerName`. An object
+   * named only by its frequency counts as unnamed here too, as it does in the tracker.
    */
   private remember(r: NewReception): NewReception {
-    if (r.scannerName !== '') return r;
+    if (r.scannerName !== '' && !isFrequencyLabel(r.scannerName)) return r;
     const mem = this.db.lastScannerObject(r.frequencyHz);
     if (!mem) return r;
     return { ...r, name: mem.name, scanlist: r.scanlist || mem.scanlist, objectType: r.objectType || mem.objectType, system: r.system || mem.system, source: 'MEM' };

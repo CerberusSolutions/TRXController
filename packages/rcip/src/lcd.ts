@@ -290,6 +290,23 @@ export function isModeFrequencyText(text: string): boolean {
   return MODE_FREQ_RE.test(text.trim()) || /^\d{1,4}\.\d{3,6}$/.test(text.trim());
 }
 
+const FREQ_TOKEN_RE = /^\d{1,4}\.\d{1,6}(?:mhz)?$/i;
+const MODE_TOKEN_RE = /^(?:auto|am|fm|nfm|wfm|dmr|dmrs|p25|nxdn|nxdn4|nxdn8|mot|edacs|ltr|dstar|dg|dig)$/i;
+/** A fingerprint note: a code prefix and / or a number ("CC15", "CC", "15", "94.8", "D023", "NAC293", "TG9", "S1"). */
+const FINGERPRINT_TOKEN_RE = /^(?:cc|c|ctcss|ct|cs|dcs|d|nac|n|ran|r|tg|tgid|ts|s|slot|col|color|colour|tone|mhz|dmr|nfm|fm|am|p25|nxdn|dg|rid|id)?[:=]?\d*(?:\.\d+)?$/i;
+
+/**
+ * True when an object's name is nothing more than its frequency: on its own ("453.0625"), after the
+ * mode ("DMRs 145.637500") or followed by the fingerprint a user notes while identifying a channel
+ * ("453.0625 CC15", "167.300 94.8", "453.0625 CC 15 S1"). Such a name carries no identity, so the
+ * lookups may name the object as if it had none.
+ */
+export function isFrequencyLabel(text: string): boolean {
+  const tokens = text.trim().split(/\s+/).filter(Boolean);
+  const start = tokens[0] && FREQ_TOKEN_RE.test(tokens[0]) ? 1 : tokens[1] && MODE_TOKEN_RE.test(tokens[0]!) && FREQ_TOKEN_RE.test(tokens[1]) ? 2 : 0;
+  return start > 0 && tokens.slice(start).every((t) => FINGERPRINT_TOKEN_RE.test(t));
+}
+
 /** Render the LCD as a boxed multi-line string for terminals. */
 export function renderLcd(lcd: Lcd): string {
   const bar = '+' + '-'.repeat(LCD_COLUMNS) + '+';
