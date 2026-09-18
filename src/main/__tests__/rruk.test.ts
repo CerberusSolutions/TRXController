@@ -49,13 +49,17 @@ describe('RRUK client', () => {
   });
 
   it('parses a live Ofcom entry: the licence number arrives as the callsign, the licensee as the alpha tag', () => {
-    // Captured 18 Sep 2026 from api_search.php with lat/lon and a 10-mile range.
-    const live = { success: true, user: 'Defiant', count: 1, data: [{ callsign: '1383591/1', alpha: 'FCC RECYCLING (UK) LIMITED', freq: 453.4375, mode: 'DMR', tone: '', colorCode: '', ran: '', nac: '', class: 'R', location: 'Steeple Claydon, Buckinghamshire', distance: '4.4 miles', tags: 'WTR', is_trunk: true }] };
+    // Captured 18 Sep 2026 from api_search.php with lat/lon and a 10-mile range, after RRUK added
+    // lat, lon and bearing for the transmitter site that afternoon.
+    const live = { success: true, user: 'Defiant', count: 1, data: [{ callsign: '1383591/1', alpha: 'FCC RECYCLING (UK) LIMITED', freq: 453.4375, mode: 'DMR', tone: '', colorCode: '', ran: '', nac: '', class: 'R', location: 'Steeple Claydon, Buckinghamshire', lat: 51.8958, lon: -0.978155, distance: '4.4 miles', bearing: 325, tags: 'WTR', is_trunk: true }] };
     const r = parseRrukResponse(live);
     expect(r.user).toBe('Defiant');
     const e = r.entries[0]!;
-    expect(e).toMatchObject({ callsign: '', alpha: 'FCC RECYCLING (UK) LIMITED', licence: '1383591/1', group: 'WTR', tags: 'WTR', direction: 'T', location: 'Steeple Claydon, Buckinghamshire', nationwide: false, code: '', isTrunk: true });
+    expect(e).toMatchObject({ callsign: '', alpha: 'FCC RECYCLING (UK) LIMITED', licence: '1383591/1', group: 'WTR', tags: 'WTR', direction: 'T', location: 'Steeple Claydon, Buckinghamshire', lat: 51.8958, lon: -0.978155, bearingDeg: 325, nationwide: false, code: '', isTrunk: true });
     expect(e.distanceKm).toBeCloseTo(7.08, 1);
+    // The earlier shape, without coordinates, still parses (a cached answer from before the change).
+    const { lat: _a, lon: _b, bearing: _c, ...older } = live.data[0]!;
+    expect(parseRrukResponse({ ...live, data: [older] }).entries[0]).toMatchObject({ lat: null, lon: null, bearingDeg: null, licence: '1383591/1' });
   });
 
   it('turns tones and codes into the form the scanner shows', () => {
