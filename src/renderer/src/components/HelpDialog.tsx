@@ -39,7 +39,7 @@ export const DATA_SOURCES = [
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-t border-edge pt-4 first:border-t-0 first:pt-0">
-      <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-widest text-ink-3">{title}</h3>
+      <h3 className="mb-2 text-[11px] font-bold uppercase tracking-widest text-ink-2">{title}</h3>
       {children}
     </section>
   );

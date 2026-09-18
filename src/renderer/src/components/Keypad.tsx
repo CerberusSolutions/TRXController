@@ -56,7 +56,7 @@ export default function Keypad() {
   return (
     <section className="rounded-xl border border-edge bg-panel p-4">
       <div className="mb-3 flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Keypad</span>
+        <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Keypad</span>
         {stalled ? (
           <span className="rounded-md border border-amber/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber" title="The scanner is not answering; key presses would queue up and fire later, so the keypad is held.">
             Scanner busy
@@ -86,7 +86,7 @@ export default function Keypad() {
       </div>
       <div className="mt-3 border-t border-edge pt-3">
         <div className="mb-1.5 flex items-center justify-between">
-          <span className="text-[11px] font-semibold uppercase tracking-widest text-ink-3">Tune</span>
+          <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Tune</span>
           <span className="text-[11px] text-ink-3">via Searches › Tune Mode</span>
         </div>
         <div className="flex gap-1.5">
