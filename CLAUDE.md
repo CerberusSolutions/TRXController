@@ -230,7 +230,7 @@ captured on 14 Sep 2026.
   it fits (source `CONF`, the per-source columns untouched, so the Detail view still shows the
   disagreement), `ReceptionLogger.confirm` overlays it on every new event after `remember`, and
   `enrich()` puts the one for the current frequency / tone / talkgroup on the snapshot as `confirmed`
-  (the hero shows it with a CONF pill and "Scanner: X" beneath when the scanner disagrees). Withdrawing
+  (the hero shows it with a CONF pill after the name, so the name never shifts, and "Scanner: X" beneath when the scanner disagrees). Withdrawing
   one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
   The Data dialog lists them with a remove link.
 - Code matching: `detectedCode` (`src/shared/rr.ts`) is the reception's tone ("CTCSS 94.8", "DCS 023",

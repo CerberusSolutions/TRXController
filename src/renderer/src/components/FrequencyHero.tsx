@@ -164,8 +164,9 @@ export default function FrequencyHero() {
         ) : conf && id.source !== 'scanning' ? (
           <>
             <p className="flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-tight text-ink" title={`${SOURCE_NAME.CONF}${conf.detail ? ` · ${conf.detail}` : ''}`}>
-              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`}>CONF</span>
+              {/* Pill after the name, so the name stays put as the scanner moves between confirmed and unconfirmed channels. */}
               <span className="truncate">{conf.name}</span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL.CONF}`}>CONF</span>
             </p>
             <p className="mt-0.5 truncate text-base text-ink-2">
               {scannerName && scannerName !== conf.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
