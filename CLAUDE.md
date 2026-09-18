@@ -341,8 +341,9 @@ captured on 14 Sep 2026.
 ## Help screen and identity
 
 - `DataDialog` (`components/DataMenu.tsx`, the Data button; `useUi.dataOpen`) is the same
-  modal chrome as the help screen, two columns: lookup order, location and RadioReference on
-  the left, the three data-file imports on the right. Esc / click outside closes it and the
+  modal chrome as the help screen, two columns balanced so neither needs much scrolling: lookup
+  order, location, RadioReference UK and RadioReference on the left; the three data-file imports,
+  confirmed identities and the scan timeout on the right. Esc / click outside closes it and the
   Keypad ignores shortcuts while either dialog is open.
 - `HelpDialog` (the `?` button; opens by itself on first run, remembered in localStorage) carries
   the beta / no-warranty notice, connection steps, the two data-file download URLs with what to

@@ -162,7 +162,7 @@ function ConfirmedList() {
   if (confirmations.length === 0) return <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, or type a name.</p>;
   return (
     <div className="mt-1">
-      <ul className="max-h-28 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
+      <ul className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
         {confirmations.map((c) => (
           <li key={c.id} className="flex items-center gap-2">
             <span className="text-amber-2">{(c.frequencyHz / 1e6).toFixed(4)}</span>
@@ -441,7 +441,7 @@ export default function DataDialog() {
         role="dialog"
         aria-modal="true"
         aria-labelledby="data-title"
-        className="relative max-h-[88vh] w-full max-w-[52rem] overflow-y-auto rounded-xl border border-edge bg-panel p-6 text-sm text-ink-2 shadow-2xl"
+        className="relative max-h-[88vh] w-full max-w-[58rem] overflow-y-auto rounded-xl border border-edge bg-panel p-6 text-sm text-ink-2 shadow-2xl"
       >
         <button
           className="absolute top-3 right-3 flex h-8 w-8 items-center justify-center rounded-md text-lg text-ink-3 hover:bg-panel-2 hover:text-ink"
@@ -464,14 +464,6 @@ export default function DataDialog() {
             <Section title="Lookup order">
               <LookupOrder />
               <p className="mt-1 text-[11px] text-ink-3">The first lookup with a match names a channel the scanner left blank. Untick one to ignore it.</p>
-            </Section>
-
-            <Section title="Confirmed identities">
-              <ConfirmedList />
-            </Section>
-
-            <Section title="Scan timeout">
-              <ScanTimeoutForm />
             </Section>
 
             <Section title="Your location (for nearest licensee and repeater)">
@@ -567,6 +559,14 @@ export default function DataDialog() {
             </Section>
 
             <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
+
+            <Section title="Confirmed identities">
+              <ConfirmedList />
+            </Section>
+
+            <Section title="Scan timeout">
+              <ScanTimeoutForm />
+            </Section>
           </div>
         </div>
 
