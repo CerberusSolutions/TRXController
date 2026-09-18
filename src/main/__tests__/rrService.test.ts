@@ -57,7 +57,7 @@ describe('RrService', { timeout: 20_000 }, () => {
     expect(make({ stid: null }).svc.enabled).toBe(false);
     expect(make().svc.enabled).toBe(true);
     expect(make({ stid: null }).svc.info(417_725_000)).toBeNull();
-    expect(make().svc.status()).toMatchObject({ appKey: true, username: 'steve', hasPassword: true, stid: 410, enabled: true, cachedFreqs: 0 });
+    expect(make().svc.status()).toMatchObject({ appKey: true, passwordStore: 'os', username: 'steve', hasPassword: true, stid: 410, enabled: true, cachedFreqs: 0 });
   });
 
   it('looks a heard frequency up once, pulls the trunked system, then answers from the cache', async () => {

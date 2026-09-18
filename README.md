@@ -1,6 +1,6 @@
 # TRXController
 
-A modern remote-control and logging app (Windows, and macOS on Apple silicon) for the Whistler TRX-1 / TRX-1E / TRX-2
+A modern remote-control and logging app (Windows, macOS on Apple silicon, and Linux) for the Whistler TRX-1 / TRX-1E / TRX-2
 digital scanners, replacing Whistler's own remote control software.
 
 - Protocol spec: `docs/Whistler_Remote_Control_Protocol_v1_7.pdf`
@@ -90,6 +90,23 @@ npm run dist:dir    # release/win-unpacked/ only, for a quick check without inst
 ```
 
 Run `npm run dist` on Windows (the NSIS step needs Wine anywhere else; `dist:dir` works on Linux).
+
+## Linux (Ubuntu, Debian, Mint, or any distro via AppImage)
+
+```
+npm run dist:linux  # release/TRXController-<version>-linux-{x86_64,arm64}.AppImage and -{amd64,arm64}.deb
+```
+
+To install from the [releases page](https://github.com/CerberusSolutions/TRXController/releases):
+
+- **Ubuntu / Debian / Mint**: `sudo apt install ./TRXController-<version>-linux-amd64.deb` (arm64 for a
+  Raspberry Pi), then launch TRXController from the applications menu.
+- **Any distro**: download the AppImage, `chmod +x` it and run it. No install needed.
+
+The scanner appears as `/dev/ttyUSB0` or `/dev/ttyACM0`. Your user must be in the `dialout` group to
+open it: `sudo usermod -aG dialout $USER`, then log out and in again. The RadioReference password is
+kept in the desktop keyring (GNOME Keyring or KWallet); without one it is stored obfuscated, and the
+Data dialog says so. Settings, log and imported data live in `~/.config/TRXController`.
 
 ## Installing on a Mac (Apple silicon)
 

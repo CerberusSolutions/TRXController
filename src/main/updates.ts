@@ -38,14 +38,16 @@ interface ReleaseJson {
 
 /**
  * Turn the /releases/latest JSON into an UpdateInfo, or null if it is not a usable release.
- * The download link is the installer for this platform: the .exe on Windows, the .dmg on macOS.
+ * The download link is the installer for this platform: the .exe on Windows, the .dmg on macOS,
+ * the AppImage for this architecture on Linux.
  */
-export function readRelease(json: unknown, current: string, checkedAt = Date.now(), platform: string = process.platform): UpdateInfo | null {
+export function readRelease(json: unknown, current: string, checkedAt = Date.now(), platform: string = process.platform, arch: string = process.arch): UpdateInfo | null {
   const r = json as ReleaseJson;
   if (!r || typeof r.tag_name !== 'string' || !parseVersion(r.tag_name)) return null;
   if (r.draft === true) return null;
   const assets = Array.isArray(r.assets) ? (r.assets as { name?: unknown; browser_download_url?: unknown }[]) : [];
-  const want = platform === 'darwin' ? /\.dmg$/i : /\.exe$/i;
+  // electron-builder names the Linux x64 AppImage "x86_64" (and the .deb "amd64"); arm64 stays arm64.
+  const want = platform === 'darwin' ? /\.dmg$/i : platform === 'linux' ? new RegExp(`linux-${arch === 'x64' ? 'x86_64' : arch}\\.AppImage$`, 'i') : /\.exe$/i;
   const exe = assets.find((a) => typeof a.name === 'string' && want.test(a.name));
   const latest = r.tag_name.replace(/^v/, '');
   return {

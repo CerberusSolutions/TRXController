@@ -34,6 +34,11 @@ describe('readRelease', () => {
     expect(info?.downloadUrl).toMatch(/Setup-0\.2\.4\.exe$/);
     expect(readRelease(release, '0.2.3', 1000, 'darwin')?.downloadUrl).toMatch(/mac-arm64\.dmg$/);
     expect(readRelease({ ...release, assets: [release.assets[0]] }, '0.2.3', 1000, 'darwin')?.downloadUrl).toBeNull();
+    // Linux picks the AppImage for its own architecture; the .deb is on the release page.
+    const linux = { ...release, assets: [...release.assets, { name: 'TRXController-0.2.4-linux-x86_64.AppImage', browser_download_url: 'https://x/l64' }, { name: 'TRXController-0.2.4-linux-arm64.AppImage', browser_download_url: 'https://x/la64' }, { name: 'TRXController-0.2.4-linux-amd64.deb', browser_download_url: 'https://x/deb' }] };
+    expect(readRelease(linux, '0.2.3', 1000, 'linux', 'x64')?.downloadUrl).toBe('https://x/l64');
+    expect(readRelease(linux, '0.2.3', 1000, 'linux', 'arm64')?.downloadUrl).toBe('https://x/la64');
+    expect(readRelease(release, '0.2.3', 1000, 'linux', 'x64')?.downloadUrl).toBeNull();
     expect(info?.publishedAt).toBe(Date.parse('2026-09-15T12:00:00Z'));
   });
 

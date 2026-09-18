@@ -27,6 +27,7 @@ const CHROME = {
 } as const;
 
 const IS_MAC = process.platform === 'darwin';
+const IS_LINUX = process.platform === 'linux';
 
 function applyChrome(): void {
   const c = nativeTheme.shouldUseDarkColors ? CHROME.dark : CHROME.light;
@@ -34,7 +35,7 @@ function applyChrome(): void {
     if (w.isDestroyed()) continue;
     w.setBackgroundColor(c.background);
     // macOS draws its own traffic lights; the overlay is a Windows / Linux thing.
-    if (!IS_MAC) w.setTitleBarOverlay({ color: c.overlay, symbolColor: c.symbol, height: 46 });
+    if (!IS_MAC && !IS_LINUX) w.setTitleBarOverlay({ color: c.overlay, symbolColor: c.symbol, height: 46 });
   }
 }
 
@@ -202,7 +203,15 @@ async function autoConnectAttempt(): Promise<void> {
 }
 
 function registerIpc(): void {
-  ipcMain.handle(IPC.listPorts, () => listPorts());
+  ipcMain.handle(IPC.listPorts, async () => {
+    // A system that cannot enumerate ports (no udev on a minimal Linux, say) shows none rather than an error.
+    try {
+      return await listPorts();
+    } catch (e) {
+      console.log(`[scanner] cannot list serial ports: ${(e as Error).message}`);
+      return [];
+    }
+  });
   ipcMain.handle(IPC.connect, async (_e, path: unknown) => {
     if (typeof path !== 'string' || !path) throw new Error('Port path required');
     await session.connect(path);
@@ -331,7 +340,7 @@ function registerIpc(): void {
     const cur = settings.get().rr;
     let stored = cur.password;
     if (password !== '') {
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('This Windows account cannot encrypt the password (safeStorage unavailable)');
+      if (!safeStorage.isEncryptionAvailable()) throw new Error('This account cannot encrypt the password (safeStorage unavailable)');
       stored = safeStorage.encryptString(password).toString('base64');
     }
     settings.set({ rr: { ...cur, username: username.trim(), password: username.trim() ? stored : '' } });
@@ -415,6 +424,7 @@ function openLog(): void {
     appKey: __RR_APP_KEY__,
     getSettings: () => settings!.get().rr,
     decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+    passwordStore: () => (IS_LINUX ? safeStorage.getSelectedStorageBackend() : 'os'),
     getLocation: () => {
       const s = settings!.get();
       return { lat: s.lat, lon: s.lon, radiusKm: s.radiusKm };
@@ -466,14 +476,17 @@ function createWindow(): void {
     // Frameless with the native window controls drawn over our own top bar:
     // Windows puts minimise / maximise / close at the top right (the overlay),
     // macOS its traffic lights at the top left, vertically centred in the 46 px bar.
+    // Linux has no overlay, so it keeps the window manager's own frame.
     ...(IS_MAC
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 15 } }
-      : {
-          titleBarStyle: 'hidden' as const,
-          titleBarOverlay: nativeTheme.shouldUseDarkColors
-            ? { color: CHROME.dark.overlay, symbolColor: CHROME.dark.symbol, height: 46 }
-            : { color: CHROME.light.overlay, symbolColor: CHROME.light.symbol, height: 46 },
-        }),
+      : IS_LINUX
+        ? {}
+        : {
+            titleBarStyle: 'hidden' as const,
+            titleBarOverlay: nativeTheme.shouldUseDarkColors
+              ? { color: CHROME.dark.overlay, symbolColor: CHROME.dark.symbol, height: 46 }
+              : { color: CHROME.light.overlay, symbolColor: CHROME.light.symbol, height: 46 },
+          }),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       sandbox: false,
@@ -508,6 +521,13 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // Linux without a keyring (GNOME Keyring / KWallet) has only Electron's basic_text backend:
+  // accept it, obfuscated rather than encrypted, and say so in the Data dialog, instead of
+  // refusing to store the RadioReference password at all.
+  if (IS_LINUX && safeStorage.getSelectedStorageBackend() === 'basic_text') {
+    safeStorage.setUsePlainTextEncryption(true);
+    console.log('[rr] no keyring found: the RadioReference password will be stored obfuscated, not encrypted');
+  }
   openLog();
   registerIpc();
   createWindow();
