@@ -143,7 +143,7 @@ export default function HelpDialog() {
 
           <Section title="Optional data files">
             <p className="mb-3">
-              Three free downloads make the log far more useful, and a RadioReference account adds names from its database. Save each file anywhere, then load it with the{' '}
+              Three free downloads make the log far more useful, and a RadioReference UK or RadioReference account adds names from those databases. Save each file anywhere, then load it with the{' '}
               <b className="rounded border border-edge px-1 py-px text-ink">Data</b> button in the top bar. Importing replaces the previous copy, so
               repeat it whenever you fetch a fresh file.
             </p>
@@ -174,6 +174,23 @@ export default function HelpDialog() {
               ))}
               <li className="rounded-lg border border-edge bg-panel-2 p-3">
                 <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-semibold text-ink">RadioReference UK (online)</span>
+                  <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://radioreferenceuk.co.uk/" target="_blank" rel="noreferrer">
+                    radioreferenceuk.co.uk
+                  </a>
+                </div>
+                <p className="mt-1 text-ink-3">
+                  The UK-centric, Ofcom-backed database: licensee, place, distance and the colour code or tone for business channels near you, as
+                  frequencies are heard. Results are cached, so each frequency is asked about once a month.
+                </p>
+                <p className="mt-2">
+                  <span className="text-ink-3">Then: </span>
+                  Generate an API key in your RRUK account dashboard and enter it under Data › RadioReference UK, then press Test. Lookups need a
+                  location (or a postcode) under Data, and use the radius as the search range. The key is yours alone and is stored encrypted.
+                </p>
+              </li>
+              <li className="rounded-lg border border-edge bg-panel-2 p-3">
+                <div className="flex items-baseline justify-between gap-3">
                   <span className="font-semibold text-ink">RadioReference (online)</span>
                   <span className="shrink-0 font-mono text-[11px] text-ink-3">premium account</span>
                 </div>
@@ -184,7 +201,7 @@ export default function HelpDialog() {
                 <p className="mt-2">
                   <span className="text-ink-3">Then: </span>
                   Data › RadioReference: enter your radioreference.com username and password (a premium subscription is required for API access)
-                  and pick your country and region. The password is stored encrypted by Windows for your account only.
+                  and pick your country and region. The password is stored encrypted for your account only.
                 </p>
               </li>
             </ul>
