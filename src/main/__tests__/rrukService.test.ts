@@ -1,0 +1,110 @@
+import { describe, expect, it } from 'vitest';
+import { LogDb } from '../log/db';
+import { RrukService } from '../identities/rrukService';
+import type { FetchLike } from '../identities/rruk';
+import type { RrukSettings } from '../../shared/ipc';
+
+const ENTRY = { callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', freq: 453.4375, mode: 'DMR', tone: '', colorCode: '12', ran: '', nac: '', class: 'R', location: 'Steeple Claydon', distance: '4.4', lat: 51.8958, lon: -0.978155, is_trunk: false };
+
+function fake(calls: string[], reply: (url: URL) => { status: number; body: unknown }): FetchLike {
+  return (async (url: string) => {
+    calls.push(url);
+    const r = reply(new URL(url));
+    return { ok: r.status < 400, status: r.status, text: async () => (typeof r.body === 'string' ? r.body : JSON.stringify(r.body)) } as unknown as Response;
+  }) as FetchLike;
+}
+
+function make(over: Partial<RrukSettings> = {}, opts: { devKey?: string; calls?: string[]; reply?: (url: URL) => { status: number; body: unknown }; location?: { lat: number | null; lon: number | null; radiusKm: number | null } } = {}) {
+  const db = new LogDb(':memory:');
+  const settings: RrukSettings = { apiKey: 'enc:secret', postcode: '', ...over };
+  let changes = 0;
+  const calls = opts.calls ?? [];
+  const svc = new RrukService({
+    db,
+    getSettings: () => settings,
+    decrypt: (c) => c.replace(/^enc:/, ''),
+    devKey: () => opts.devKey ?? '',
+    getLocation: () => opts.location ?? { lat: 51.8438, lon: -0.9183, radiusKm: 16 },
+    fetchImpl: fake(calls, opts.reply ?? (() => ({ status: 200, body: { success: true, user: 'steve', count: 1, data: [ENTRY] } }))),
+    onChange: () => changes++,
+    spacingMs: 5,
+  });
+  return { db, svc, settings, calls, changes: () => changes };
+}
+
+async function settled(svc: RrukService, ...hz: number[]): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (hz.some((h) => svc.info(h)?.pending) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 5));
+}
+
+describe('RrukService', { timeout: 20_000 }, () => {
+  it('is enabled with a key and somewhere to search from; a development key stands in when none is stored', () => {
+    expect(make().svc.enabled).toBe(true);
+    expect(make({ apiKey: '' }).svc.enabled).toBe(false);
+    expect(make({ apiKey: '' }, { devKey: 'dev' }).svc.enabled).toBe(true);
+    expect(make({ apiKey: '' }, { devKey: 'dev' }).svc.status()).toMatchObject({ hasKey: false, devKey: true, enabled: true, located: true });
+    expect(make({}, { location: { lat: null, lon: null, radiusKm: null } }).svc.enabled).toBe(false);
+    expect(make({ postcode: 'HP18' }, { location: { lat: null, lon: null, radiusKm: null } }).svc.enabled).toBe(true);
+    expect(make({ apiKey: '' }).svc.info(453_437_500)).toBeNull();
+  });
+
+  it('asks once per frequency, caches the answer for the location, and adds the bearing from the coordinates', async () => {
+    const { svc, calls, changes } = make();
+    expect(svc.info(453_437_500)).toMatchObject({ fetchedAt: null, pending: false, entries: [] });
+    expect(svc.request(453_437_500)).toBe(true);
+    expect(svc.request(453_437_500)).toBe(false);
+    expect(svc.info(453_437_500)?.pending).toBe(true);
+    await settled(svc, 453_437_500);
+    expect(calls).toHaveLength(1);
+    const u = new URL(calls[0]!);
+    expect(Object.fromEntries(u.searchParams)).toEqual({ api_key: 'secret', freq: '453.4375', lat: '51.84380', lon: '-0.91830', range: '10' });
+    const info = svc.info(453_437_500)!;
+    expect(info.pending).toBe(false);
+    expect(info.entries[0]).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', code: 'CC 12', direction: 'R' });
+    expect(info.entries[0]!.distanceKm).toBeCloseTo(7.08, 1);
+    expect(info.entries[0]!.bearingDeg).toBeGreaterThan(320);
+    expect(info.entries[0]!.bearingDeg).toBeLessThan(335);
+    expect(changes()).toBeGreaterThan(0);
+    expect(svc.request(453_437_500)).toBe(false); // cached
+    expect(svc.status()).toMatchObject({ cachedFreqs: 1, lastError: null });
+  });
+
+  it('prefers the postcode, and treats a cache row from another location as missing', async () => {
+    const { svc, calls, settings } = make({ postcode: 'ls1' });
+    svc.request(446_006_250);
+    await settled(svc, 446_006_250);
+    expect(new URL(calls[0]!).searchParams.get('postcode')).toBe('LS1');
+    expect(new URL(calls[0]!).searchParams.has('lat')).toBe(false);
+    expect(svc.info(446_006_250)?.fetchedAt).not.toBeNull();
+    // Move: the cached answer no longer applies and the frequency is asked again.
+    settings.postcode = 'HP18';
+    svc.resetFailures();
+    expect(svc.info(446_006_250)).toMatchObject({ fetchedAt: null, entries: [] });
+    expect(svc.request(446_006_250)).toBe(true);
+    await settled(svc, 446_006_250);
+    expect(calls).toHaveLength(2);
+    expect(new URL(calls[1]!).searchParams.get('postcode')).toBe('HP18');
+    svc.clearCache();
+    expect(svc.status().cachedFreqs).toBe(0);
+  });
+
+  it('backs off a failed frequency and empties the queue when the key is rejected', async () => {
+    const { svc, calls } = make({}, { reply: () => ({ status: 403, body: { success: false, error: 'Invalid API key' } }) });
+    svc.request(145_500_000);
+    svc.request(145_512_500);
+    await settled(svc, 145_500_000, 145_512_500);
+    expect(calls).toHaveLength(1);
+    expect(svc.info(145_500_000)?.error).toBe('Invalid API key');
+    expect(svc.status().lastError).toBe('Invalid API key');
+    expect(svc.request(145_500_000)).toBe(false);
+    expect(svc.request(145_500_000, true)).toBe(true);
+    svc.dispose();
+  });
+
+  it('test() asks about PMR446 channel 1 and reports the account', async () => {
+    const { svc, calls } = make({}, { reply: () => ({ status: 200, body: { success: true, user: 'steve', count: 0, data: [] } }) });
+    await expect(svc.test()).resolves.toEqual({ user: 'steve', entries: [] });
+    expect(new URL(calls[0]!).searchParams.get('freq')).toBe('446.00625');
+    await expect(make({ apiKey: '' }).svc.test()).rejects.toThrow(/API key/);
+  });
+});

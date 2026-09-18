@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
@@ -112,6 +112,12 @@ export class LogDb {
         lon        REAL,
         range_km   REAL
       );
+      CREATE TABLE IF NOT EXISTS rruk_freqs (
+        frequency_hz INTEGER PRIMARY KEY,
+        scope        TEXT NOT NULL DEFAULT '',
+        fetched_at   INTEGER NOT NULL,
+        entries      TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS confirmations (
         id           INTEGER PRIMARY KEY AUTOINCREMENT,
         frequency_hz INTEGER NOT NULL,
@@ -154,6 +160,7 @@ export class LogDb {
     for (const c of ['scanner_name', 'wtr', 'rr_name', 'rr_system', 'rpt']) {
       if (!cols.includes(c)) this.db.exec(`ALTER TABLE receptions ADD COLUMN ${c} TEXT NOT NULL DEFAULT ''`);
     }
+    if (!cols.includes('rruk')) this.db.exec("ALTER TABLE receptions ADD COLUMN rruk TEXT NOT NULL DEFAULT ''");
     if (!cols.includes('distance_km')) this.db.exec('ALTER TABLE receptions ADD COLUMN distance_km REAL');
     if (!cols.includes('bearing_deg')) this.db.exec('ALTER TABLE receptions ADD COLUMN bearing_deg INTEGER');
     if (!cols.includes('candidates')) this.db.exec("ALTER TABLE receptions ADD COLUMN candidates TEXT NOT NULL DEFAULT '[]'");
@@ -163,14 +170,14 @@ export class LogDb {
     const res = this.db
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
-           object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt,
+           object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rruk,
            distance_km, bearing_deg, candidates, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
         r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
-        r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '',
+        r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '',
         r.distanceKm ?? null, r.bearingDeg ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
@@ -183,7 +190,7 @@ export class LogDb {
       startedAt: 'started_at', endedAt: 'ended_at', frequencyHz: 'frequency_hz', mode: 'mode',
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
       tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source',
-      scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt',
+      scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt', rruk: 'rruk',
       distanceKm: 'distance_km', bearingDeg: 'bearing_deg', candidates: 'candidates', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
@@ -557,6 +564,32 @@ export class LogDb {
     this.db.prepare('INSERT OR REPLACE INTO rr_counties (ctid, fetched_at, name, lat, lon, range_km) VALUES (?, ?, ?, ?, ?, ?)').run(c.ctid, now, c.name, c.lat, c.lon, c.rangeKm);
   }
 
+  // --- RadioReference UK cache ---------------------------------------------
+
+  rrukGetFreq(hz: number): { scope: string; fetchedAt: number; entries: RrukEntry[] } | null {
+    const r = this.db.prepare('SELECT scope, fetched_at, entries FROM rruk_freqs WHERE frequency_hz = ?').get(hz) as
+      | { scope: string; fetched_at: number; entries: string }
+      | undefined;
+    if (!r) return null;
+    try {
+      return { scope: r.scope, fetchedAt: Number(r.fetched_at), entries: JSON.parse(r.entries) as RrukEntry[] };
+    } catch {
+      return null;
+    }
+  }
+
+  rrukPutFreq(hz: number, scope: string, entries: RrukEntry[], now = Date.now()): void {
+    this.db.prepare('INSERT OR REPLACE INTO rruk_freqs (frequency_hz, scope, fetched_at, entries) VALUES (?, ?, ?, ?)').run(hz, scope, now, JSON.stringify(entries));
+  }
+
+  rrukStats(): { freqs: number } {
+    return { freqs: Number((this.db.prepare('SELECT COUNT(*) AS n FROM rruk_freqs').get() as { n: number }).n) };
+  }
+
+  rrukClear(): void {
+    this.db.exec('DELETE FROM rruk_freqs');
+  }
+
   rrStats(): { freqs: number; systems: number; talkgroups: number } {
     const n = (sql: string): number => Number((this.db.prepare(sql).get() as { n: number }).n);
     return { freqs: n('SELECT COUNT(*) AS n FROM rr_freqs'), systems: n('SELECT COUNT(*) AS n FROM rr_systems'), talkgroups: n('SELECT COUNT(*) AS n FROM rr_talkgroups') };
@@ -713,6 +746,7 @@ interface Raw {
   rr_name: string;
   rr_system: string;
   rpt: string;
+  rruk: string;
   distance_km: number | null;
   bearing_deg: number | null;
   candidates: string;
@@ -756,6 +790,7 @@ function toRow(r: Raw): ReceptionRow {
     rrName: r.rr_name ?? '',
     rrSystem: r.rr_system ?? '',
     rpt: r.rpt ?? '',
+    rruk: r.rruk ?? '',
     distanceKm: r.distance_km === null || r.distance_km === undefined ? null : Number(r.distance_km),
     bearingDeg: r.bearing_deg === null || r.bearing_deg === undefined ? null : Number(r.bearing_deg),
     candidates: parseCandidates(r.candidates),

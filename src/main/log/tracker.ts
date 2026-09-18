@@ -18,7 +18,7 @@
 import { NO_ID, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
-import { candidatesFor, storedCandidates } from '../../shared/listed';
+import { candidatesFor, placed as isPlaced, rrukName, storedCandidates } from '../../shared/listed';
 import { rankRepeaters, repeaterLabel } from '../../shared/repeaters';
 import { detectedCode, rrToneMatches } from '../../shared/rr';
 import { lookupRank, type LookupId, type LookupSource } from '../../shared/sources';
@@ -50,7 +50,7 @@ export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequenc
  */
 const FIELDS: Exclude<keyof Description, 'source' | 'distanceKm' | 'bearingDeg' | 'candidates'>[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee',
-  'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rssiPeak',
+  'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rruk', 'rssiPeak',
 ];
 
 /** The placement travels with the identity exactly as `sourceAfter` moves the source; an unplaced row takes any placement offered. */
@@ -241,17 +241,27 @@ export function describe(s: ScannerSnapshot): Description {
   // The user's lookup order (Data menu): a lookup switched off ranks Infinity and contributes nothing.
   const rank = (id: LookupId): number => lookupRank(s.lookups, id);
   const rrOn = rank('RRDB') !== Infinity;
+  const rrukOn = rank('RRUK') !== Infinity;
   // RadioReference fills in what the scanner's programming leaves blank: the talkgroup or channel name, and the system.
   const rrSys = rrOn ? s.rr?.systems[0] : undefined;
-  // RadioReference's channel for this reception: the one whose tone / colour code matches the detected
-  // one if any does (several users are listed on a shared channel), else the nearest.
+  // The channel each online database lists for this reception: the one whose tone / colour code matches
+  // the detected one if any does (several users are listed on a shared channel), else the first (nearest).
   const detected = detectedCode(details);
   const toneScore = (t: string): number => ({ true: 0, null: 1, false: 2 })[String(rrToneMatches(t, detected))] ?? 1;
   const rrConv = rrOn && s.rr?.conventional.length ? [...s.rr.conventional].sort((a, b) => toneScore(a.tone) - toneScore(b.tone))[0] : undefined;
-  const rrMatch = rrConv ? rrToneMatches(rrConv.tone, detected) : null;
+  const rrukBest = rrukOn && s.rruk?.entries.length ? [...s.rruk.entries].sort((a, b) => toneScore(a.code) - toneScore(b.code))[0] : undefined;
   // Descriptions are the readable names; alpha tags are short codes and only stand in when there is no description.
   const rrTalkgroup = rrSys?.talkgroup?.descr || rrSys?.talkgroup?.alpha || '';
   const rrChannel = rrConv?.descr || rrConv?.alpha || '';
+  const rruk = rrukBest ? rrukName(rrukBest) : '';
+  // The channel description in play: RadioReference's or RRUK's, whichever matches the detected code,
+  // else is placed, else ranks higher in the lookup order.
+  interface Desc { src: 'RRDB' | 'RRUK'; name: string; place: { distanceKm: number | null; bearingDeg: number | null }; placed: boolean; match: boolean | null }
+  const descs: Desc[] = [];
+  if (rrConv && rrChannel) descs.push({ src: 'RRDB', name: rrChannel, place: rrConv, placed: isPlaced(rrConv), match: rrToneMatches(rrConv.tone, detected) });
+  if (rrukBest && rruk) descs.push({ src: 'RRUK', name: rruk, place: rrukBest, placed: isPlaced(rrukBest), match: rrukBest.code ? rrToneMatches(rrukBest.code, detected) : null });
+  const mScore = (m: boolean | null): number => (m === true ? 0 : m === null ? 1 : 2);
+  const desc = descs.sort((a, b) => mScore(a.match) - mScore(b.match) || Number(b.placed) - Number(a.placed) || rank(a.src) - rank(b.src))[0];
   const scannerName = (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '';
   // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
   // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
@@ -260,35 +270,38 @@ export function describe(s: ScannerSnapshot): Description {
   const rpt = bestRpt ? repeaterLabel(bestRpt) : '';
   const licSrc: LookupSource = wtr && rpt ? (rank('WTR') <= rank('UKR') ? 'WTR' : 'UKR') : wtr ? 'WTR' : rpt ? 'UKR' : '';
   const licensee = licSrc === 'WTR' ? wtr : licSrc === 'UKR' ? rpt : '';
-  // Whether the chosen licensee, and RadioReference's channel, could be placed relative to the user:
-  // an entry nobody can place never outranks one that is, whatever the order.
+  // Whether the chosen licensee could be placed relative to the user: an entry nobody can place never
+  // outranks one that is, whatever the order.
   const licPlaced = licSrc === 'WTR' ? s.licences![0]!.distanceKm !== null : licSrc === 'UKR' ? bestRpt!.distanceKm !== null : false;
-  const rrPlaced = (rrConv?.distanceKm ?? null) !== null;
-  // A RadioReference channel whose tone matches the detected one wins whatever the order (the registers
-  // know no tones); one whose tone differs loses to any licensee.
+  // A channel description whose code matches the detected one wins whatever the order (the registers
+  // know no codes); one whose code differs loses to any licensee; otherwise the order and placement decide.
   const licenseeWins =
-    licensee !== '' && (rrMatch === false || (rrMatch !== true && (rank(licSrc as LookupId) < rank('RRDB') || (licPlaced && !rrPlaced))));
+    licensee !== '' &&
+    (desc === undefined || desc.match === false || (desc.match !== true && (rank(licSrc as LookupId) < rank(desc.src) || (licPlaced && !desc.placed))));
   // The name: the scanner's own, else RadioReference's talkgroup (a licence register knows no
-  // talkgroups), else RadioReference's channel description unless the licensee will show in its place.
-  const rrName = rrTalkgroup || (rrChannel && !licenseeWins ? rrChannel : '');
-  const name = scannerName || rrName;
+  // talkgroups), else the channel description unless the licensee will show in its place.
+  const descName = rrTalkgroup || (desc && !licenseeWins ? desc.name : '');
+  const descSrc: LookupSource = rrTalkgroup ? 'RRDB' : desc && !licenseeWins ? desc.src : '';
+  const name = scannerName || descName;
   const system = h?.systemTag || rrSys?.name || '';
   // What the log should credit: the lookup behind the name, or behind the system when the scanner
   // named the object itself, or behind the licensee when that is all there is to show.
   const source: LookupSource =
-    (scannerName === '' && rrName !== '') || (!h?.systemTag && system !== '')
-      ? 'RRDB'
-      : name === '' && system === '' && licensee !== ''
-        ? licSrc
-        : '';
-  // Where the row's identity lies: the licensee's licence or repeater, or RadioReference's site /
-  // county when RadioReference supplied the name; whichever placed the row when the other is unknown.
+    scannerName === '' && descName !== ''
+      ? descSrc
+      : !h?.systemTag && system !== ''
+        ? 'RRDB'
+        : name === '' && system === '' && licensee !== ''
+          ? licSrc
+          : '';
+  // Where the row's identity lies: the licensee's licence or repeater, or the database's site / county /
+  // entry when a database supplied the name; whichever placed the row when the other is unknown.
   const licPlace = licSrc === 'WTR' ? s.licences![0]! : licSrc === 'UKR' ? bestRpt! : null;
-  const rrPlace = rrTalkgroup || (system !== '' && !h?.systemTag) ? rrSys : rrName !== '' ? rrConv : (rrSys ?? rrConv);
-  const first = source === 'RRDB' ? rrPlace : licPlace;
-  const second = source === 'RRDB' ? licPlace : rrPlace;
-  const placed = first?.distanceKm != null ? first : second?.distanceKm != null ? second : (first ?? second);
-  const candidates = storedCandidates(candidatesFor({ rr: s.rr, licences: s.licences, repeaters: s.repeaters, detectedTone: detected }, s.lookups));
+  const descPlace = rrTalkgroup || (system !== '' && !h?.systemTag) ? rrSys : (desc?.place ?? rrSys ?? rrConv);
+  const first = source === 'RRDB' || source === 'RRUK' ? descPlace : licPlace;
+  const second = source === 'RRDB' || source === 'RRUK' ? licPlace : descPlace;
+  const placedBy = first?.distanceKm != null ? first : second?.distanceKm != null ? second : (first ?? second);
+  const candidates = storedCandidates(candidatesFor({ rr: s.rr, rruk: s.rruk, licences: s.licences, repeaters: s.repeaters, detectedTone: detected }, s.lookups));
   return {
     mode: status.rxModeName,
     signalType: lcd?.icons.signalType ? lcd.icons.signalTypeName : '',
@@ -309,8 +322,9 @@ export function describe(s: ScannerSnapshot): Description {
     rrName: rrTalkgroup || rrChannel,
     rrSystem: rrSys?.name ?? '',
     rpt,
-    distanceKm: placed?.distanceKm ?? null,
-    bearingDeg: placed?.bearingDeg ?? null,
+    rruk,
+    distanceKm: placedBy?.distanceKm ?? null,
+    bearingDeg: placedBy?.bearingDeg ?? null,
     candidates,
     rssiPeak: status.rssi,
   };

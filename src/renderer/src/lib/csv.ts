@@ -22,7 +22,7 @@ function localStamp(ms: number): string {
 export const LOG_CSV_HEADER = [
   'first_heard', 'last_heard', 'duration_s', 'calls', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type',
   'tgid', 'radio_id', 'callsign', 'radio_name', 'tone', 'squelch', 'site', 'licensee', 'source',
-  'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'distance_km', 'bearing_deg', 'candidates', 'rssi_peak', 'hits',
+  'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'rruk', 'distance_km', 'bearing_deg', 'candidates', 'rssi_peak', 'hits',
 ];
 
 /** Every candidate on one line: "WTR University of Buckingham (3.2 km 047°) | RRDB …", distances always in km. */
@@ -65,6 +65,7 @@ export function logToCsv(rows: readonly ReceptionRow[], now = Date.now()): strin
       r.rrName ?? '',
       r.rrSystem ?? '',
       r.rpt ?? '',
+      r.rruk ?? '',
       r.distanceKm === null || r.distanceKm === undefined ? '' : r.distanceKm.toFixed(1),
       r.bearingDeg ?? '',
       candidatesText(r),

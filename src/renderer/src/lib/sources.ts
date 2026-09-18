@@ -5,6 +5,7 @@ export { SOURCE_NAME };
 /** Pill colours per lookup, shared by the hero's Listed block and the log's SRC column. */
 export const SOURCE_PILL: Readonly<Record<Exclude<LookupSource, ''>, string>> = {
   RRDB: 'bg-cyan/15 text-cyan',
+  RRUK: 'bg-rruk/15 text-rruk',
   WTR: 'bg-amber/15 text-amber',
   UKR: 'bg-green/15 text-green',
   RID: 'bg-panel-2 text-ink-2',

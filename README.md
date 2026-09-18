@@ -38,6 +38,13 @@ npm run build && npm start    # run the built app
   premium login and pick your country and region. Heard frequencies are looked up once and
   cached: trunked systems get their system, site and talkgroup names; conventional channels
   their descriptions. Only builds made with the `RR_KEY` application key have this.
+- **RadioReference UK** (optional, online, <https://radioreferenceuk.co.uk/>): the UK-centric,
+  Ofcom-backed database. Generate an API key in your RRUK account dashboard, paste it under Data >
+  RadioReference UK, and optionally enter a postcode (otherwise your latitude and longitude are
+  used, with the radius as the range, up to RRUK's 50 miles). Heard frequencies are looked up once
+  and cached; entries carry the licensee, place, distance, bearing and the colour code or tone, which
+  the app matches against what the scanner shows. The key is yours: it is stored encrypted and never
+  built into the app.
 - **UK amateur repeaters**: download the "all" repeater list from the RSGB ETCC
   (<https://ukrepeater.net/csvfiles.html>), then Data > Import repeater list CSV. Amateur
   repeater outputs then show the callsign, place, distance, CTCSS tone and FM / DMR / D-STAR /
@@ -48,13 +55,13 @@ Put downloads in `data/` (git-ignored).
 
 The scanner's own programming always wins: a lookup only fills in a name or system the scanner
 did not have. Data > Lookup order sets which lookup is asked first (default: the Ofcom register,
-then RadioReference, then the repeater list; a RadioReference talkgroup name still wins, since the
-register knows no talkgroups). Untick a lookup to ignore it while it is offline or returning
+then RadioReference UK, then RadioReference, then the repeater list; a RadioReference talkgroup name
+still wins, since the register knows no talkgroups). Untick a lookup to ignore it while it is offline or returning
 junk. The log's **Src** column (and the `source` column of the CSV export) says which
-lookup did: blank for the scanner's data, `WTR`, `RRDB` (RadioReference), `UKR` (repeater list)
+lookup did: blank for the scanner's data, `WTR`, `RRUK` (RadioReference UK), `RRDB` (RadioReference), `UKR` (repeater list)
 or `RID` (radioid.net), and `MEM` when a reception too brief to show the object on the display was
 named from an earlier reception on the same frequency. The log's **Detail** view shows what every source said, one column each
-(Scanner, List, WTR, RRDB, UKR, Sys), and the CSV carries the same columns, so a row where the
+(Scanner, List, WTR, RRUK, RRDB, UKR, Sys), and the CSV carries the same columns, so a row where the
 scanner and the register disagree is easy to spot and reprogram. Drag a column divider in the
 log header to resize it; double-click the divider to reset.
 

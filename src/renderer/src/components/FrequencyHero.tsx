@@ -51,7 +51,7 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
 }
 
 export default function FrequencyHero() {
-  const { status, lcd, active, link, licences, repeaters, rr, lookups, confirmed } = useScanner((s) => s.snapshot);
+  const { status, lcd, active, link, licences, repeaters, rr, rruk, lookups, confirmed } = useScanner((s) => s.snapshot);
   const held = useScanner((s) => s.held);
   const units = useIdentities((s) => s.settings.units);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
@@ -89,7 +89,7 @@ export default function FrequencyHero() {
   // Everything that lists this frequency, in one block, ranked as the log stores it: placed
   // entries first, then the user's lookup order (Data menu), repeaters with the one whose CTCSS
   // matches the detected tone first. Each source is filtered to the user's area upstream.
-  const listed = candidatesFor({ rr, licences, repeaters, detectedTone: code }, lookups);
+  const listed = candidatesFor({ rr, rruk, licences, repeaters, detectedTone: code }, lookups);
   // An identity the user confirmed for this frequency (and tone / talkgroup) outranks everything shown.
   const conf = confirmed && confirmed.frequencyHz === hz ? confirmed : null;
   const scannerName = (id.source === 'active' || id.source === 'lcd') && id.name !== '—' ? id.name : '';
@@ -188,7 +188,7 @@ export default function FrequencyHero() {
       <div className="mt-3 h-[4.6rem] overflow-hidden border-t border-edge pt-2">
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference UK, RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
               Listed
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[13.5px] leading-tight">
@@ -209,7 +209,17 @@ export default function FrequencyHero() {
           </div>
         ) : (
           <p className="pt-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3/70">
-            {!online ? '' : rr?.pending ? 'Asking RadioReference…' : rr?.error ? `RadioReference: ${rr.error}` : 'Not listed by RadioReference, Ofcom or the repeater list'}
+            {!online
+              ? ''
+              : rruk?.pending
+                ? 'Asking RadioReference UK…'
+                : rr?.pending
+                  ? 'Asking RadioReference…'
+                  : rruk?.error
+                    ? `RadioReference UK: ${rruk.error}`
+                    : rr?.error
+                      ? `RadioReference: ${rr.error}`
+                      : 'Not listed by RadioReference UK, RadioReference, Ofcom or the repeater list'}
           </p>
         )}
       </div>

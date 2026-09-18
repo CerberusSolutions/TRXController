@@ -22,6 +22,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && tsc -p packages/rcip/tsconfig.json --noEmit",
     "probe": "tsx scripts/probe.ts",
+    "rruk": "tsx scripts/rruk.ts",
     "dist": "electron-vite build && electron-builder --win",
     "dist:dir": "electron-vite build && electron-builder --win --dir",
     "dist:mac": "electron-vite build && electron-builder --mac",

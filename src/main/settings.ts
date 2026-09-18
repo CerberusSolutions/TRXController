@@ -1,12 +1,13 @@
 /** Small JSON settings file in userData, owned by the main process. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { RrSettings, Settings, WindowState } from '../shared/ipc';
+import type { RrSettings, RrukSettings, Settings, WindowState } from '../shared/ipc';
 import { normaliseUnits } from '../shared/geo';
 import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '' };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -48,6 +49,7 @@ export function sanitize(s: Settings): Settings {
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),
     rr: sanitizeRr(s.rr),
+    rruk: sanitizeRruk(s.rruk),
     lookups: normaliseLookups(s.lookups),
   };
 }
@@ -64,6 +66,15 @@ function sanitizeRr(r: unknown): RrSettings {
     stid: id(o['stid']),
     countryName: text(o['countryName']),
     stateName: text(o['stateName']),
+  };
+}
+
+function sanitizeRruk(r: unknown): RrukSettings {
+  if (typeof r !== 'object' || r === null) return { ...DEFAULT_RRUK };
+  const o = r as Record<string, unknown>;
+  return {
+    apiKey: typeof o['apiKey'] === 'string' ? o['apiKey'] : '',
+    postcode: typeof o['postcode'] === 'string' ? o['postcode'].trim().toUpperCase().slice(0, 10) : '',
   };
 }
 

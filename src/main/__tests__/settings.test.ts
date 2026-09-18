@@ -27,12 +27,15 @@ describe('sanitize', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, units: undefined as never }).units).toBe('km');
   });
 
-  it('keeps the lookup order, drops unknown lookups and appends missing ones enabled', () => {
+  it('keeps the lookup order, drops unknown lookups and slots missing ones in enabled at their default place', () => {
     expect(sanitize({ ...DEFAULT_SETTINGS, lookups: [{ id: 'RRDB', enabled: false }, { id: 'X' }, { id: 'RRDB', enabled: true }] as never }).lookups).toEqual([
-      { id: 'RRDB', enabled: false },
       { id: 'WTR', enabled: true },
+      { id: 'RRUK', enabled: true },
+      { id: 'RRDB', enabled: false },
       { id: 'UKR', enabled: true },
     ]);
+    // A file from before RRUK existed: it goes in above RadioReference, where the default puts it, not at the end.
+    expect(sanitize({ ...DEFAULT_SETTINGS, lookups: [{ id: 'RRDB', enabled: true }, { id: 'WTR', enabled: true }, { id: 'UKR', enabled: true }] }).lookups.map((p) => p.id)).toEqual(['RRDB', 'RRUK', 'WTR', 'UKR']);
     expect(sanitize({ ...DEFAULT_SETTINGS, lookups: 'all' as never }).lookups).toEqual(DEFAULT_SETTINGS.lookups);
     expect(sanitize({ ...DEFAULT_SETTINGS, port: 7 as unknown as string }).port).toBeNull();
   });
