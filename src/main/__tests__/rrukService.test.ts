@@ -60,7 +60,7 @@ describe('RrukService', { timeout: 20_000 }, () => {
     expect(Object.fromEntries(u.searchParams)).toEqual({ api_key: 'secret', freq: '453.4375', lat: '51.84380', lon: '-0.91830', range: '10' });
     const info = svc.info(453_437_500)!;
     expect(info.pending).toBe(false);
-    expect(info.entries[0]).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', code: 'CC 12', direction: 'R' });
+    expect(info.entries[0]).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', code: 'CC 12', direction: 'T' });
     expect(info.entries[0]!.distanceKm).toBeCloseTo(7.08, 1);
     expect(info.entries[0]!.bearingDeg).toBeGreaterThan(320);
     expect(info.entries[0]!.bearingDeg).toBeLessThan(335);
