@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useUi } from '../store/ui';
 
-export const PUBLISHER = 'Cerberus Systems';
-export const REPO_URL = 'https://github.com/CerberusSolutions/TRXController';
+const PUBLISHER = 'Cerberus Systems';
+const REPO_URL = 'https://github.com/CerberusSolutions/TRXController';
 
 const IS_MAC = typeof window !== 'undefined' && window.trx?.platform === 'darwin';
 const IS_LINUX = typeof window !== 'undefined' && window.trx?.platform === 'linux';
@@ -11,7 +11,7 @@ const DATA_DIR = IS_MAC ? '~/Library/Application Support/TRXController' : IS_LIN
 const MOD_KEY = IS_MAC ? 'Cmd' : 'Ctrl';
 
 /** Where the two optional data files come from. Shown verbatim so they can be copied. */
-export const DATA_SOURCES = [
+const DATA_SOURCES = [
   {
     title: 'Ofcom Wireless Telegraphy Register',
     file: 'WTR.csv',
