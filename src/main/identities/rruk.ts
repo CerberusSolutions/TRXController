@@ -132,9 +132,11 @@ function toEntry(v: unknown): RrukEntry | null {
     location: text(o['location']),
     nationwide,
     distanceKm: nationwide || !Number.isFinite(miles) ? null : miles * KM_PER_MILE,
-    bearingDeg: bearing === null ? null : ((Math.round(bearing) % 360) + 360) % 360,
-    lat: lat !== null && lat !== 0 && Math.abs(lat) <= 90 ? lat : null,
-    lon: lon !== null && lat !== null && lat !== 0 && Math.abs(lon) <= 180 ? lon : null,
+    // A nationwide allocation has no transmitter site: RRUK sends generic coordinates and a bearing
+    // for some of them, which would place PMR446 somewhere it is not, so they are dropped.
+    bearingDeg: nationwide || bearing === null ? null : ((Math.round(bearing) % 360) + 360) % 360,
+    lat: !nationwide && lat !== null && lat !== 0 && Math.abs(lat) <= 90 ? lat : null,
+    lon: !nationwide && lon !== null && lat !== null && lat !== 0 && Math.abs(lon) <= 180 ? lon : null,
     place: text(o['place'] ?? o['town'] ?? o['location_name']),
     county: text(o['county']),
     postcode: text(o['postcode']),

@@ -39,8 +39,11 @@ describe('RRUK client', () => {
     // class R is RRUK's "you receive it": the base transmits here, so the WTR-style direction is T.
     expect(e).toMatchObject({ callsign: 'FCC RECYCLING (UK) LIMITED', alpha: '', code: 'CC 12', direction: 'T', nationwide: false, bearingDeg: 324, lat: 51.8958, lon: -0.978155, place: 'Steeple Claydon', county: 'Buckinghamshire', postcode: 'HP180AF', licence: '1383591/1', group: 'WTR' });
     expect(e.distanceKm).toBeCloseTo(7.08, 1);
-    // "Nationwide" in the location alone is enough.
-    expect(parseRrukResponse({ success: true, data: [{ callsign: 'PMR446', alpha: 'PMR446 CH8', location: 'Nationwide', distance: '' }] }).entries[0]).toMatchObject({ nationwide: true, distanceKm: null });
+    // "Nationwide" in the location alone is enough, and the generic coordinates / bearing RRUK sends
+    // for some nationwide listings are ignored (18 Sep 2026: the API now returns lat, lon and bearing).
+    expect(parseRrukResponse({ success: true, data: [{ callsign: 'PMR446', alpha: 'PMR446 CH8', location: 'Nationwide', distance: '', lat: 52.5, lon: -1.5, bearing: 12 }] }).entries[0]).toMatchObject({ nationwide: true, distanceKm: null, bearingDeg: null, lat: null, lon: null });
+    // The server's own lat / lon / bearing on a placed entry are taken as sent.
+    expect(parseRrukResponse({ success: true, data: [{ callsign: '1/1', alpha: 'X', location: 'Leeds', distance: '4.4 miles', lat: 53.8, lon: -1.55, bearing: 359.6 }] }).entries[0]).toMatchObject({ bearingDeg: 0, lat: 53.8, lon: -1.55 });
     // Entries with neither a name nor a callsign are dropped; 0,0 coordinates count as none.
     expect(parseRrukResponse({ success: true, data: [{ freq: 1 }, { callsign: 'X', lat: 0, lon: 0 }] }).entries).toEqual([expect.objectContaining({ callsign: 'X', lat: null, lon: null })]);
   });
