@@ -194,16 +194,35 @@ captured on 14 Sep 2026.
   carry `rr: RrInfo`; the hero merges RadioReference, WTR and repeater rows into one "Listed"
   block with a source pill per row; `describe()` fills a blank log name / system from the
   nearest system / channel. Details in `docs/radioreference-api.md`.
+- RadioReference UK (online, optional; radioreferenceuk.co.uk): `src/main/identities/rruk.ts` is
+  a one-call REST client (`GET api_search.php?api_key&freq&postcode|lat,lon&range`, JSON back:
+  callsign, alpha, mode, tone / colorCode / ran / nac, class = TX/RX flag like the WTR direction,
+  location, distance in miles or "Nationwide", tags, is_trunk, and when the server sends them lat /
+  long, bearing, place, county, postcode, licence, group). The server filters to the user's area
+  (±5 kHz, range capped at 50 miles; nationwide and aero entries bypass it), so nothing is placed
+  afterwards; `rrukCode` turns the codes into the scanner's form ("CC 12", "CTCSS 94.8", "NAC 293",
+  "RAN 1") for matching. `rrukService.ts` mirrors `rrService`: `rruk_freqs` cache keyed by frequency
+  with a `scope` (postcode or coordinates + range) so moving invalidates it, 30-day TTL, one call in
+  flight 1.2 s apart, 10-minute backoff, a rejected key empties the queue. **The API key is the
+  user's own** (generated in their RRUK dashboard): Data dialog "RadioReference UK", encrypted with
+  `safeStorage`, blanked in `settingsGet`, never in the build; `RRUK_KEY` in the environment stands
+  in for development builds only (`app.isPackaged` false). An optional postcode (`settings.rruk.postcode`)
+  is used instead of the coordinates when set; the radius (in miles) is the range. Snapshots carry
+  `rruk: RrukInfo`; rows keep the best entry as `rruk` (Detail column, CSV column); the source pill
+  is `RRUK` (`--t-rruk`, pink). A nationwide entry counts as placed (`Candidate.nationwide`).
 - Lookup order: `settings.lookups` (`LookupPref[]`, Data menu "Lookup order", default WTR >
-  RRDB > UKR, each with an `enabled` tick) is carried on every snapshot as `lookups` so
+  RRUK > RRDB > UKR, each with an `enabled` tick; a lookup missing from an older settings file is
+  slotted in at its default position) is carried on every snapshot as `lookups` so
   `describe()` and the hero rank the sources the same way: the scanner's own name always
-  wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); a
-  RadioReference channel description is used only when no higher-ranked licensee will show;
+  wins; a RadioReference talkgroup beats any licensee (registers know no talkgroups); the channel
+  description in play is RadioReference's or RRUK's, whichever matches the detected code, else is
+  placed, else ranks higher (`describe()`'s `desc`), and it is used only when no higher-ranked
+  licensee will show;
   the licensee is the higher-ranked of WTR / UKR with a match; an entry nobody can place
   (`distanceKm` null) never outranks one that is, in the log or the hero's Listed block, whatever
   the order. A lookup switched off is neither
   queried (main skips the WTR / repeater queries and RadioReference requests) nor shown.
-- Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `WTR`, `UKR`), the
+- Each row stores `source` (`src/shared/sources.ts`: '' scanner, `RRDB`, `RRUK`, `WTR`, `UKR`), the
   lookup behind the name, or behind the system when the scanner named the object, or behind
   the licensee when that is all the row will show. The tracker carries it with those fields
   (`sourceAfter`), not value by value, so a scanner name arriving a poll later clears it. The
@@ -217,7 +236,7 @@ captured on 14 Sep 2026.
   live object arriving later replaces it. The Detail view's Scanner column dims it.
 - Each row also keeps every source's own answer (`scannerName`, `wtr`, `rrName`, `rrSystem`,
   `rpt`) beside the chosen name, so the log's **Detail** view (Simple / Detail toggle, kept in
-  localStorage) can show one column per source: Scanner · List · WTR · RRDB · UKR · Sys. Rows
+  localStorage) can show one column per source: Scanner · List · WTR · RRUK · RRDB · UKR · Sys. Rows
   from before those fields existed fall back to the chosen name under its source's column. The
   CSV carries the same columns. `LogTable` is column-driven (`Column[]` per view); dragging a
   header divider resizes that column (px override kept per view in localStorage

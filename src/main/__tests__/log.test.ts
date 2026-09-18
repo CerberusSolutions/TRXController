@@ -136,6 +136,41 @@ describe('describe()', () => {
     expect(describeSnapshot({ ...snap({ lcd: idle }), licences: [wtr], rr })).toMatchObject({ name: '', source: 'WTR' });
   });
 
+  it('names a row from RadioReference UK, by code match first, and keeps its own answer beside the others', () => {
+    const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   453.437500'];
+    const cc = (n: number) => ['', 'Imported/New', 'CONV        psDr', 'TGID:         19', 'DMR   453.437500', `Slot:1  Color:${n}`];
+    const entry = (callsign: string, colorCode: string, distanceKm: number | null, over = {}) => ({
+      callsign, alpha: '', freqMHz: 453.4375, mode: 'DMR', tone: '', colorCode, ran: '', nac: '', code: colorCode ? `CC ${colorCode}` : '', direction: 'R', location: 'Steeple Claydon',
+      nationwide: false, distanceKm, bearingDeg: distanceKm === null ? null : 324, lat: null, lon: null, place: 'Steeple Claydon', county: 'Bucks', postcode: '', licence: '', group: 'WTR', tags: '', isTrunk: false, ...over,
+    });
+    const rruk = { frequencyHz: 453_437_500, fetchedAt: 1, pending: false, error: null, entries: [entry('FCC RECYCLING (UK) LIMITED', '12', 7.1), entry('AMAZON UK SERVICES LTD.', '3', 29)] };
+    const wtr = { id: 1, frequencyHz: 453_437_500, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };
+    // Nothing else knows the frequency: RRUK names it and places it.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rruk })).toMatchObject({ name: 'FCC RECYCLING (UK) LIMITED', source: 'RRUK', rruk: 'FCC RECYCLING (UK) LIMITED', distanceKm: 7.1, bearingDeg: 324 });
+    // Default order: the register outranks RRUK when no code decides; RRUK's answer is still kept.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rruk, licences: [wtr] })).toMatchObject({ name: '', licensee: 'RESOUND LIMITED', source: 'WTR', rruk: 'FCC RECYCLING (UK) LIMITED' });
+    // CC 3 detected picks Amazon out of RRUK's list and names the row with it, over the register.
+    expect(describeSnapshot({ ...snap({ lcd: cc(3) }), rruk, licences: [wtr] })).toMatchObject({ name: 'AMAZON UK SERVICES LTD.', source: 'RRUK', tone: 'CC 3', rruk: 'AMAZON UK SERVICES LTD.', distanceKm: 29 });
+    // CC 7 matches neither RRUK entry: they lose to the licensee even with RRUK ranked first.
+    const rrukFirst = [{ id: 'RRUK' as const, enabled: true }, { id: 'WTR' as const, enabled: true }, { id: 'RRDB' as const, enabled: true }, { id: 'UKR' as const, enabled: true }];
+    expect(describeSnapshot({ ...snap({ lcd: cc(7) }), rruk, licences: [wtr], lookups: rrukFirst })).toMatchObject({ name: '', source: 'WTR' });
+    // RRUK ranked first with no code in play: it names the row.
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rruk, licences: [wtr], lookups: rrukFirst })).toMatchObject({ name: 'FCC RECYCLING (UK) LIMITED', source: 'RRUK' });
+    // Both databases answer: the one that matches the code wins; otherwise placement, then the order.
+    const conv = { frequencyHz: 453_437_500, conventional: [{ descr: 'Some RR channel', alpha: 'RRCH', tone: 'CC 12', mode: 'DMR', callsign: '', tags: [], county: 'Bucks', distanceKm: 20, bearingDeg: 10 }], systems: [], fetchedAt: 1, pending: false, error: null };
+    expect(describeSnapshot({ ...snap({ lcd: cc(12) }), rruk, rr: conv })).toMatchObject({ name: 'FCC RECYCLING (UK) LIMITED', source: 'RRUK', rrName: 'Some RR channel' });
+    expect(describeSnapshot({ ...snap({ lcd: cc(3) }), rruk, rr: conv })).toMatchObject({ name: 'AMAZON UK SERVICES LTD.', source: 'RRUK' });
+    const nationwide = { ...rruk, entries: [entry('PMR446', '', null, { alpha: 'PMR446 CH1', nationwide: true })] };
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rruk: nationwide, rr: { ...conv, conventional: [{ ...conv.conventional[0]!, tone: '', distanceKm: null, bearingDeg: null }] } })).toMatchObject({ name: 'PMR446 CH1', source: 'RRUK' });
+    // Switched off: neither named nor listed.
+    const off = describeSnapshot({ ...snap({ lcd: idle }), rruk, lookups: [{ id: 'RRUK', enabled: false }, { id: 'WTR', enabled: true }] });
+    expect(off).toMatchObject({ name: '', source: '', rruk: '' });
+    expect(off.candidates).toEqual([]);
+    expect(describeSnapshot({ ...snap({ lcd: idle }), rruk }).candidates.map((c) => [c.source, c.name])).toEqual([['RRUK', 'FCC RECYCLING (UK) LIMITED'], ['RRUK', 'AMAZON UK SERVICES LTD.']]);
+    // The scanner's own name still wins.
+    expect(describeSnapshot({ ...snap({}), rruk })).toMatchObject({ name: 'TC NW Deps', source: '', rruk: 'FCC RECYCLING (UK) LIMITED', distanceKm: 7.1 });
+  });
+
   it('places the row by the identity it shows and stores every candidate the lookups offered', () => {
     const idle = ['', 'Imported/New', 'CONV        psDr', '', 'DMR   456.350000'];
     const wtr = { id: 1, frequencyHz: 456_350_000, direction: 'T', licensee: 'RESOUND LIMITED', product: '', emission: '', mode: 'DIG', widthHz: 12_500, lat: 51.9, lon: -0.7, ngr: '', licenceNo: '', distanceKm: 6.7, bearingDeg: 47 };

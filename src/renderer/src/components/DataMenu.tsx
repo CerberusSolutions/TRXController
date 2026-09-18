@@ -81,7 +81,7 @@ function LookupOrder() {
     next.splice(i + d, 0, p!);
     save(next);
   };
-  const short: Record<LookupPref['id'], string> = { WTR: 'Ofcom licence register', RRDB: 'RadioReference', UKR: 'RSGB repeater list' };
+  const short: Record<LookupPref['id'], string> = { WTR: 'Ofcom licence register', RRUK: 'RadioReference UK', RRDB: 'RadioReference', UKR: 'RSGB repeater list' };
   const btn = 'rounded border border-edge px-1 text-[10px] leading-4 text-ink-3 hover:text-ink disabled:opacity-30 disabled:hover:text-ink-3';
   return (
     <ol className="mt-1 space-y-1 text-xs">
@@ -178,6 +178,75 @@ function ConfirmedList() {
       <p className="mt-1 text-[11px] text-ink-3">
         {confirmations.length} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone.
       </p>
+    </div>
+  );
+}
+
+/** RadioReference UK: the user's own API key, an optional postcode, and the cache. */
+function RrukForm() {
+  const { rruk, rrukBusy, rrukMessage, setRrukKey, testRruk, clearRrukCache, settings, saveSettings } = useIdentities();
+  const [key, setKey] = useState('');
+  const [postcode, setPostcode] = useState(settings.rruk?.postcode ?? '');
+  useEffect(() => {
+    setPostcode(settings.rruk?.postcode ?? '');
+  }, [settings.rruk?.postcode]);
+  const inp = 'w-full rounded-md border border-edge bg-panel-2 px-2 py-1 font-mono text-xs text-ink outline-none focus:border-cyan';
+  const btn = 'rounded-md border border-edge px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50';
+  if (!rruk) return <p className="mt-1 text-ink-3">Not available.</p>;
+  return (
+    <div className="mt-1 space-y-2">
+      <p className="text-[11px] text-ink-3">
+        UK-centric, Ofcom-backed lookups filtered to your area. Needs your own API key from your account dashboard at{' '}
+        <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href="https://radioreferenceuk.co.uk/" target="_blank" rel="noreferrer">
+          radioreferenceuk.co.uk
+        </a>
+        . The key is stored encrypted and used only for lookups from this app.
+      </p>
+      <div className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+        <label className="text-[10px] text-ink-3">
+          API key
+          <input className={inp} type="password" value={key} placeholder={rruk.hasKey ? '(saved)' : rruk.devKey ? '(development key from RRUK_KEY)' : ''} onChange={(e) => setKey(e.target.value)} />
+        </label>
+        <button
+          className={btn}
+          disabled={rrukBusy || (!key.trim() && !rruk.hasKey)}
+          title={key.trim() ? 'Store the key' : 'Clear the stored key'}
+          onClick={() => {
+            void setRrukKey(key.trim()).then(() => setKey(''));
+          }}
+        >
+          {key.trim() || !rruk.hasKey ? 'Save' : 'Clear'}
+        </button>
+        <button className={btn} disabled={rrukBusy || (!rruk.hasKey && !rruk.devKey)} onClick={() => void testRruk()} title="Ask RRUK about PMR446 channel 1 with this key">
+          Test
+        </button>
+      </div>
+      <div className="grid grid-cols-[8rem_auto_1fr] items-end gap-2">
+        <label className="text-[10px] text-ink-3">
+          Postcode (optional)
+          <input className={inp} value={postcode} placeholder="LS1 or LS1 4AP" onChange={(e) => setPostcode(e.target.value.toUpperCase())} />
+        </label>
+        <button className={btn} onClick={() => void saveSettings({ rruk: { ...settings.rruk, postcode: postcode.trim() } })}>
+          Save
+        </button>
+        <span className="pb-1 text-[10px] text-ink-3">{postcode.trim() ? 'Searches from this postcode.' : 'Blank: searches from the latitude and longitude above, within the radius (RRUK caps it at 50 miles).'}</span>
+      </div>
+      <p className="text-[11px] text-ink-3">
+        {rruk.enabled ? (
+          <>
+            Lookups on. Cached: <span className="font-mono text-ink-2">{rruk.cachedFreqs}</span> frequencies.{' '}
+            <button className="underline decoration-ink-3/40 underline-offset-2" onClick={() => void clearRrukCache()}>
+              clear
+            </button>
+          </>
+        ) : !rruk.hasKey && !rruk.devKey ? (
+          'Lookups run once a key is saved.'
+        ) : (
+          'Lookups run once a postcode or a location is set.'
+        )}
+      </p>
+      {rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>}
+      {rrukMessage && <p className={`text-xs ${rrukMessage.ok ? 'text-green' : 'text-red'}`}>{rrukMessage.text}</p>}
     </div>
   );
 }
@@ -408,6 +477,10 @@ export default function DataDialog() {
             <Section title="Your location (for nearest licensee and repeater)">
               <LocationForm />
               <p className="mt-1 text-[11px] text-ink-3">Decimal degrees. Leave blank to sort by name only.</p>
+            </Section>
+
+            <Section title="RadioReference UK (online)">
+              <RrukForm />
             </Section>
 
             <Section title="RadioReference (online)">

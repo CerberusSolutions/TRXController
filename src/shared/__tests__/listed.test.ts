@@ -72,6 +72,28 @@ describe('candidatesFor', () => {
     expect(list[2]).toMatchObject({ match: false });
   });
 
+  it('lists RadioReference UK entries, a nationwide one as placed, with the address in the detail', () => {
+    const e = (over: object) => ({
+      callsign: 'PMR446', alpha: 'PMR446 CH1', freqMHz: 446.00625, mode: 'DMR', tone: '', colorCode: '', ran: '', nac: '', code: '', direction: 'R', location: 'Nationwide', nationwide: true,
+      distanceKm: null, bearingDeg: null, lat: null, lon: null, place: '', county: '', postcode: '', licence: '', group: '', tags: 'Nationwide - PMR446 Digital', isTrunk: false, ...over,
+    });
+    const rruk = { frequencyHz: 446_006_250, fetchedAt: 1, pending: false, error: null, entries: [e({}), e({ callsign: 'ACME TAXIS', alpha: '', code: 'CC 5', colorCode: '5', location: 'Leeds', place: 'Leeds', county: 'West Yorkshire', licence: '123/1', nationwide: false, distanceKm: 3, bearingDeg: 90 })] };
+    const list = candidatesFor({ rr: null, rruk, licences: [wtr(1, 'Kwik Fit', null)], repeaters: [], detectedTone: 'CC 5' }, DEFAULT_LOOKUPS);
+    expect(list.map((c) => [c.source, c.name, c.distanceKm, c.nationwide ?? false])).toEqual([
+      ['RRUK', 'ACME TAXIS', 3, false],
+      ['RRUK', 'PMR446 CH1', null, true],
+      ['WTR', 'Kwik Fit', null, false],
+    ]);
+    expect(list[0]).toMatchObject({ match: true, detail: 'Leeds · CC 5 ✓ · DMR · mob', bearingDeg: 90 });
+    expect(list[0]!.title).toContain('licence 123/1');
+    expect(list[1]).toMatchObject({ detail: 'PMR446 · nationwide · DMR · mob' });
+    expect(list[1]).not.toHaveProperty('match');
+    // Stored and read back, the nationwide flag survives so the row still ranks it as placed.
+    expect(normaliseCandidates(JSON.parse(JSON.stringify(storedCandidates(list))))[1]).toMatchObject({ nationwide: true });
+    // Switched off: gone.
+    expect(candidatesFor({ rr: null, rruk, licences: [], repeaters: [], detectedTone: null }, [{ id: 'RRUK', enabled: false }])).toEqual([]);
+  });
+
   it('stores the list without the tooltips and reads it back leniently', () => {
     const list = candidatesFor({ rr, licences: [wtr(1, 'Kwik Fit', 5)], repeaters: [], detectedTone: null }, DEFAULT_LOOKUPS);
     const stored = storedCandidates(list);

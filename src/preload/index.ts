@@ -17,6 +17,7 @@ import {
   type RrInfo,
   type RrRegion,
   type RrStatus,
+  type RrukStatus,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 
@@ -81,6 +82,11 @@ const api = {
   rrClearCache: (): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrClearCache),
   /** Force a fresh lookup of a frequency. */
   rrLookup: (hz: number): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz),
+  /** RadioReference UK: the user's own API key (stored encrypted; an empty key clears it), a test call, the cache. */
+  rrukStatus: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukStatus),
+  rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
+  rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
+  rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),

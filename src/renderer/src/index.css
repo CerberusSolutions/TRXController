@@ -25,6 +25,7 @@
   --t-mode-dmr: #ff8a3d;
   --t-mode-dstar: #b48cff;
   --t-mode-fusion: #5b9dff;
+  --t-rruk: #f472b6;
   --t-key-hover: #1f2a3c;
   --t-key-active: #26334a;
   --t-scroll: #2a3648;
@@ -52,6 +53,7 @@
   --t-mode-dmr: #c2410c;
   --t-mode-dstar: #6d3fd1;
   --t-mode-fusion: #1d4ed8;
+  --t-rruk: #be185d;
   --t-key-hover: #e6ebf2;
   --t-key-active: #d9e1eb;
   --t-scroll: #c5cedb;
@@ -74,6 +76,7 @@
   --color-mode-fm: var(--t-mode-fm);
   --color-mode-dmr: var(--t-mode-dmr);
   --color-mode-dstar: var(--t-mode-dstar);
+  --color-rruk: var(--t-rruk);
   --color-mode-fusion: var(--t-mode-fusion);
   --color-lcd: var(--t-lcd);
   --color-lcd-ink: var(--t-lcd-ink);

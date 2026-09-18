@@ -323,8 +323,8 @@ const listCell: Column = {
   ),
 };
 
-function lookupCell(key: "wtr" | "rrdb" | "ukr", label: string, title: string, track: string, value: (r: ReceptionRow) => string, extra?: (r: ReceptionRow) => string): Column {
-  const pill = key === "wtr" ? "WTR" : key === "rrdb" ? "RRDB" : "UKR";
+function lookupCell(key: "wtr" | "rrdb" | "rruk" | "ukr", label: string, title: string, track: string, value: (r: ReceptionRow) => string, extra?: (r: ReceptionRow) => string): Column {
+  const pill = key === "wtr" ? "WTR" : key === "rrdb" ? "RRDB" : key === "rruk" ? "RRUK" : "UKR";
   return {
     key,
     label,
@@ -353,6 +353,7 @@ const rrdbCell = lookupCell(
   (r) => r.rrName || fromLegacy(r, "RRDB"),
   (r) => r.rrSystem,
 );
+const rrukCell = lookupCell("rruk", "RRUK", `Best entry from ${SOURCE_NAME.RRUK}`, "minmax(6rem,1.2fr)", (r) => r.rruk || fromLegacy(r, "RRUK"));
 const ukrCell = lookupCell("ukr", "UKR", `Repeater from the ${SOURCE_NAME.UKR}`, "minmax(4.5rem,0.6fr)", (r) => r.rpt || fromLegacy(r, "UKR"));
 
 const sysCell: Column = {
@@ -369,7 +370,7 @@ const sysCell: Column = {
 };
 
 const SIMPLE: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
-const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
+const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrukCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 
 function fmtStamp(ms: number): string {
   return `${fmtDate(ms) ? fmtDate(ms) + " " : ""}${fmtTime(ms)}`;
@@ -640,7 +641,7 @@ export default function LogTable() {
   };
 
   const template = columns.map((c) => (widths[view][c.key] ? `${widths[view][c.key]}px` : c.track)).join(" ");
-  const minWidth = view === "detail" ? "73rem" : "60rem";
+  const minWidth = view === "detail" ? "79rem" : "60rem";
 
   // Tick once a second only while a reception is open, to grow its duration.
   useEffect(() => {
@@ -685,7 +686,7 @@ export default function LogTable() {
               role="radio"
               aria-checked={view === v}
               className={`px-2 py-1 ${view === v ? "bg-panel-2 text-ink" : "text-ink-3 hover:text-ink"}`}
-              title={v === "simple" ? "The name each row was given and where it came from" : "What every source said: scanner, WTR, RadioReference, repeater list"}
+              title={v === "simple" ? "The name each row was given and where it came from" : "What every source said: scanner, WTR, RadioReference UK, RadioReference, repeater list"}
               onClick={() => chooseView(v)}
             >
               {v === "simple" ? "Simple" : "Detail"}

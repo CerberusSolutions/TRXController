@@ -5,7 +5,7 @@
  * Pure functions shared by main (the tracker stores the list) and the renderer (the hero
  * and the log's expander draw it).
  */
-import type { RepeaterMatch, RrConventional, RrInfo, RrSystemInfo, WtrMatch } from './ipc';
+import type { RepeaterMatch, RrConventional, RrInfo, RrSystemInfo, RrukEntry, RrukInfo, WtrMatch } from './ipc';
 import { ctcssHz, rankRepeaters, toneMatches } from './repeaters';
 import { conventionalLabel, rrToneMatches } from './rr';
 import { lookupRank, type LookupId, type LookupPref } from './sources';
@@ -22,6 +22,8 @@ export interface Candidate {
   match?: boolean;
   /** Repeater capabilities ("FM · DMR"), drawn as pills. */
   pills?: string;
+  /** A nationwide allocation (PMR446, aero): placed everywhere. */
+  nationwide?: boolean;
 }
 
 /** A candidate with the tooltip the hero shows; the tooltip is not stored on log rows. */
@@ -30,11 +32,12 @@ export interface ListedCandidate extends Candidate {
   title: string;
 }
 
-/** Nobody could place it relative to the user: it never outranks one that was. */
-export const placed = (c: { distanceKm: number | null }): boolean => c.distanceKm !== null;
+/** Nobody could place it relative to the user: it never outranks one that was. A nationwide allocation counts as placed. */
+export const placed = (c: { distanceKm: number | null; nationwide?: boolean }): boolean => c.distanceKm !== null || c.nationwide === true;
 
 export interface CandidateInputs {
   rr: RrInfo | null | undefined;
+  rruk?: RrukInfo | null | undefined;
   licences: readonly WtrMatch[] | undefined;
   repeaters: readonly RepeaterMatch[] | undefined;
   /** The tone the scanner detected ("CTCSS 94.8", "CC 1", "NAC 293"), for the match marks and the repeater order. */
@@ -66,6 +69,33 @@ function fromConventional(c: RrConventional, i: number, detected: string | null 
     ...(match === null ? {} : { match }),
     title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
   };
+}
+
+/** The name RRUK gives an entry: the alpha tag, else the licensee. */
+export const rrukName = (e: Pick<RrukEntry, 'alpha' | 'callsign'>): string => e.alpha || e.callsign;
+
+function fromRruk(e: RrukEntry, i: number, detected: string | null | undefined): ListedCandidate {
+  const match = e.code ? rrToneMatches(e.code, detected ?? null) : null;
+  const c: ListedCandidate = {
+    key: `rruk-${i}`,
+    source: 'RRUK',
+    name: rrukName(e),
+    detail: [
+      e.alpha && e.callsign && e.alpha !== e.callsign ? e.callsign : '',
+      e.nationwide ? 'nationwide' : e.place || e.location,
+      e.code ? `${e.code}${match === true ? ' ✓' : ''}` : '',
+      e.mode,
+      e.direction === 'R' ? 'mob' : e.direction === 'T' ? 'base' : '',
+    ]
+      .filter(Boolean)
+      .join(' · '),
+    distanceKm: e.distanceKm,
+    bearingDeg: e.bearingDeg,
+    title: `RadioReference UK${e.licence ? ` · licence ${e.licence}` : ''}${e.location && e.location !== e.place ? ` · ${e.location}` : ''}${e.county ? ` · ${e.county}` : ''}${e.postcode ? ` · ${e.postcode}` : ''}${e.group ? ` · ${e.group}` : ''}${e.tags ? ` · ${e.tags}` : ''}${e.isTrunk ? ' · trunked' : ''}${e.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}${match === false ? ' · code differs from the detected one' : ''}`,
+  };
+  if (match !== null) c.match = match;
+  if (e.nationwide) c.nationwide = true;
+  return c;
 }
 
 function fromLicence(l: WtrMatch): ListedCandidate {
@@ -112,6 +142,7 @@ export function candidatesFor(inputs: CandidateInputs, prefs: readonly LookupPre
   const rr = lookupRank(prefs, 'RRDB') !== Infinity ? inputs.rr : null;
   for (const sys of rr?.systems ?? []) out.push(fromSystem(sys));
   (rr?.conventional ?? []).forEach((c, i) => out.push(fromConventional(c, i, detected)));
+  if (lookupRank(prefs, 'RRUK') !== Infinity) (inputs.rruk?.entries ?? []).forEach((e, i) => out.push(fromRruk(e, i, detected)));
   if (lookupRank(prefs, 'WTR') !== Infinity) for (const l of inputs.licences ?? []) out.push(fromLicence(l));
   if (lookupRank(prefs, 'UKR') !== Infinity) {
     const hz = ctcssHz(detected);
@@ -135,7 +166,7 @@ export function normaliseCandidates(v: unknown): Candidate[] {
   for (const item of v) {
     if (typeof item !== 'object' || item === null) continue;
     const o = item as Record<string, unknown>;
-    if (o['source'] !== 'RRDB' && o['source'] !== 'WTR' && o['source'] !== 'UKR') continue;
+    if (o['source'] !== 'RRDB' && o['source'] !== 'RRUK' && o['source'] !== 'WTR' && o['source'] !== 'UKR') continue;
     const num = (x: unknown): number | null => (typeof x === 'number' && Number.isFinite(x) ? x : null);
     const c: Candidate = {
       source: o['source'],
@@ -146,6 +177,7 @@ export function normaliseCandidates(v: unknown): Candidate[] {
     };
     if (typeof o['match'] === 'boolean') c.match = o['match'];
     if (typeof o['pills'] === 'string' && o['pills']) c.pills = o['pills'];
+    if (o['nationwide'] === true) c.nationwide = true;
     out.push(c);
   }
   return out;

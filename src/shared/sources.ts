@@ -3,10 +3,11 @@
  * programming is the blank source; the initials name the lookup that filled
  * in what the scanner did not know.
  */
-export type LookupSource = '' | 'RRDB' | 'WTR' | 'UKR' | 'RID' | 'MEM' | 'CONF';
+export type LookupSource = '' | 'RRDB' | 'RRUK' | 'WTR' | 'UKR' | 'RID' | 'MEM' | 'CONF';
 
 export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = {
   RRDB: 'RadioReference database',
+  RRUK: 'RadioReference UK (radioreferenceuk.co.uk)',
   WTR: 'Ofcom Wireless Telegraphy Register',
   UKR: 'RSGB ETCC repeater list (ukrepeater.net)',
   RID: 'radioid.net DMR user database',
@@ -15,32 +16,40 @@ export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = 
 };
 
 /** The lookups a user can order and switch off. The scanner's own programming is always first. */
-export type LookupId = 'RRDB' | 'WTR' | 'UKR';
+export type LookupId = 'RRDB' | 'RRUK' | 'WTR' | 'UKR';
 
 export interface LookupPref {
   id: LookupId;
   enabled: boolean;
 }
 
-/** For the UK the licence register beats RadioReference's member-entered channel names. */
+/** For the UK the licence register beats the UK database, which beats RadioReference's member-entered channel names. */
 export const DEFAULT_LOOKUPS: readonly LookupPref[] = [
   { id: 'WTR', enabled: true },
+  { id: 'RRUK', enabled: true },
   { id: 'RRDB', enabled: true },
   { id: 'UKR', enabled: true },
 ];
 
-/** Settings-file value to a full, ordered list: unknown ids dropped, missing ones appended enabled. */
+export const isLookupId = (v: unknown): v is LookupId => v === 'RRDB' || v === 'RRUK' || v === 'WTR' || v === 'UKR';
+
+/**
+ * Settings-file value to a full, ordered list: unknown ids dropped, a missing one (a lookup added
+ * after the file was written) slotted in enabled at its default position.
+ */
 export function normaliseLookups(v: unknown): LookupPref[] {
   const out: LookupPref[] = [];
   if (Array.isArray(v)) {
     for (const item of v) {
       const id = typeof item === 'object' && item !== null ? (item as { id?: unknown }).id : undefined;
-      if ((id === 'RRDB' || id === 'WTR' || id === 'UKR') && !out.some((p) => p.id === id)) {
+      if (isLookupId(id) && !out.some((p) => p.id === id)) {
         out.push({ id, enabled: (item as { enabled?: unknown }).enabled !== false });
       }
     }
   }
-  for (const d of DEFAULT_LOOKUPS) if (!out.some((p) => p.id === d.id)) out.push({ ...d });
+  DEFAULT_LOOKUPS.forEach((d, i) => {
+    if (!out.some((p) => p.id === d.id)) out.splice(Math.min(i, out.length), 0, { ...d });
+  });
   return out;
 }
 

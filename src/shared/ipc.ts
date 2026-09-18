@@ -56,6 +56,8 @@ export interface ScannerSnapshot {
   repeaters: RepeaterMatch[];
   /** What RadioReference knows about status.frequencyHz, from the local cache; null when RadioReference is not set up. */
   rr: RrInfo | null;
+  /** What RadioReference UK lists on status.frequencyHz near the user, from the local cache; null when RRUK is not set up. */
+  rruk: RrukInfo | null;
   stats: LinkStats;
   /** Wall-clock time (ms since epoch) of the last update. */
   updatedAt: number;
@@ -100,6 +102,8 @@ export interface ReceptionRow {
   /** RadioReference's talkgroup or channel name and its system, */
   rrName: string;
   rrSystem: string;
+  /** RadioReference UK's best entry (alpha tag, else callsign), */
+  rruk: string;
   /** and the repeater from the RSGB list. */
   rpt: string;
   /**
@@ -270,6 +274,71 @@ export interface RrInfo {
   error: string | null;
 }
 
+/** One entry RadioReference UK lists on a frequency near the user. */
+export interface RrukEntry {
+  /** Licensee / user as RRUK has it ("FCC RECYCLING (UK) LIMITED", "PMR446"). */
+  callsign: string;
+  /** The descriptive alpha tag ("PMR446 CH1"); the name shown when present. */
+  alpha: string;
+  freqMHz: number;
+  mode: string;
+  tone: string;
+  colorCode: string;
+  ran: string;
+  nac: string;
+  /** The code in the scanner's form ("CC 12", "CTCSS 94.8", "NAC 293", "RAN 1"), for matching; '' when none. */
+  code: string;
+  /** TX/RX as the WTR has it: 'T' base transmits here, 'R' base receives (mobiles transmit), 'TR', or ''. */
+  direction: string;
+  location: string;
+  /** A nationwide or aero allocation: placed everywhere, so it never sinks below local guesses. */
+  nationwide: boolean;
+  /** Distance from the user's postcode / coordinates, converted from RRUK's miles; null when nationwide or unknown. */
+  distanceKm: number | null;
+  /** Bearing from the user, degrees; from the server when it sends one, else from the entry's coordinates. */
+  bearingDeg: number | null;
+  /** The entry's own position and address, when the server sends them (the web search shows them). */
+  lat: number | null;
+  lon: number | null;
+  place: string;
+  county: string;
+  postcode: string;
+  /** Ofcom licence number, when given. */
+  licence: string;
+  /** RRUK's group ("WTR", "PMR446", …), when given. */
+  group: string;
+  tags: string;
+  isTrunk: boolean;
+}
+
+/** RadioReference UK's view of one frequency for the user's location, from the local cache. */
+export interface RrukInfo {
+  frequencyHz: number;
+  entries: RrukEntry[];
+  fetchedAt: number | null;
+  pending: boolean;
+  error: string | null;
+}
+
+/** RadioReference UK settings. The API key is the user's own, stored encrypted by safeStorage and blanked when sent to the renderer. */
+export interface RrukSettings {
+  apiKey: string;
+  /** UK postcode (full or outward) to search from; blank = use the location's coordinates. */
+  postcode: string;
+}
+
+export interface RrukStatus {
+  hasKey: boolean;
+  /** No stored key, but a development key from the environment is in use. */
+  devKey: boolean;
+  postcode: string;
+  /** A postcode or coordinates are set, so there is somewhere to search from. */
+  located: boolean;
+  enabled: boolean;
+  cachedFreqs: number;
+  lastError: string | null;
+}
+
 export interface RrRegion {
   id: number;
   name: string;
@@ -310,6 +379,8 @@ export interface RrSettings {
 export interface Settings {
   /** RadioReference account and region. */
   rr: RrSettings;
+  /** RadioReference UK key and postcode. */
+  rruk: RrukSettings;
   /** Which lookups fill in names, in order of preference; the scanner's own programming always comes first. */
   lookups: LookupPref[];
   /** Observer location for distance sorting, decimal degrees. */
@@ -396,6 +467,10 @@ export const IPC = {
   rrRegionSet: 'rr:region-set',
   rrClearCache: 'rr:clear-cache',
   rrLookup: 'rr:lookup',
+  rrukStatus: 'rruk:status',
+  rrukKeySet: 'rruk:key-set',
+  rrukTest: 'rruk:test',
+  rrukClearCache: 'rruk:clear-cache',
   settingsGet: 'settings:get',
   settingsSet: 'settings:set',
   setTheme: 'theme:set',

@@ -14,6 +14,7 @@ import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
 import { describe as describeSnapshot, snapshotRadioId } from './log/tracker';
 import { RrService } from './identities/rrService';
+import { RrukService } from './identities/rrukService';
 import { ScannerSession } from './scanner/session';
 import { ScanTimeout } from './scanner/scanTimeout';
 import { listPorts, serialTransportFactory } from './scanner/serialTransport';
@@ -48,6 +49,7 @@ function broadcast(channel: string, payload: unknown): void {
 let db: LogDb | null = null;
 let logger: ReceptionLogger | null = null;
 let rr: RrService | null = null;
+let rruk: RrukService | null = null;
 let settings: SettingsStore | null = null;
 let licenceCache: { hz: number; matches: WtrMatch[] } | null = null;
 
@@ -92,7 +94,8 @@ function enrich(s: ScannerSnapshot): ScannerSnapshot {
   const licences = s.status && lookupEnabled(prefs, 'WTR') ? licencesFor(s.status.frequencyHz) : [];
   const repeaters = s.status && lookupEnabled(prefs, 'UKR') ? repeatersFor(s.status.frequencyHz) : [];
   const confirmed = db && s.status ? confirmedFor(s) : null;
-  return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, lookups: prefs, confirmed };
+  const rrukInfo = rruk && s.status && lookupEnabled(prefs, 'RRUK') ? rruk.info(s.status.frequencyHz) : null;
+  return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, rruk: rrukInfo, lookups: prefs, confirmed };
 }
 
 /** The identity the user confirmed for the current frequency, tone and talkgroup, if any. */
@@ -125,9 +128,15 @@ function sanitizeConfirmation(v: unknown): NewConfirmation {
   };
 }
 
-/** Settings as the renderer may see them: the RadioReference password stays in main. */
+/** Settings as the renderer may see them: the RadioReference password and the RRUK key stay in main. */
 function publicSettings(s: Settings): Settings {
-  return { ...s, rr: { ...s.rr, password: '' } };
+  return { ...s, rr: { ...s.rr, password: '' }, rruk: { ...s.rruk, apiKey: '' } };
+}
+
+/** Encrypt a credential for settings.json with the OS store (or the Linux fallback chosen at start-up). */
+function encryptSecret(plain: string): string {
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('This account cannot encrypt the credential (safeStorage unavailable)');
+  return safeStorage.encryptString(plain).toString('base64');
 }
 
 const scanTimeout = new ScanTimeout();
@@ -136,6 +145,7 @@ const session = new ScannerSession(serialTransportFactory, {
   onSnapshot: (raw: ScannerSnapshot) => {
     // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
     if (rr && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRDB')) rr.request(raw.status.frequencyHz);
+    if (rruk && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRUK')) rruk.request(raw.status.frequencyHz);
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
@@ -325,11 +335,14 @@ function registerIpc(): void {
   ipcMain.handle(IPC.settingsSet, (_e, patch: unknown) => {
     if (!settings || typeof patch !== 'object' || patch === null) throw new Error('Bad settings');
     const p = { ...(patch as Partial<Settings>) };
-    // The renderer never carries the password; only rr:account-set changes it.
+    // The renderer never carries the password or the RRUK key; only rr:account-set / rruk:key-set change them.
     if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
+    if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey };
     const next = settings.set(p);
     licenceCache = null;
     repeaterCache = null;
+    // A new postcode or location changes what RRUK is asked; failed frequencies may be tried again.
+    rruk?.resetFailures();
     // A new location or lookup order changes what the current frequency shows: republish it.
     broadcast(IPC.snapshot, enrich(session.getSnapshot()));
     return publicSettings(next);
@@ -340,8 +353,7 @@ function registerIpc(): void {
     const cur = settings.get().rr;
     let stored = cur.password;
     if (password !== '') {
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('This account cannot encrypt the password (safeStorage unavailable)');
-      stored = safeStorage.encryptString(password).toString('base64');
+      stored = encryptSecret(password);
     }
     settings.set({ rr: { ...cur, username: username.trim(), password: username.trim() ? stored : '' } });
     rr.resetFailures();
@@ -376,6 +388,23 @@ function registerIpc(): void {
     });
     rr.resetFailures();
     return rr.status();
+  });
+  ipcMain.handle(IPC.rrukStatus, () => rruk?.status() ?? null);
+  ipcMain.handle(IPC.rrukKeySet, (_e, key: unknown) => {
+    if (!rruk || !settings || typeof key !== 'string') throw new Error('Bad key');
+    const k = key.trim();
+    settings.set({ rruk: { ...settings.get().rruk, apiKey: k ? encryptSecret(k) : '' } });
+    rruk.resetFailures();
+    return rruk.status();
+  });
+  ipcMain.handle(IPC.rrukTest, async () => {
+    if (!rruk) throw new Error('RRUK is not available');
+    const r = await rruk.test();
+    return { user: r.user, entries: r.entries.length };
+  });
+  ipcMain.handle(IPC.rrukClearCache, () => {
+    rruk?.clearCache();
+    return rruk?.status() ?? null;
   });
   ipcMain.handle(IPC.rrClearCache, () => {
     rr?.clearCache();
@@ -435,6 +464,21 @@ function openLog(): void {
     log: (msg) => console.log(`[rr] ${msg}`),
   });
   console.log(`[rr] ${rr.status().appKey ? 'app key present' : 'no app key in this build'}; ${rr.enabled ? 'enabled' : 'not configured'}`);
+  rruk = new RrukService({
+    db,
+    getSettings: () => settings!.get().rruk,
+    decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+    // A key from the environment for development only: never in a packaged build, so nobody ships theirs.
+    devKey: () => (app.isPackaged ? '' : (process.env['RRUK_KEY'] ?? '').trim()),
+    getLocation: () => {
+      const s = settings!.get();
+      return { lat: s.lat, lon: s.lon, radiusKm: s.radiusKm };
+    },
+    fetchImpl: net.fetch as unknown as (input: string, init?: RequestInit) => Promise<Response>,
+    onChange: () => broadcast(IPC.snapshot, enrich(session.getSnapshot())),
+    log: (msg) => console.log(`[rruk] ${msg}`),
+  });
+  console.log(`[rruk] ${rruk.status().hasKey ? 'key stored' : rruk.status().devKey ? 'development key from RRUK_KEY' : 'no key'}; ${rruk.enabled ? 'enabled' : 'not configured'}`);
 }
 
 // Wide enough for the log table without truncating the system column.

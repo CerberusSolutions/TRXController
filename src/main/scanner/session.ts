@@ -293,6 +293,7 @@ export function emptySnapshot(): ScannerSnapshot {
     licences: [],
     repeaters: [],
     rr: null,
+    rruk: null,
     stats: { requests: 0, responses: 0, timeouts: 0, late: 0, frameErrors: 0, consecutiveTimeouts: 0, lastRttMs: null },
     updatedAt: 0,
     lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })),
