@@ -5,6 +5,7 @@
   "private": true,
   "description": "Remote control and logging app for the Whistler TRX-1/TRX-1E/TRX-2 scanner",
   "author": "Cerberus Systems",
+  "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/CerberusSolutions/TRXController",
   "desktopName": "trxcontroller.desktop",
   "main": "./out/main/index.js",

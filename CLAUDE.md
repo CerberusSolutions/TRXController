@@ -311,6 +311,14 @@ captured on 14 Sep 2026.
   resize / move). It is restored only if at least an 80 px grip of it is still on a connected
   screen; otherwise the 1320 x 780 default is used.
 
+## Licence
+
+- `LICENSE` is proprietary, source-available: code published to be read, not reused; binaries free
+  for personal, non-commercial use; no warranty; trade marks acknowledged. `package.json` says
+  `SEE LICENSE IN LICENSE` (npm and the .deb read it), the README has a Licence section and the help
+  screen's About block carries the copyright line with a link to the file. Never label it MIT or
+  any open-source licence.
+
 ## Help screen and identity
 
 - `DataDialog` (`components/DataMenu.tsx`, the Data button; `useUi.dataOpen`) is the same

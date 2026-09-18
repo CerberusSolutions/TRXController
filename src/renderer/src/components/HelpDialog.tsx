@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useUi } from '../store/ui';
 
 export const PUBLISHER = 'Cerberus Systems';
+export const REPO_URL = 'https://github.com/CerberusSolutions/TRXController';
 
 const IS_MAC = typeof window !== 'undefined' && window.trx?.platform === 'darwin';
 const IS_LINUX = typeof window !== 'undefined' && window.trx?.platform === 'linux';
@@ -107,6 +108,14 @@ export default function HelpDialog() {
             <p className="mt-2 text-ink-3">
               Provided as is, with no warranty or guarantee of any kind, express or implied. Use at your own risk. Not affiliated with Whistler,
               Ofcom, RadioID or the RSGB. Repeater data is published by the RSGB Emerging Technology Coordination Committee at ukrepeater.net.
+            </p>
+            <p className="mt-2 text-ink-3">
+              Copyright © 2026 {PUBLISHER}. All rights reserved. Free for personal, non-commercial use; the source is published to be read, not
+              reused. Terms in the{' '}
+              <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href={`${REPO_URL}/blob/main/LICENSE`} target="_blank" rel="noreferrer">
+                LICENSE
+              </a>{' '}
+              file.
             </p>
           </Section>
 
