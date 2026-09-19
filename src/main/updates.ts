@@ -47,7 +47,7 @@ export function readRelease(json: unknown, current: string, checkedAt = Date.now
   if (r.draft === true) return null;
   const assets = Array.isArray(r.assets) ? (r.assets as { name?: unknown; browser_download_url?: unknown }[]) : [];
   // electron-builder names the Linux x64 AppImage "x86_64" (and the .deb "amd64"); arm64 stays arm64.
-  const want = platform === 'darwin' ? /\.dmg$/i : platform === 'linux' ? new RegExp(`linux-${arch === 'x64' ? 'x86_64' : arch}\\.AppImage$`, 'i') : /\.exe$/i;
+  const want = platform === 'darwin' ? /\.dmg$/i : platform === 'linux' ? new RegExp(`linux-${arch === 'x64' ? 'x86_64' : arch}\\.AppImage$`, 'i') : /Setup-.*\.exe$/i;
   const exe = assets.find((a) => typeof a.name === 'string' && want.test(a.name));
   const latest = r.tag_name.replace(/^v/, '');
   return {

@@ -32,8 +32,10 @@ jobs:
         include:
           - os: windows-latest
             script: dist
-            artifact: TRXController-Setup
-            files: release/*.exe
+            artifact: TRXController-windows
+            files: |
+              release/*.exe
+              release/*.zip
           - os: macos-latest
             script: dist:mac
             artifact: TRXController-mac-arm64
@@ -97,6 +99,8 @@ jobs:
             **Windows**: `TRXController-Setup-<version>.exe`. Unsigned, so SmartScreen will warn on first run:
             choose "More info" then "Run anyway". Installs per user under `%LOCALAPPDATA%\Programs\TRXController`;
             log, settings and imported data live in `%APPDATA%\TRXController`.
+            `TRXController-<version>-win-x64.zip` is the same app with no installer: unzip it anywhere and run
+            `TRXController.exe`. Use it if the installer is blocked on your machine.
 
             **macOS (Apple silicon)**: `TRXController-<version>-mac-arm64.dmg`. Unsigned and not notarised, so on
             first launch right-click the app and choose Open (or run `xattr -dr com.apple.quarantine /Applications/TRXController.app`).
