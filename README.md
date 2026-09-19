@@ -101,6 +101,14 @@ npm run dist:dir    # release/win-unpacked/ only, for a quick check without inst
 
 Run `npm run dist` on Windows (the NSIS step needs Wine anywhere else; `dist:dir` works on Linux).
 
+electron-builder config is `electron-builder.yml`; the icon is `build/icon.ico`. The installer is
+unsigned, so users see two one-off warnings: Edge holds the download ("isn't commonly downloaded":
+⋯ › Keep, then the arrow on Delete › Keep anyway; Chrome and Firefox have a similar Keep prompt) and
+SmartScreen objects when it runs ("Windows protected your PC": More info › Run anyway). The app
+installs under `%LOCALAPPDATA%\Programs\TRXController` and keeps its log, settings and imported data
+in `%APPDATA%\TRXController`, the same folder the dev build uses, so nothing needs re-importing. The
+last port used is reopened at launch.
+
 ## Installing on Linux (Ubuntu, Debian, Mint, Raspberry Pi, or any distro via AppImage)
 
 Two packages are built for each release: a `.deb` for Ubuntu, Debian and Mint, and an AppImage that
@@ -194,11 +202,6 @@ over the old one; data and settings are kept. To remove it, delete the app and, 
 clean slate, that folder.
 
 Building it yourself: `npm run dist:mac` on a Mac produces the dmg (and a zip) in `release/`.
-electron-builder config is `electron-builder.yml`; the icon is `build/icon.ico`. The installer
-is unsigned, so SmartScreen shows a warning the first time it runs. The app installs under
-`%LOCALAPPDATA%\Programs\TRXController` and keeps its log, settings and imported data in
-`%APPDATA%\TRXController`, the same folder the dev build uses, so nothing needs re-importing.
-The last port used is reopened at launch.
 
 ## Releases on GitHub
 
