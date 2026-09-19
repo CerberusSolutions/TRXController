@@ -310,7 +310,18 @@ captured on 14 Sep 2026.
 - The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
   that shares the panel under the hero with the raw scanner display. The CSV button saves
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
-  `src/renderer/src/lib/csv.ts`, UTF-8 with BOM for Excel).
+  `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
+  columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
+  `*` bare), followed by `LOG_EXTRA_HEADER` (times, receptions, calls, RSSI, every source's answer,
+  distance, bearing, candidates), which EZ Scan's importer ignores. `ezObjects` folds the rows into one
+  object per frequency + code (`objectCode`: the detected tone / colour code, else the programmed
+  CTCSS / DCS / NAC squelch), newest named row naming it; `alphaTag` is the name, else `scannerName`,
+  else the frequency, cut to 16; `ezToneOf` / `ezModeOf` map the code and LCD icon onto Tone Type /
+  Tone (Search when none) and Modulation / DMode (DMR / P25 / NXDN digital, else AM / FM / NFM). DMR rows
+  get `*` talkgroup and slot with the colour code number (or `*`); Scanlists is left "" for the user to
+  tick in EZ Scan. Written as UTF-8 **without** a BOM (EZ Scan reads the header from byte 0), CRLF. The
+  sample it was built from is a TRX-1 conventional export from EZ Scan 3; its trunked-system export is
+  a different file and is not produced.
 - "Scan" (Main Menu > Scan) counts as done as soon as the scanner goes silent after the
   key (it is loading scanlists), via `MacroHost.stalled`; tune / scan failure messages clear
   themselves after 8 s.

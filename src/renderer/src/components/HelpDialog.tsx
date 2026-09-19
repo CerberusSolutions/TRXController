@@ -246,6 +246,15 @@ export default function HelpDialog() {
             </p>
           </Section>
 
+          <Section title="Log export for EZ Scan">
+            <p>
+              The log's <b className="text-ink">CSV</b> button writes a file Whistler's EZ Scan imports as conventional objects (its CSV import):
+              one object per frequency and tone or colour code, named from the log (16 characters, EZ Scan's limit), with the mode, tone or
+              NAC, colour code and slot filled in and no scanlist ticked, so a session's finds go into the scanner without retyping. The log's
+              own columns (times, sources, distance, candidates) follow EZ Scan's and are ignored by its importer.
+            </p>
+          </Section>
+
           <p className="border-t border-edge pt-3 text-[11px] text-ink-3">
             Log and imported data live in {DATA_DIR}. Open this screen again any time with the ? button in the top bar.
             {MOD_KEY}+Shift+D shows diagnostics (the raw display bytes on the Scanner display tab).

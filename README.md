@@ -75,6 +75,17 @@ click **+** at the left of a row to unfold them, ranked as the Listed block had 
 first, then your lookup order). The CSV export carries `distance_km`, `bearing_deg` and the whole
 `candidates` list, so the right match can be picked by hand when several users share a channel.
 
+The CSV export is an **EZ Scan import file**: EZ Scan's own conventional-object columns come first,
+exactly as its export writes them, so EZ Scan's CSV import takes it as it is and the session's
+finds go into the scanner without retyping. One object per frequency and tone or colour code (the
+way confirmations are keyed, so two users sharing a channel become two objects and twenty
+conversations with one become one), the alpha tag from the log's name (cut to EZ Scan's 16
+characters, else the scanner's own label such as "453.0625 CC12", else the frequency), the mode,
+CTCSS / DCS / NAC, DMR colour code and slot filled in, and no scanlist ticked: assign the imported
+objects to lists in EZ Scan. The log's own columns (first and last heard, receptions, calls, peak
+RSSI, every source's answer, `distance_km`, `bearing_deg`, `candidates`) follow EZ Scan's; its
+importer ignores columns it does not know, and any other program reads them as a normal CSV.
+
 When you know which one it is, say so: in the unfolded list press **confirm** on the right candidate,
 or type a name none of them offer. The confirmation is keyed to the frequency and the tone or colour
 code the row showed (and the talkgroup on a trunked object), so co-channel users stay apart. It
