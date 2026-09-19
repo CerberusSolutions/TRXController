@@ -3,6 +3,8 @@
 A modern remote-control and logging app (Windows, macOS on Apple silicon, and Linux) for the Whistler TRX-1 / TRX-1E / TRX-2
 digital scanners, replacing Whistler's own remote control software.
 
+**Website, downloads and user guide:** <https://cerberussolutions.github.io/TRXController/>
+
 - Protocol spec: `docs/Whistler_Remote_Control_Protocol_v1_7.pdf`
 - Working notes on the protocol: `docs/protocol-notes.md`
 - Protocol library: `packages/rcip`

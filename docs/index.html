@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRXController · remote control and logging for the Whistler TRX-1 / TRX-2</title>
+<meta name="description" content="TRXController is a free Windows, macOS and Linux app that replaces Whistler's remote-control software for the TRX-1, TRX-1E and TRX-2 scanners: a large live display, an on-screen keypad, click-to-tune, a reception log with identification from Ofcom, RadioReference UK, RadioReference and the RSGB repeater list, and band occupancy.">
+<meta property="og:title" content="TRXController">
+<meta property="og:description" content="Remote control and logging for the Whistler TRX-1 / TRX-1E / TRX-2 scanners on Windows, macOS and Linux.">
+<meta property="og:image" content="https://cerberussolutions.github.io/TRXController/img/hero.png">
+<meta property="og:type" content="website">
+<link rel="icon" href="icon.png" type="image/png">
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #0b0f14; --panel: #121821; --panel-2: #182130; --edge: #243044;
+    --ink: #e6edf3; --ink-2: #9fb0c3; --ink-3: #5c6b7f;
+    --amber: #ffb020; --amber-2: #ffd27a; --cyan: #4fd1ff; --green: #3ddc84; --red: #ff5d5d;
+    --rruk: #f472b6; --rrdb: #4fd1ff; --wtr: #ffb020; --ukr: #3ddc84;
+    --shadow: 0 30px 80px rgba(0, 0, 0, .55);
+    --mono: ui-monospace, "Cascadia Mono", "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      color-scheme: light;
+      --bg: #eef1f5; --panel: #ffffff; --panel-2: #f1f4f8; --edge: #d3dae4;
+      --ink: #101828; --ink-2: #475467; --ink-3: #8593a6;
+      --amber: #b8600a; --amber-2: #d9820f; --cyan: #0b7a9c; --green: #178a48; --red: #d92d20;
+      --rruk: #be185d; --rrdb: #0b7a9c; --wtr: #b8600a; --ukr: #178a48;
+      --shadow: 0 30px 80px rgba(16, 24, 40, .18);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 4.5rem; }
+  body { margin: 0; background: var(--bg); color: var(--ink-2); font: 16px/1.6 var(--sans); -webkit-font-smoothing: antialiased; }
+  a { color: var(--cyan); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--cyan) 40%, transparent); text-underline-offset: 3px; }
+  a:hover { text-decoration-color: var(--cyan); }
+  h1, h2, h3, h4 { color: var(--ink); letter-spacing: -0.01em; line-height: 1.2; margin: 0; }
+  h2 { font-size: 1.75rem; margin-bottom: .5rem; }
+  h3 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; }
+  h4 { font-size: 1rem; margin: 1rem 0 .25rem; }
+  p { margin: .6rem 0; }
+  code, kbd, .mono { font-family: var(--mono); font-size: .92em; }
+  code { color: var(--ink); background: var(--panel-2); border: 1px solid var(--edge); border-radius: 4px; padding: 0 .35em; white-space: nowrap; }
+  pre { background: var(--panel-2); border: 1px solid var(--edge); border-radius: 8px; padding: .8rem 1rem; overflow-x: auto; color: var(--ink); font-family: var(--mono); font-size: .9rem; line-height: 1.5; margin: .6rem 0; }
+  pre code { background: none; border: 0; padding: 0; white-space: pre; }
+  kbd { display: inline-block; min-width: 1.7em; text-align: center; color: var(--ink); background: var(--panel-2); border: 1px solid var(--edge); border-bottom-width: 2px; border-radius: 5px; padding: 0 .4em; line-height: 1.6; }
+  b, strong { color: var(--ink); font-weight: 600; }
+  .wrap { max-width: 64rem; margin: 0 auto; padding: 0 1rem; }
+  section { padding: 3.5rem 0 1rem; border-top: 1px solid var(--edge); }
+  section > .wrap > p.lead { font-size: 1.1rem; color: var(--ink-2); max-width: 46rem; }
+  .eyebrow { font-size: .72rem; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); margin-bottom: .6rem; }
+
+  /* Top bar */
+  header.top { position: sticky; top: 0; z-index: 10; background: color-mix(in srgb, var(--bg) 94%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--edge); }
+  header.top .wrap { display: flex; align-items: center; gap: 1rem; height: 3.5rem; }
+  .brand { display: flex; align-items: center; gap: .55rem; color: var(--ink); text-decoration: none; font-size: 1.15rem; letter-spacing: -0.02em; white-space: nowrap; }
+  .brand img { width: 26px; height: 26px; border-radius: 6px; }
+  .brand b { font-weight: 800; }
+  .brand span { font-weight: 300; color: var(--ink-2); }
+  .beta { font-size: .62rem; font-weight: 800; letter-spacing: .12em; color: var(--amber); border: 1px solid color-mix(in srgb, var(--amber) 60%, transparent); border-radius: 4px; padding: 0 .35em; line-height: 1.5; }
+  nav.links { margin-left: auto; display: flex; gap: 1.1rem; font-size: .9rem; overflow-x: auto; }
+  nav.links a { color: var(--ink-2); text-decoration: none; white-space: nowrap; }
+  nav.links a:hover { color: var(--ink); }
+  nav.links a.gh { color: var(--ink); }
+
+  /* Hero */
+  .hero { padding: 3.5rem 0 2.5rem; }
+  .hero h1 { font-size: clamp(2.2rem, 5vw, 3.4rem); letter-spacing: -0.03em; }
+  .hero h1 span { font-weight: 300; color: var(--ink-2); }
+  .hero .tag { font-size: 1.2rem; max-width: 44rem; margin-top: .8rem; }
+  .hero .tag b { color: var(--ink); }
+  .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin: 1.5rem 0 .5rem; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .7rem 1.15rem; border-radius: 9px; border: 1px solid var(--edge); background: var(--panel); color: var(--ink); text-decoration: none; font-weight: 600; font-size: .98rem; transition: transform .08s ease, border-color .15s ease; }
+  .btn:hover { transform: translateY(-1px); border-color: var(--ink-3); text-decoration: none; }
+  .btn.primary { background: var(--amber); border-color: var(--amber); color: #1a1200; }
+  .btn.primary:hover { background: var(--amber-2); border-color: var(--amber-2); }
+  .btn small { font-weight: 400; opacity: .75; }
+  .hero .note { font-size: .85rem; color: var(--ink-3); }
+  .shot { margin: 2.2rem 0 0; }
+  .shot img { display: block; width: 100%; height: auto; border-radius: 12px; border: 1px solid var(--edge); box-shadow: var(--shadow); }
+  figure { margin: 1.2rem 0; }
+  figcaption { font-size: .85rem; color: var(--ink-3); margin-top: .5rem; }
+  figure img { display: block; width: 100%; height: auto; border-radius: 10px; border: 1px solid var(--edge); box-shadow: var(--shadow); }
+
+  /* Cards and grids */
+  .grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); margin-top: 1.2rem; }
+  .card { background: var(--panel); border: 1px solid var(--edge); border-radius: 12px; padding: 1.1rem 1.2rem; }
+  .card h3 { margin: 0 0 .35rem; font-size: 1.02rem; }
+  .card p { margin: 0; font-size: .93rem; }
+  .card .ico { font-size: 1.3rem; margin-bottom: .4rem; color: var(--amber); }
+  .dl { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr)); margin-top: 1.2rem; }
+  .dl .card { display: flex; flex-direction: column; gap: .55rem; }
+  .dl .card.mine { border-color: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
+  .dl .card .os { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .dl .card .os small { color: var(--ink-3); font-size: .8rem; }
+  .dl .card .sub { font-size: .88rem; color: var(--ink-3); }
+  .dl .card .you { font-size: .72rem; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--amber); }
+  .dl a.asset { display: flex; justify-content: space-between; align-items: center; gap: .6rem; padding: .55rem .8rem; border-radius: 8px; border: 1px solid var(--edge); background: var(--panel-2); color: var(--ink); text-decoration: none; font-family: var(--mono); font-size: .84rem; }
+  .dl a.asset:hover { border-color: var(--ink-3); }
+  .dl a.asset .size { color: var(--ink-3); font-size: .78rem; white-space: nowrap; }
+  .dl a.asset .arch { color: var(--ink-3); }
+  .ver { font-family: var(--mono); color: var(--ink); }
+
+  /* Steps */
+  ol.steps { padding-left: 1.3rem; }
+  ol.steps li { margin: .45rem 0; }
+  ol.steps li::marker { color: var(--amber); font-weight: 700; }
+  .callout { border-left: 3px solid var(--amber); background: var(--panel); border-radius: 0 10px 10px 0; padding: .7rem 1rem; margin: 1rem 0; font-size: .95rem; }
+  .callout.info { border-left-color: var(--cyan); }
+  .callout.warn { border-left-color: var(--red); }
+  .os-tabs { display: flex; gap: .4rem; margin: 1.2rem 0 1rem; flex-wrap: wrap; }
+  .os-tabs button { font: inherit; font-weight: 600; font-size: .92rem; padding: .5rem .95rem; border-radius: 8px; border: 1px solid var(--edge); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+  .os-tabs button[aria-selected="true"] { background: var(--panel-2); color: var(--ink); border-color: var(--ink-3); }
+  .os-pane { display: none; }
+  .os-pane.show { display: block; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; font-size: .92rem; margin: .8rem 0; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--edge); vertical-align: top; }
+  th { color: var(--ink); font-weight: 600; font-size: .8rem; letter-spacing: .06em; text-transform: uppercase; }
+  td:first-child { color: var(--ink); white-space: nowrap; }
+  .tbl-wrap { overflow-x: auto; }
+  .pill { display: inline-block; font: 700 .66rem/1.7 var(--sans); letter-spacing: .1em; text-transform: uppercase; border-radius: 4px; padding: 0 .4em; vertical-align: middle; }
+  .pill.wtr { color: var(--wtr); background: color-mix(in srgb, var(--wtr) 15%, transparent); }
+  .pill.rruk { color: var(--rruk); background: color-mix(in srgb, var(--rruk) 15%, transparent); }
+  .pill.rrdb { color: var(--rrdb); background: color-mix(in srgb, var(--rrdb) 15%, transparent); }
+  .pill.ukr { color: var(--ukr); background: color-mix(in srgb, var(--ukr) 15%, transparent); }
+  .pill.rid, .pill.mem { color: var(--ink-2); background: color-mix(in srgb, var(--ink-2) 15%, transparent); }
+  .pill.conf { color: var(--bg); background: var(--green); }
+
+  /* FAQ */
+  details { border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); padding: .6rem 1rem; margin: .5rem 0; }
+  summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+  summary::marker { color: var(--amber); }
+  details p { font-size: .95rem; }
+
+  footer { border-top: 1px solid var(--edge); padding: 2.5rem 0 3rem; font-size: .88rem; color: var(--ink-3); }
+  footer p { margin: .3rem 0; }
+  .two { display: grid; gap: 1.5rem 2.5rem; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 48rem) { .two { grid-template-columns: 1fr; } nav.links { gap: .8rem; } }
+  .muted { color: var(--ink-3); }
+  .freq { font-family: var(--mono); color: var(--amber); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="icon.png" alt=""><b>TRX</b><span>Controller</span> <span class="beta">BETA</span></a>
+    <nav class="links" aria-label="Sections">
+      <a href="#download">Download</a>
+      <a href="#start">Get started</a>
+      <a href="#using">Using it</a>
+      <a href="#identify">Identification</a>
+      <a href="#keys">Keyboard</a>
+      <a href="#faq">FAQ</a>
+      <a class="gh" href="https://github.com/CerberusSolutions/TRXController">GitHub ↗</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <div class="eyebrow">For the Whistler TRX-1 · TRX-1E · TRX-2 · WS-1080 / 1088 / 1095 / 1098</div>
+      <h1>TRX<span>Controller</span></h1>
+      <p class="tag">A modern remote control and reception log for the Whistler TRX scanners, on <b>Windows</b>, <b>macOS</b> and <b>Linux</b>. A large live display, the keypad, click-to-tune, and a log that names what you heard from the Ofcom register, RadioReference UK, RadioReference and the RSGB repeater list.</p>
+      <div class="cta">
+        <a class="btn primary" id="cta-download" href="#download">Download <small id="cta-ver"></small></a>
+        <a class="btn" href="#start">Get started</a>
+        <a class="btn" href="https://github.com/CerberusSolutions/TRXController/releases">All releases</a>
+      </div>
+      <p class="note">Free for personal, non-commercial use. Beta software, provided as is. Not affiliated with Whistler.</p>
+      <div class="shot">
+        <img src="img/hero.png" alt="TRXController receiving a DMR business channel: the frequency in large amber digits, the signal meter, the licensee named by RadioReference UK with the scanner's own label beneath, the Listed block, the reception log and the keypad" width="1980" height="1170">
+      </div>
+    </div>
+  </div>
+
+  <section id="what">
+    <div class="wrap">
+      <div class="eyebrow">What it does</div>
+      <h2>Everything Whistler's own program does, and the parts it gets wrong</h2>
+      <p class="lead">The scanner plugs in over USB. TRXController drives it exactly as you would from the front panel, and adds the things a computer is good at: a display you can read from across the room, a log of every reception, and identification.</p>
+      <div class="grid">
+        <div class="card"><div class="ico">◉</div><h3>Live display</h3><p>Frequency, mode, signal strength, channel name, system or scanlist, talkgroup, radio ID, tone or colour code, slot and site, updated several times a second. The scanner's own LCD is there too.</p></div>
+        <div class="card"><div class="ico">⌨</div><h3>Keypad and keyboard</h3><p>Every front-panel key, the knob included, on screen and on the keyboard. Arrows, Enter for SEL, Esc for MENU, the digits and the decimal point.</p></div>
+        <div class="card"><div class="ico">⤳</div><h3>Click to tune</h3><p>Type a frequency, click one in the log, or click a bar on the Band tab: the app walks the scanner's own menus into Tune Mode. One button takes it back to scanning.</p></div>
+        <div class="card"><div class="ico">☰</div><h3>Reception log</h3><p>One row per conversation: time, duration, frequency, mode, name, system, talkgroup, radio ID, tone, RSSI and hit count, with a filter and CSV export. Kept between sessions.</p></div>
+        <div class="card"><div class="ico">⌖</div><h3>Identification</h3><p>Unnamed frequencies are named from the Ofcom Wireless Telegraphy Register, RadioReference UK, RadioReference and the RSGB repeater list, nearest first, with distance and bearing from you.</p></div>
+        <div class="card"><div class="ico">✓</div><h3>Confirmations</h3><p>When you know who a channel is, say so once. The confirmation is keyed to the frequency and its tone or colour code, and outranks everything from then on.</p></div>
+        <div class="card"><div class="ico">▥</div><h3>Band occupancy</h3><p>A histogram of every frequency the scanner has visited this session, brighter where a signal was heard, so a busy band is obvious at a glance.</p></div>
+        <div class="card"><div class="ico">◐</div><h3>Light and dark</h3><p>Follows the system theme or your choice. The scanner display panel stays dark in both, because it is a display.</p></div>
+        <div class="card"><div class="ico">⇪</div><h3>Update notices</h3><p>The app checks GitHub for a newer release and shows a link in the top bar. It never installs anything by itself.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap">
+      <div class="eyebrow">Download</div>
+      <h2>Latest release <span class="ver" id="dl-ver"></span></h2>
+      <p class="lead">Installers are built by GitHub Actions from the tagged source and attached to the <a href="https://github.com/CerberusSolutions/TRXController/releases/latest">release page</a>. They are unsigned, so each operating system shows a first-run warning once; the steps below say what to click. <span id="dl-note" class="muted"></span></p>
+      <div class="dl" id="dl">
+        <div class="card" data-os="windows">
+          <div class="you" hidden>Your system</div>
+          <div class="os"><h3>Windows</h3><small>10 and 11, 64-bit</small></div>
+          <a class="asset" data-match="Setup-.*\.exe$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span>TRXController-Setup-<i>version</i>.exe</span><span class="size"></span></a>
+          <div class="sub">Per-user installer, no administrator rights needed. SmartScreen asks once: More info › Run anyway.</div>
+        </div>
+        <div class="card" data-os="mac">
+          <div class="you" hidden>Your system</div>
+          <div class="os"><h3>macOS</h3><small>Apple silicon (M1 onwards)</small></div>
+          <a class="asset" data-match="mac-arm64\.dmg$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span>TRXController-<i>version</i>-mac-arm64.dmg</span><span class="size"></span></a>
+          <div class="sub">Not for Intel Macs. Unsigned and not notarised: right-click › Open the first time.</div>
+        </div>
+        <div class="card" data-os="linux">
+          <div class="you" hidden>Your system</div>
+          <div class="os"><h3>Linux</h3><small>x64 and arm64</small></div>
+          <a class="asset" data-match="linux-amd64\.deb$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span><span class="arch">.deb · x64</span></span><span class="size"></span></a>
+          <a class="asset" data-match="linux-x86_64\.AppImage$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span><span class="arch">AppImage · x64</span></span><span class="size"></span></a>
+          <a class="asset" data-match="linux-arm64\.deb$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span><span class="arch">.deb · arm64 (Raspberry Pi)</span></span><span class="size"></span></a>
+          <a class="asset" data-match="linux-arm64\.AppImage$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span><span class="arch">AppImage · arm64</span></span><span class="size"></span></a>
+          <div class="sub">The .deb is for Ubuntu, Debian and Mint; the AppImage runs on any distribution.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="start">
+    <div class="wrap">
+      <div class="eyebrow">Get started</div>
+      <h2>Install, plug in, connect</h2>
+      <p class="lead">No driver is needed on any platform: the scanner appears as a plain USB serial port. Pick your operating system.</p>
+
+      <div class="os-tabs" role="tablist">
+        <button role="tab" data-pane="windows" aria-selected="true">Windows</button>
+        <button role="tab" data-pane="mac" aria-selected="false">macOS</button>
+        <button role="tab" data-pane="linux" aria-selected="false">Linux</button>
+      </div>
+
+      <div class="os-pane show" id="pane-windows">
+        <ol class="steps">
+          <li>Download <b>TRXController-Setup-<i>version</i>.exe</b> and run it. It installs for your user only, under <code>%LOCALAPPDATA%\Programs\TRXController</code>, and needs no administrator rights.</li>
+          <li>The installer is not code-signed, so SmartScreen shows <b>"Windows protected your PC"</b> the first time. Click <b>More info</b>, then <b>Run anyway</b>. This happens once.</li>
+          <li>Plug the scanner in over USB and switch it on. Windows uses its own USB serial driver; the scanner appears in the port selector as <b>COM<i>n</i> · USB Serial Device</b>.</li>
+          <li>Launch TRXController. Pick the port in the top bar (the Whistler port is chosen automatically when it can be told apart; press ⟳ to rescan after plugging in) and press <b>Connect</b>.</li>
+        </ol>
+        <div class="callout info">The port is remembered. Next time, the app reconnects on its own when it starts, and again if the scanner is unplugged and plugged back in. <b>Disconnect</b> switches that off until you press Connect again. The log, settings and imported data live in <code>%APPDATA%\TRXController</code>. To update, run the new installer over the old one; everything is kept.</div>
+      </div>
+
+      <div class="os-pane" id="pane-mac">
+        <ol class="steps">
+          <li>Download <b>TRXController-<i>version</i>-mac-arm64.dmg</b> and open it. Drag <b>TRXController</b> into <b>Applications</b>, then eject the disk image.</li>
+          <li>First launch: in Finder, open Applications, <b>right-click</b> (or Control-click) TRXController and choose <b>Open</b>, then <b>Open</b> again in the dialog. A plain double-click is refused for an unsigned app; right-click › Open only has to be done once.</li>
+          <li>If macOS says the app <b>"is damaged and can't be opened"</b>, that is the download quarantine flag, not a damaged file. In Terminal:
+            <pre><code>xattr -dr com.apple.quarantine /Applications/TRXController.app</code></pre>
+            then launch it normally. On macOS 15 (Sequoia) and later you may instead find the app blocked in <b>System Settings › Privacy &amp; Security</b>; scroll to the bottom of that page and choose <b>Open Anyway</b>.</li>
+          <li>Plug the scanner in over USB and switch it on. It appears in the port selector as <code>/dev/tty.usbserial-…</code> or <code>/dev/tty.usbmodem…</code>. Press <b>Connect</b>.</li>
+        </ol>
+        <div class="callout info">The build is for M-series Macs only; it will not run on an Intel Mac. Cmd takes the place of Ctrl in the shortcuts. Data lives in <code>~/Library/Application Support/TRXController</code>. To update, drag the new app over the old one; everything is kept.</div>
+      </div>
+
+      <div class="os-pane" id="pane-linux">
+        <h4>Ubuntu, Debian, Mint (.deb)</h4>
+        <ol class="steps">
+          <li>Download <b>TRXController-<i>version</i>-linux-amd64.deb</b>, or <b>-arm64.deb</b> for a Raspberry Pi on a 64-bit OS (Pi 3 onwards).</li>
+          <li>Install it, which also pulls in the few libraries Electron needs:
+            <pre><code>sudo apt install ./TRXController-<i>version</i>-linux-amd64.deb</code></pre></li>
+          <li>Give yourself access to serial ports. They belong to the <code>dialout</code> group:
+            <pre><code>sudo usermod -aG dialout $USER</code></pre>
+            then <b>log out and back in</b> (or reboot). Group changes only take effect on a new login. The package prints this reminder too.</li>
+          <li>Plug the scanner in and switch it on. It appears as <code>/dev/ttyUSB0</code> or <code>/dev/ttyACM0</code>. Launch <b>TRXController</b> from the applications menu, pick the port and press <b>Connect</b>.</li>
+        </ol>
+        <h4>Any distribution (AppImage)</h4>
+        <ol class="steps">
+          <li>Download <b>TRXController-<i>version</i>-linux-x86_64.AppImage</b> (or <b>-arm64.AppImage</b>).</li>
+          <li>Make it executable and run it:
+            <pre><code>chmod +x TRXController-<i>version</i>-linux-x86_64.AppImage
+./TRXController-<i>version</i>-linux-x86_64.AppImage</code></pre>
+            If it complains about FUSE (older distributions, some containers), install <code>libfuse2</code> or run it with <code>--appimage-extract-and-run</code>.</li>
+          <li>Do the <code>dialout</code> step above, then connect as above.</li>
+        </ol>
+        <div class="callout info">There is no signing step on Linux, so no first-run warning. Data lives in <code>~/.config/TRXController</code>. The RadioReference password goes in the desktop keyring (GNOME Keyring or KWallet); without one it is stored obfuscated rather than encrypted, and the Data dialog says so. To update, install the new .deb over the old one or replace the AppImage. To remove, <code>sudo apt remove trxcontroller</code> or delete the AppImage.</div>
+      </div>
+
+      <h3>The first thing you see</h3>
+      <p>The help screen opens on first run, with the connection steps, the download links for the optional data files and the keyboard summary. It is behind the <b>?</b> button in the top bar whenever you want it back.</p>
+      <figure>
+        <img src="img/help.png" alt="The help screen: About, Getting connected, the optional data files with their download links, Updates, and Keyboard and tuning" width="1980" height="1170" loading="lazy">
+        <figcaption>The built-in help screen. Everything on this page is in there too.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="using">
+    <div class="wrap">
+      <div class="eyebrow">Using it</div>
+      <h2>The screen</h2>
+      <p class="lead">The frequency is the hero. Beneath it, the channel and the details the scanner reports; under that, a panel with three tabs; on the right, the keypad and the Tune box.</p>
+
+      <h3>The hero</h3>
+      <p>The frequency in large amber digits with the mode, the signal type and the scanlist flags beside it. The signal meter follows the scanner's RSSI, with the raw value at the end. Then the channel name in large text with its system or scanlist beneath, and a parameter row: type, talkgroup, radio ID (resolved to a callsign and name when the DMR user database is imported), slot and colour code, squelch tone or NAC, site, and when the transmission started.</p>
+      <p>When the scanner has no name for the channel, or the name is only the frequency (a habit when logging channels for identification, such as <code>453.0625 CC15</code>), the best listing takes its place with a pill saying which database it came from, and the scanner's own text is shown beneath. The <b>Listed</b> block shows what every enabled lookup knows about the frequency, nearest first, with the distance and bearing from your location and a tick against the entry whose tone or colour code matches the one the scanner is hearing.</p>
+      <figure>
+        <img src="img/trunked.png" alt="A P25 talkgroup reception: Fire Dispatch on County P25, TGID, the radio ID resolved to a callsign, site, NAC and the nearest licensees from the Ofcom register" width="1980" height="1170" loading="lazy">
+        <figcaption>A trunked reception: talkgroup, radio ID resolved through the RadioID database, site and NAC, with the nearest Ofcom licensees listed.</figcaption>
+      </figure>
+
+      <h3>Tuning</h3>
+      <p>The scanner has no "go to frequency" command, so TRXController does what you would do: it opens the menu, goes to <b>Searches › Tune Mode</b>, types the digits and presses SEL. Each step is checked against the scanner's display before the next key. Three ways to start it:</p>
+      <ul>
+        <li>Type a frequency in MHz into the <b>Tune</b> box under the keypad and press <b>Tune</b>.</li>
+        <li>Click a frequency in the log.</li>
+        <li>Click a bar on the <b>Band</b> tab.</li>
+      </ul>
+      <p><b>Scan</b> beside the Tune box takes the scanner back to scanning (Main Menu › Scan). While it loads its scanlists the scanner stops talking to the port for a few seconds; the top bar shows "Loading scanlists" and the keypad is held until it wakes, so nothing is queued into it. That is normal.</p>
+      <figure>
+        <img src="img/tune.png" alt="Tune Mode on a DMR signal: the radio ID resolved to a callsign and town, slot and colour code, with the Scanner display tab showing the LCD" width="1980" height="1170" loading="lazy">
+        <figcaption>Tune Mode on a DMR signal. The radio ID, slot and colour code come off the scanner's display; the <b>Scanner display</b> tab shows the LCD itself.</figcaption>
+      </figure>
+
+      <h3>The log</h3>
+      <p>A reception is a period with the squelch open on one frequency. Bursts shorter than half a second are ignored, and a new opening on the same channel within ten seconds of the last reopens that row, so one conversation is one row: first heard stays, last heard and the call count move on, and the peak RSSI is kept. Rows are ordered by last activity, open rows first, and live between sessions.</p>
+      <ul>
+        <li><b>Filter</b> matches the name, system, frequency, talkgroup or radio ID.</li>
+        <li><b>Simple / Detail</b> switches between the one-name view and a column per source (Scanner, List, WTR, RRUK, RRDB, UKR, Sys), so a row where the scanner and a register disagree is easy to spot.</li>
+        <li><b>+</b> at the left of a row unfolds every candidate the lookups offered for that frequency, with a <b>confirm</b> button beside each, and the traffic heard on the frequency grouped by tone or colour code and talkgroup.</li>
+        <li><b>Dist</b> shows the distance and bearing of the identity the row shows, in km or miles (the toggle is in the Data dialog).</li>
+        <li><b>Src</b> says which lookup named the row: blank for the scanner's own programming, otherwise a pill (see below).</li>
+        <li><b>CSV</b> saves the rows as filtered, with every source's answer, the distance, the bearing and the full candidate list. <b>Clear log</b> empties it.</li>
+        <li>Drag a column divider to resize it; double-click the divider to reset. The view and the widths are remembered.</li>
+      </ul>
+      <figure>
+        <img src="img/candidates.png" alt="A log row unfolded to show three Ofcom licensees for the frequency with their distance and bearing and a confirm button beside each" width="1980" height="1170" loading="lazy">
+        <figcaption>A row unfolded: the candidates for 410.775 MHz, nearest first, each with a <b>confirm</b> button.</figcaption>
+      </figure>
+
+      <h3>Band tab</h3>
+      <p>One bar per frequency the scanner has visited in Scan, Search, Sweeper or Monitor mode. Height is the peak RSSI, cyan fading with age, amber where the squelch ever opened, a dashed marker at the current frequency, and a tooltip on hover. It is a visual aid, not a measurement: the scanner's RSSI is uncalibrated. <b>Reset</b> starts again; nothing here is saved.</p>
+
+      <h3>Scanner display tab</h3>
+      <p>The scanner's own six-line LCD and icons, as it draws them. It is what the app reads to follow the menus, so it is also the place to look when something seems stuck. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> (<kbd>Cmd</kbd> on a Mac) adds a raw-bytes dump for reporting problems.</p>
+
+      <h3>Theme</h3>
+      <p>The sun, moon and monitor buttons in the top bar pick light, dark or the system theme. The window chrome follows.</p>
+      <figure>
+        <img src="img/light.png" alt="The same reception in the light theme" width="1980" height="1170" loading="lazy">
+        <figcaption>The light theme. The scanner display panel keeps its dark colours in both.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="identify">
+    <div class="wrap">
+      <div class="eyebrow">Identification</div>
+      <h2>Naming what you heard</h2>
+      <p class="lead">The scanner only knows what you programmed into it. TRXController fills the gaps from four sources: three free files you import once, and two online databases you can sign up to. Set them up under the <b>Data</b> button.</p>
+
+      <div class="tbl-wrap">
+      <table>
+        <thead><tr><th>Source</th><th>What it gives</th><th>How to set it up</th></tr></thead>
+        <tbody>
+          <tr><td><span class="pill wtr">WTR</span> Ofcom Wireless Telegraphy Register</td><td>The licensee on a business-radio frequency near you, with distance and bearing. Not in it: PMR446, Simple UK / Site licences, amateur, MoD and Home Office.</td><td>Download <a href="https://static.ofcom.org.uk/static/radiolicensing/html/register/WTR.csv">WTR.csv</a> (about 55 MB), then Data › <b>Import WTR CSV</b>. Set your latitude, longitude and radius under Data so the nearest come first. Free.</td></tr>
+          <tr><td><span class="pill rruk">RRUK</span> RadioReference UK</td><td>UK-centric, Ofcom-backed listings filtered to your area: licensee, place, distance, bearing and the colour code or tone, which the app matches against what the scanner is hearing.</td><td>Sign up at <a href="https://radioreferenceuk.co.uk/">radioreferenceuk.co.uk</a>, generate an API key in your dashboard, paste it under Data › <b>RadioReference UK</b> and press Test. Optionally a postcode; otherwise your coordinates and radius are used (up to RRUK's 50 miles). The key is yours alone, stored encrypted on your machine.</td></tr>
+          <tr><td><span class="pill rrdb">RRDB</span> RadioReference</td><td>Trunked systems, sites and talkgroup names, and conventional channel descriptions, from the RadioReference database, filtered to your area.</td><td>Data › <b>RadioReference</b>: your radioreference.com username and password (a premium subscription is required for API access) and your region. The password is stored encrypted.</td></tr>
+          <tr><td><span class="pill ukr">UKR</span> RSGB repeater list</td><td>The amateur repeater on 10 m, 6 m, 2 m, 70 cm and 23 cm: callsign, place, distance, CTCSS tone and FM / DMR / D-STAR / Fusion capability, the one whose tone matches first.</td><td>On <a href="https://ukrepeater.net/csvfiles.html">ukrepeater.net</a> pick the "all" repeater list (about 60 KB), then Data › <b>Import repeater list CSV</b>. Free.</td></tr>
+          <tr><td><span class="pill rid">RID</span> RadioID DMR users</td><td>Turns a DMR radio ID into a callsign, name and town.</td><td>Download <a href="https://radioid.net/static/user.csv">user.csv</a> (about 20 MB), then Data › <b>Import radioid.net CSV or JSON</b>. Free.</td></tr>
+        </tbody>
+      </table>
+      </div>
+      <p class="muted">Importing replaces the previous copy, so repeat it whenever you fetch a fresh file. Online lookups happen once per frequency, when the squelch first opens on it, and are cached for a month.</p>
+
+      <div class="two">
+        <div>
+          <h3>Lookup order</h3>
+          <p>Data › <b>Lookup order</b> sets which source is asked first when several know a frequency. The scanner's own programming always wins; a lookup only fills in a name or system the scanner did not have. Two exceptions: a RadioReference talkgroup name still wins over a licensee (registers know no talkgroups), and a candidate whose tone or colour code matches the one the scanner shows is listed first and names the row whatever the order, while one whose code differs sinks. Untick a source to ignore it while it is offline or returning junk.</p>
+          <h3>Confirming an identity</h3>
+          <p>Unfold a log row, press <b>confirm</b> beside the right candidate, or type a name none of them offer. The confirmation is keyed to the frequency and the tone or colour code the row showed (and the talkgroup on a trunked object), so co-channel users stay apart. From then on it outranks every lookup and the scanner's own programming: every logged reception it fits is renamed with a green <span class="pill conf">CONF</span> pill, new receptions take it as they arrive, and the hero shows it while the scanner is on the frequency. <b>remove</b> withdraws it. Data › <b>Confirmed identities</b> lists them all.</p>
+        </div>
+        <div>
+          <h3>The Src column</h3>
+          <div class="tbl-wrap">
+          <table>
+            <tbody>
+              <tr><td><span class="pill wtr">WTR</span></td><td>Named from the Ofcom register</td></tr>
+              <tr><td><span class="pill rruk">RRUK</span></td><td>Named from RadioReference UK</td></tr>
+              <tr><td><span class="pill rrdb">RRDB</span></td><td>Named from RadioReference</td></tr>
+              <tr><td><span class="pill ukr">UKR</span></td><td>Named from the repeater list</td></tr>
+              <tr><td><span class="pill rid">RID</span></td><td>The only name is the radio ID's callsign</td></tr>
+              <tr><td><span class="pill mem">MEM</span></td><td>Too brief to show the object; named from an earlier reception on the frequency</td></tr>
+              <tr><td><span class="pill conf">CONF</span></td><td>An identity you confirmed</td></tr>
+              <tr><td class="muted">blank</td><td>The scanner's own programming</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <h3>Scan timeout</h3>
+          <p>Data › <b>Scan timeout</b> (off, 10 s to 2 min) stops a dead carrier or a stuck beacon eating the session: after that long on one carrier in Scan mode the app presses ► for you and scanning resumes. Searches and Tune Mode are never nudged, since sitting on a signal is what they are for.</p>
+        </div>
+      </div>
+      <figure>
+        <img src="img/data.png" alt="The Data dialog: lookup order, location, RadioReference UK and RadioReference on the left; the three imports, confirmed identities and the scan timeout on the right" width="1980" height="1170" loading="lazy">
+        <figcaption>The Data dialog: lookup order, location, the two online accounts, the three file imports, confirmed identities and the scan timeout.</figcaption>
+      </figure>
+      <figure>
+        <img src="img/repeater.png" alt="An amateur repeater reception: RV53 on 145.6625 MHz with three repeaters listed, the one whose CTCSS matches the detected 94.8 Hz tone first" width="1980" height="1170" loading="lazy">
+        <figcaption>An amateur repeater output. Several share the channel; the one whose CTCSS matches the detected tone is listed first, with its mode capabilities.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section id="keys">
+    <div class="wrap">
+      <div class="eyebrow">Keyboard</div>
+      <h2>Shortcuts</h2>
+      <p class="lead">The keypad follows the keyboard while the scanner is connected and no dialog or text field has the focus. Hover a key on screen for its shortcut.</p>
+      <div class="two">
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Scanner key</th><th>Keyboard</th></tr></thead>
+            <tbody>
+              <tr><td>▲ ▼ ◄ ►</td><td><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd></td></tr>
+              <tr><td>SEL (play / pause)</td><td><kbd>Enter</kbd> or <kbd>Space</kbd></td></tr>
+              <tr><td>MENU</td><td><kbd>Esc</kbd> or <kbd>M</kbd></td></tr>
+              <tr><td>SKIP</td><td><kbd>S</kbd> or <kbd>Backspace</kbd></td></tr>
+              <tr><td>ATT · WX · Fn · PRI</td><td><kbd>A</kbd> · <kbd>W</kbd> · <kbd>F</kbd> · <kbd>P</kbd></td></tr>
+              <tr><td>0 – 9 and .</td><td><kbd>0</kbd> – <kbd>9</kbd> and <kbd>.</kbd></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Scanner key</th><th>Keyboard</th></tr></thead>
+            <tbody>
+              <tr><td>Knob press</td><td><kbd>K</kbd></td></tr>
+              <tr><td>Knob anticlockwise</td><td><kbd>[</kbd> or <kbd>Page Up</kbd></td></tr>
+              <tr><td>Knob clockwise</td><td><kbd>]</kbd> or <kbd>Page Down</kbd></td></tr>
+              <tr><td>Power</td><td>Click ⏻ twice within 2.5 s (no shortcut, on purpose)</td></tr>
+              <tr><td>Diagnostics</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> (<kbd>Cmd</kbd> on a Mac)</td></tr>
+              <tr><td>Help</td><td>The <b>?</b> button; <kbd>Esc</kbd> closes it</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="eyebrow">FAQ</div>
+      <h2>Questions and troubleshooting</h2>
+      <details><summary>Which scanners does it work with?</summary><p>The Whistler TRX-1, TRX-1E and TRX-2, and the WS-1080, WS-1088, WS-1095 and WS-1098, which share the same remote-control protocol. It was developed and tested on a TRX-1E with CPU firmware 7.4.</p></details>
+      <details><summary>No serial port appears in the top bar.</summary><p>Check the scanner is switched on and the cable carries data (some USB leads are charge-only), then press ⟳ to rescan. On Linux, make sure you are in the <code>dialout</code> group and have logged in again since adding yourself. On a Mac the port is named <code>/dev/tty.usbserial-…</code> or <code>/dev/tty.usbmodem…</code>.</p></details>
+      <details><summary>Windows says "Windows protected your PC".</summary><p>The installer is not code-signed. Click <b>More info</b>, then <b>Run anyway</b>. It only happens the first time.</p></details>
+      <details><summary>macOS says the app is damaged or from an unidentified developer.</summary><p>Right-click the app and choose <b>Open</b> for the "unidentified developer" case. For "damaged", clear the quarantine flag with <code>xattr -dr com.apple.quarantine /Applications/TRXController.app</code>, or use <b>Open Anyway</b> at the bottom of System Settings › Privacy &amp; Security on macOS 15 and later. The app is unsigned and not notarised; the file itself is fine.</p></details>
+      <details><summary>The top bar says "Loading scanlists" and the keypad is greyed out.</summary><p>Right after a mode change, and for several seconds while it loads its scanlists, the scanner stops answering the port but remembers every request and answers them all when it wakes. The app waits rather than piling keys into that queue. With two large scanlists this can take over a minute. It is the scanner, not the link.</p></details>
+      <details><summary>The scanner's name and the register disagree. Which is right?</summary><p>Only you can say. The <b>Detail</b> view of the log shows every source's answer side by side, and unfolding the row shows the traffic heard on the frequency by tone or colour code. When you know, <b>confirm</b> the right one; the confirmation then outranks both, and Data › Confirmed identities lists it so you can reprogram the scanner at leisure.</p></details>
+      <details><summary>Why is a channel named by its frequency showing a different name?</summary><p>An object named only by its frequency, with or without a code noted after it (<code>453.0625</code>, <code>453.0625 CC15</code>, <code>167.300 94.8</code>), counts as unnamed, so the lookups name it. The scanner's own text is still shown beneath the name in the hero and in the Scanner column of the Detail view.</p></details>
+      <details><summary>Does RadioReference work without a premium account?</summary><p>No. RadioReference's web service needs a premium subscription; the app uses your login and never stores the password in clear. RadioReference UK is a separate, UK-run database with its own free API key from your dashboard there. The Ofcom register, the repeater list and the RadioID database are free files.</p></details>
+      <details><summary>What leaves my computer?</summary><p>Nothing, unless you switch it on: RadioReference UK and RadioReference lookups send the frequency (and your area) to those services when you have entered a key or a login, and the update check fetches the latest release number from GitHub. The log and the imported files stay on your machine.</p></details>
+      <details><summary>Where is my data, and how do I move it?</summary><p>In <code>%APPDATA%\TRXController</code> on Windows, <code>~/Library/Application Support/TRXController</code> on macOS and <code>~/.config/TRXController</code> on Linux: the log (<code>trx-log.sqlite</code>), the settings and the imported databases. Copy the folder to move everything to another machine of the same platform. Updates keep it.</p></details>
+      <details><summary>Can I build it myself?</summary><p>Yes, the source is on <a href="https://github.com/CerberusSolutions/TRXController">GitHub</a> with the build steps in the README. Note the <a href="https://github.com/CerberusSolutions/TRXController/blob/main/LICENSE">licence</a>: the code is published to be read, not reused, and the binaries are free for personal, non-commercial use.</p></details>
+      <details><summary>Something is wrong. How do I report it?</summary><p>Open an issue on <a href="https://github.com/CerberusSolutions/TRXController/issues">GitHub</a> with the app version (top bar), the scanner model and firmware (shown beside "Connected"), what you did and what happened. For display or tuning problems, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> adds a raw-bytes dump with a copy button to the Scanner display tab; paste that in.</p></details>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p><b>TRXController</b> is beta software from Cerberus Systems. Provided as is, with no warranty or guarantee of any kind, express or implied. Use at your own risk.</p>
+    <p>Not affiliated with Whistler, Ofcom, RadioReference, RadioReference UK, RadioID or the RSGB. Repeater data is published by the RSGB Emerging Technology Coordination Committee at ukrepeater.net. Whistler and TRX are trade marks of their owners.</p>
+    <p>Copyright © 2026 Cerberus Systems. All rights reserved. Free for personal, non-commercial use under the <a href="https://github.com/CerberusSolutions/TRXController/blob/main/LICENSE">licence</a>. <a href="https://github.com/CerberusSolutions/TRXController">Source on GitHub</a> · <a href="https://github.com/CerberusSolutions/TRXController/releases">Releases</a> · <a href="https://github.com/CerberusSolutions/TRXController/issues">Issues</a></p>
+  </div>
+</footer>
+
+<script>
+(() => {
+  // Operating-system tabs, preselected from the browser's platform.
+  const ua = navigator.userAgent;
+  const os = /Windows/i.test(ua) ? 'windows' : /Mac/i.test(ua) && !/iPhone|iPad/i.test(ua) ? 'mac' : /Linux|X11/i.test(ua) && !/Android/i.test(ua) ? 'linux' : null;
+  const tabs = [...document.querySelectorAll('.os-tabs [role="tab"]')];
+  const select = (name) => {
+    for (const t of tabs) t.setAttribute('aria-selected', String(t.dataset.pane === name));
+    for (const p of document.querySelectorAll('.os-pane')) p.classList.toggle('show', p.id === 'pane-' + name);
+  };
+  for (const t of tabs) t.addEventListener('click', () => select(t.dataset.pane));
+  if (os) {
+    select(os);
+    const card = document.querySelector(`.dl .card[data-os="${os}"]`);
+    if (card) { card.classList.add('mine'); card.querySelector('.you').hidden = false; }
+  }
+
+  // Fill the download links from the latest GitHub release; the static links to the release page stay as the fallback.
+  const mb = (n) => (n / 1048576).toFixed(0) + ' MB';
+  fetch('https://api.github.com/repos/CerberusSolutions/TRXController/releases/latest', { headers: { Accept: 'application/vnd.github+json' } })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+    .then((rel) => {
+      const ver = String(rel.tag_name || '').replace(/^v/, '');
+      if (ver) {
+        document.getElementById('dl-ver').textContent = 'v' + ver;
+        document.getElementById('cta-ver').textContent = 'v' + ver;
+        for (const i of document.querySelectorAll('i')) if (i.textContent === 'version') i.textContent = ver;
+      }
+      if (rel.published_at) document.getElementById('dl-note').textContent = 'Published ' + new Date(rel.published_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) + '.';
+      for (const a of document.querySelectorAll('a.asset[data-match]')) {
+        const re = new RegExp(a.dataset.match);
+        const asset = (rel.assets || []).find((x) => re.test(x.name));
+        if (!asset) continue;
+        a.href = asset.browser_download_url;
+        a.querySelector('.size').textContent = mb(asset.size);
+        const label = a.querySelector('span');
+        if (!label.querySelector('.arch')) label.textContent = asset.name;
+      }
+      const mine = document.querySelector('.dl .card.mine a.asset');
+      if (mine) document.getElementById('cta-download').href = mine.href;
+    })
+    .catch(() => { /* offline or rate-limited: the release page links remain */ });
+})();
+</script>
+</body>
+</html>
