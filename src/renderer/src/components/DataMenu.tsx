@@ -81,7 +81,7 @@ function LookupOrder() {
     next.splice(i + d, 0, p!);
     save(next);
   };
-  const short: Record<LookupPref['id'], string> = { WTR: 'Ofcom licence register', RRUK: 'RadioReference UK', RRDB: 'RadioReference', UKR: 'RSGB repeater list' };
+  const short: Record<LookupPref['id'], string> = { WTR: 'Ofcom licence register', RRUK: 'RadioReference UK', RRDB: 'RadioReference.com', UKR: 'RSGB repeater list' };
   const btn = 'rounded border border-edge px-1 text-[10px] leading-4 text-ink-3 hover:text-ink disabled:opacity-30 disabled:hover:text-ink-3';
   return (
     <ol className="mt-1 space-y-1 text-xs">
@@ -475,7 +475,7 @@ export default function DataDialog() {
               <RrukForm />
             </Section>
 
-            <Section title="RadioReference (online)">
+            <Section title="RadioReference.com (online)">
               <RadioReferenceForm />
             </Section>
           </div>
