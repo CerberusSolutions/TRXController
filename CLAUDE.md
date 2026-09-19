@@ -145,8 +145,14 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - `.github/workflows/static.yml` (Pages source "GitHub Actions") uploads `docs/` on every push to main
   that touches it; `docs/.nojekyll` keeps Pages from running Jekyll if the source is ever switched to
   "Deploy from a branch". The protocol PDF and notes in `docs/` are published with it.
-- Keep the page in step with the app: a new feature, data source, shortcut or install step goes in the
-  README, the help screen and here.
+- **Keeping it current is part of every user-facing change.** Whenever a change touches something a
+  user sees or does (a feature, a data source, a Data-dialog or help-screen entry, a keyboard shortcut,
+  an install or update step, a supported platform, a release asset name), update `docs/index.html` in
+  the same pull request, alongside the README and the help screen, and say so in the PR summary. If
+  the change alters what the screen looks like, re-shoot the affected screenshots in `docs/img/` from
+  the mock preview (same scenes, 1320 x 780, DPR 1.5, mock version bumped to the current one) so the
+  page never shows a stale UI. The download cards need no edit on a release: they read the latest
+  release from GitHub at run time. A pure refactor, test or CI change needs nothing here.
 
 ## UI preview without a scanner
 
