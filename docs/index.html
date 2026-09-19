@@ -104,6 +104,10 @@
   .ver { font-family: var(--mono); color: var(--ink); }
 
   /* Steps */
+  .strip { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; margin: .8rem 0 .2rem; }
+  .strip figure { flex: 1 1 11rem; max-width: 16rem; margin: 0; }
+  .strip figure img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--edge); box-shadow: none; background: #fff; }
+  .strip figcaption { font-size: .8rem; }
   ol.steps { padding-left: 1.3rem; }
   ol.steps li { margin: .45rem 0; }
   ol.steps li::marker { color: var(--amber); font-weight: 700; }
@@ -208,7 +212,7 @@
           <div class="you" hidden>Your system</div>
           <div class="os"><h3>Windows</h3><small>10 and 11, 64-bit</small></div>
           <a class="asset" data-match="Setup-.*\.exe$" href="https://github.com/CerberusSolutions/TRXController/releases/latest"><span>TRXController-Setup-<i>version</i>.exe</span><span class="size"></span></a>
-          <div class="sub">Per-user installer, no administrator rights needed. SmartScreen asks once: More info › Run anyway.</div>
+          <div class="sub">Per-user installer, no administrator rights needed. Unsigned, so Edge asks you to <b>Keep</b> the download and SmartScreen asks once more when it runs: More info › Run anyway. <a href="#faq-edge">Details</a>.</div>
         </div>
         <div class="card" data-os="mac">
           <div class="you" hidden>Your system</div>
@@ -243,8 +247,15 @@
 
       <div class="os-pane show" id="pane-windows">
         <ol class="steps">
-          <li>Download <b>TRXController-Setup-<i>version</i>.exe</b> and run it. It installs for your user only, under <code>%LOCALAPPDATA%\Programs\TRXController</code>, and needs no administrator rights.</li>
-          <li>The installer is not code-signed, so SmartScreen shows <b>"Windows protected your PC"</b> the first time. Click <b>More info</b>, then <b>Run anyway</b>. This happens once.</li>
+          <li>Download <b>TRXController-Setup-<i>version</i>.exe</b>. The installer is not code-signed, so Edge holds the download with <b>"isn't commonly downloaded"</b>. Press the <b>⋯</b> beside it and choose <b>Keep</b>; in the dialog that follows, open the arrow on the <b>Delete</b> button and choose <b>Keep anyway</b>. The file then shows <b>Open file</b>. Chrome and Firefox show a similar "keep" prompt.
+            <div class="strip">
+              <figure><img src="img/edge-1-warning.png" alt="Edge download panel: TRXController-Setup isn't commonly downloaded" width="351" height="183" loading="lazy"><figcaption>1. Edge holds the download.</figcaption></figure>
+              <figure><img src="img/edge-2-keep.png" alt="The download's menu with Keep highlighted" width="244" height="269" loading="lazy"><figcaption>2. ⋯ › <b>Keep</b>.</figcaption></figure>
+              <figure><img src="img/edge-3-keep-anyway.png" alt="Make sure you trust this file before you open it, with Keep anyway under the Delete button" width="356" height="502" loading="lazy"><figcaption>3. The arrow on Delete › <b>Keep anyway</b>.</figcaption></figure>
+              <figure><img src="img/edge-4-open.png" alt="The download panel now offers Open file" width="362" height="149" loading="lazy"><figcaption>4. <b>Open file</b> runs the installer.</figcaption></figure>
+            </div>
+          </li>
+          <li>Run it. SmartScreen shows <b>"Windows protected your PC"</b> the first time. Click <b>More info</b>, then <b>Run anyway</b>. It installs for your user only, under <code>%LOCALAPPDATA%\Programs\TRXController</code>, and needs no administrator rights. Both warnings happen once.</li>
           <li>Plug the scanner in over USB and switch it on. Windows uses its own USB serial driver; the scanner appears in the port selector as <b>COM<i>n</i> · USB Serial Device</b>.</li>
           <li>Launch TRXController. Pick the port in the top bar (the Whistler port is chosen automatically when it can be told apart; press ⟳ to rescan after plugging in) and press <b>Connect</b>.</li>
         </ol>
@@ -453,7 +464,8 @@
       <h2>Questions and troubleshooting</h2>
       <details><summary>Which scanners does it work with?</summary><p>The Whistler TRX-1, TRX-1E and TRX-2, and the WS-1080, WS-1088, WS-1095 and WS-1098, which share the same remote-control protocol. It was developed and tested on a TRX-1E with CPU firmware 7.4.</p></details>
       <details><summary>No serial port appears in the top bar.</summary><p>Check the scanner is switched on and the cable carries data (some USB leads are charge-only), then press ⟳ to rescan. On Linux, make sure you are in the <code>dialout</code> group and have logged in again since adding yourself. On a Mac the port is named <code>/dev/tty.usbserial-…</code> or <code>/dev/tty.usbmodem…</code>.</p></details>
-      <details><summary>Windows says "Windows protected your PC".</summary><p>The installer is not code-signed. Click <b>More info</b>, then <b>Run anyway</b>. It only happens the first time.</p></details>
+      <details id="faq-edge"><summary>Edge says the download "isn't commonly downloaded". Is it safe?</summary><p>Yes. Edge's SmartScreen holds any installer that is not code-signed and has not yet been downloaded by many people, whatever it contains. Press the <b>⋯</b> beside the download and choose <b>Keep</b>. In the "Make sure you trust" dialog, open the arrow on the <b>Delete</b> button and choose <b>Keep anyway</b>. The download then offers <b>Open file</b>. Chrome ("This file may be dangerous" › Keep) and Firefox behave the same way. If you want to check the file first, it is built by GitHub Actions from the tagged source and the release page lists its size.</p></details>
+      <details><summary>Windows says "Windows protected your PC" when the installer runs.</summary><p>The same reason: the installer is not code-signed. Click <b>More info</b>, then <b>Run anyway</b>. It only happens the first time.</p></details>
       <details><summary>macOS says the app is damaged or from an unidentified developer.</summary><p>Right-click the app and choose <b>Open</b> for the "unidentified developer" case. For "damaged", clear the quarantine flag with <code>xattr -dr com.apple.quarantine /Applications/TRXController.app</code>, or use <b>Open Anyway</b> at the bottom of System Settings › Privacy &amp; Security on macOS 15 and later. The app is unsigned and not notarised; the file itself is fine.</p></details>
       <details><summary>The top bar says "Loading scanlists" and the keypad is greyed out.</summary><p>Right after a mode change, and for several seconds while it loads its scanlists, the scanner stops answering the port but remembers every request and answers them all when it wakes. The app waits rather than piling keys into that queue. With two large scanlists this can take over a minute. It is the scanner, not the link.</p></details>
       <details><summary>The scanner's name and the register disagree. Which is right?</summary><p>Only you can say. The <b>Detail</b> view of the log shows every source's answer side by side, and unfolding the row shows the traffic heard on the frequency by tone or colour code. When you know, <b>confirm</b> the right one; the confirmation then outranks both, and Data › Confirmed identities lists it so you can reprogram the scanner at leisure.</p></details>
