@@ -3,6 +3,8 @@ import { useUi } from '../store/ui';
 
 const PUBLISHER = 'Cerberus Systems';
 const REPO_URL = 'https://github.com/CerberusSolutions/TRXController';
+/** The public page: downloads, install steps, user guide, FAQ. */
+const SITE_URL = 'https://cerberussolutions.github.io/TRXController/';
 
 const IS_MAC = typeof window !== 'undefined' && window.trx?.platform === 'darwin';
 const IS_LINUX = typeof window !== 'undefined' && window.trx?.platform === 'linux';
@@ -163,10 +165,11 @@ export default function HelpDialog() {
                 <p className="text-ink-3">Not checked yet, or GitHub could not be reached. The app looks shortly after launch and every six hours.</p>
               )}
               <p className="mt-1 text-ink-3">
-                All releases:{' '}
-                <a className="underline decoration-ink-3/40 underline-offset-2" href="https://github.com/CerberusSolutions/TRXController/releases" target="_blank" rel="noreferrer">
-                  github.com/CerberusSolutions/TRXController/releases
+                Downloads, install steps, the user guide and the FAQ:{' '}
+                <a className="text-cyan underline decoration-cyan/40 underline-offset-2" href={SITE_URL} target="_blank" rel="noreferrer">
+                  cerberussolutions.github.io/TRXController
                 </a>
+                . All releases: <a className="underline decoration-ink-3/40 underline-offset-2" href={`${REPO_URL}/releases`} target="_blank" rel="noreferrer">github.com/CerberusSolutions/TRXController/releases</a>.
               </p>
             </Section>
 
@@ -186,7 +189,8 @@ export default function HelpDialog() {
               <p>
                 The log's <b className="text-ink">CSV</b> button writes a file Whistler's EZ Scan imports as conventional objects (its CSV import):
                 one object per frequency and tone or colour code, named from the log (16 characters, EZ Scan's limit), with the mode, tone or
-                NAC, colour code and slot filled in and no scanlist ticked, so a session's finds go into the scanner without retyping. The log's
+                NAC, colour code and slot filled in, so a session's finds go into the scanner without retyping. The scanlist column is left empty, so EZ Scan
+              files them under its default import scanlist (normally scanlist 1, and you can change that in EZ Scan). The log's
                 own columns (times, sources, distance, candidates) follow EZ Scan's and are ignored by its importer.
               </p>
             </Section>
@@ -194,7 +198,7 @@ export default function HelpDialog() {
           <div className="space-y-4">
             <Section title="Optional data files">
               <p className="mb-3">
-                Three free downloads make the log far more useful, and a RadioReference UK or RadioReference account adds names from those databases. Save each file anywhere, then load it with the{' '}
+                Three free downloads make the log far more useful, and a RadioReference UK or RadioReference.com account adds names from those databases. Save each file anywhere, then load it with the{' '}
                 <b className="rounded border border-edge px-1 py-px text-ink">Data</b> button in the top bar. Importing replaces the previous copy, so
                 repeat it whenever you fetch a fresh file.
               </p>
@@ -242,8 +246,10 @@ export default function HelpDialog() {
                 </li>
                 <li className="rounded-lg border border-edge bg-panel-2 p-3">
                   <div className="flex items-baseline justify-between gap-3">
-                    <span className="font-semibold text-ink">RadioReference (online)</span>
-                    <span className="shrink-0 font-mono text-[11px] text-ink-3">premium account</span>
+                    <span className="font-semibold text-ink">RadioReference.com (online)</span>
+                    <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://www.radioreference.com/" target="_blank" rel="noreferrer">
+                      radioreference.com
+                    </a>
                   </div>
                   <p className="mt-1 text-ink-3">
                     Names trunked systems, sites and talkgroups, and conventional channels, from the RadioReference database as frequencies are
@@ -251,7 +257,7 @@ export default function HelpDialog() {
                   </p>
                   <p className="mt-2">
                     <span className="text-ink-3">Then: </span>
-                    Data › RadioReference: enter your radioreference.com username and password (a premium subscription is required for API access)
+                    Data › RadioReference.com: enter your username and password (a premium subscription is required for API access)
                     and pick your country and region. The password is stored encrypted for your account only.
                   </p>
                 </li>

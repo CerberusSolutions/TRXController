@@ -79,6 +79,8 @@ describe('csv', () => {
     expect(csv.charCodeAt(0)).not.toBe(0xfeff);
     const [header, l1, l2, rest] = csv.split('\r\n');
     expect(header).toBe(LOG_CSV_HEADER.map((h) => `"${h}"`).join(','));
+    expect(header).toContain('"Scanlists","trx_first_heard",');
+    expect(LOG_CSV_HEADER.slice(32).every((h) => h.startsWith('trx_'))).toBe(true);
     expect(EZSCAN_HEADER).toHaveLength(32);
     // Analogue with a tone: CTCSS, NFM, the DMR columns blank, no scanlist yet.
     expect(l1).toContain('"GB3AA",145.500000,"CTCSS","94.8","Yes",2.0,"No","No","Yes","No","Leave","No","No","NFM","Auto","Off","No","55555555",,,,,"None",500,500,"No",,,,,0,"",');

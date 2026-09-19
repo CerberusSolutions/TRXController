@@ -34,12 +34,16 @@ export const EZSCAN_HEADER = [
   'Alert', 'OnTime', 'OffTime', 'Record', 'Talkgroup ID', 'Color Code', 'Slot', 'NXDN RAN', 'TGSkip', 'Scanlists',
 ];
 
-/** The log's own columns, after EZ Scan's: what the app knew about the object. */
+/**
+ * The log's own columns, after EZ Scan's: what the app knew about the object. Prefixed `trx_` because EZ Scan's
+ * importer matches columns by name and would otherwise map `scanlist`, `type` and `tgid` onto its own
+ * Scanlists, Tone Type and Talkgroup ID fields.
+ */
 export const LOG_EXTRA_HEADER = [
   'first_heard', 'last_heard', 'receptions', 'calls', 'rssi_peak', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'tone',
   'squelch', 'site', 'licensee', 'source', 'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'rruk', 'distance_km',
   'bearing_deg', 'candidates',
-];
+].map((c) => `trx_${c}`);
 
 export const LOG_CSV_HEADER = [...EZSCAN_HEADER, ...LOG_EXTRA_HEADER];
 
@@ -149,7 +153,7 @@ export function ezLine(o: EzObject): string {
     modulation === 'DMR' ? (cc ?? '*') : '', // Color Code
     modulation === 'DMR' ? '*' : '', // Slot
     modulation === 'NXDN' ? (ran ?? '*') : '', // NXDN RAN
-    '0', quoted(''), // TGSkip, Scanlists: none until the user ticks them in EZ Scan
+    '0', quoted(''), // TGSkip, Scanlists: empty = EZ Scan's default import scanlist (normally 1)
   ];
   const ours = [
     localStamp(o.firstHeard), o.lastHeard === null ? '' : localStamp(o.lastHeard), o.receptions, o.calls, o.rssiPeak, r.signalType, r.name, r.system, r.scanlist, r.objectType,

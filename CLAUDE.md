@@ -280,7 +280,7 @@ captured on 14 Sep 2026.
   match leading the repeaters), which the hero's Listed block draws from the same function. The list only
   grows while a reception is open (RadioReference answers late) and survives a merge. The log's **+**
   column unfolds a row's candidates beneath it; the **Dist** column shows the row's placement; the CSV
-  has `distance_km`, `bearing_deg` and a `candidates` column (one line, ` | ` separated, always km).
+  has `trx_distance_km`, `trx_bearing_deg` and a `trx_candidates` column (one line, ` | ` separated, always km).
 - Confirmed identities (`src/shared/confirm.ts`, `confirmations` table): the user unfolds a log row
   and confirms a candidate, or types a name (`LogTable`'s `Candidates`; `log:confirm` /
   `log:unconfirm` / `log:confirmations` IPC). A confirmation is keyed by frequency plus the row's
@@ -313,13 +313,15 @@ captured on 14 Sep 2026.
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
   columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
   `*` bare), followed by `LOG_EXTRA_HEADER` (times, receptions, calls, RSSI, every source's answer,
-  distance, bearing, candidates), which EZ Scan's importer ignores. `ezObjects` folds the rows into one
+  distance, bearing, candidates), every name prefixed `trx_`: EZ Scan's importer matches columns by name
+  (verified 19 Sep 2026: it mapped bare `scanlist`, `type` and `tgid` onto Scanlists, Tone Type and
+  Talkgroup ID) and ignores the rest. `ezObjects` folds the rows into one
   object per frequency + code (`objectCode`: the detected tone / colour code, else the programmed
   CTCSS / DCS / NAC squelch), newest named row naming it; `alphaTag` is the name, else `scannerName`,
   else the frequency, cut to 16; `ezToneOf` / `ezModeOf` map the code and LCD icon onto Tone Type /
   Tone (Search when none) and Modulation / DMode (DMR / P25 / NXDN digital, else AM / FM / NFM). DMR rows
-  get `*` talkgroup and slot with the colour code number (or `*`); Scanlists is left "" for the user to
-  tick in EZ Scan. Written as UTF-8 **without** a BOM (EZ Scan reads the header from byte 0), CRLF. The
+  get `*` talkgroup and slot with the colour code number (or `*`); Scanlists is left "", which EZ Scan
+  takes as its default import scanlist (normally 1). Written as UTF-8 **without** a BOM (EZ Scan reads the header from byte 0), CRLF. The
   sample it was built from is a TRX-1 conventional export from EZ Scan 3; its trunked-system export is
   a different file and is not produced.
 - "Scan" (Main Menu > Scan) counts as done as soon as the scanner goes silent after the
