@@ -696,10 +696,10 @@ export default function LogTable() {
         <button
           className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40"
           disabled={visible.length === 0 || !window.trx?.logExportCsv}
-          title="Save the rows shown (after the filter) as a CSV file, with every source's column"
+          title="Save the frequencies shown (after the filter) as a CSV file EZ Scan can import: one object per frequency and tone or colour code, EZ Scan's columns first, then every source's column"
           onClick={() => {
             const stamp = new Date().toISOString().slice(0, 16).replace("T", "-").replace(":", "");
-            void window.trx.logExportCsv(logToCsv(visible), `trx-log-${stamp}.csv`);
+            void window.trx.logExportCsv(logToCsv(visible), `trx-ezscan-${stamp}.csv`);
           }}
         >
           CSV

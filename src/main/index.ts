@@ -258,13 +258,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.logExportCsv, async (_e, csv: unknown, suggestedName: unknown): Promise<string | null> => {
     if (typeof csv !== 'string') throw new Error('Bad CSV');
     const res = await dialog.showSaveDialog({
-      title: 'Export log as CSV',
-      defaultPath: join(app.getPath('documents'), typeof suggestedName === 'string' && suggestedName ? suggestedName : 'trx-log.csv'),
+      title: 'Export log as CSV (EZ Scan import file)',
+      defaultPath: join(app.getPath('documents'), typeof suggestedName === 'string' && suggestedName ? suggestedName : 'trx-ezscan.csv'),
       filters: [{ name: 'CSV', extensions: ['csv'] }],
     });
     if (res.canceled || !res.filePath) return null;
-    // A BOM so Excel opens it as UTF-8 (callsigns and names are plain ASCII, but places are not always).
-    await writeFile(res.filePath, '\uFEFF' + csv, 'utf8');
+    // UTF-8 without a byte-order mark: EZ Scan's importer reads the header from byte 0.
+    await writeFile(res.filePath, csv, 'utf8');
     return res.filePath;
   });
   ipcMain.handle(IPC.logConfirmations, () => db?.confirmations() ?? []);
