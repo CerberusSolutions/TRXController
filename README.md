@@ -109,6 +109,13 @@ installs under `%LOCALAPPDATA%\Programs\TRXController` and keeps its log, settin
 in `%APPDATA%\TRXController`, the same folder the dev build uses, so nothing needs re-importing. The
 last port used is reopened at launch.
 
+`npm run dist` also produces `TRXController-<version>-win-x64.zip`, the same app with no installer:
+unzip it anywhere and run `TRXController.exe`. It is for machines where the installer is blocked, most
+often by Windows' Controlled folder access refusing to write the Start Menu shortcut ("Unspecified error"
+with a path ending in `TRXController.lnk`; the app is installed by then and runs from
+`%LOCALAPPDATA%\Programs\TRXController`). Both use the same `%APPDATA%\TRXController` data folder. The
+zip target builds anywhere; only the NSIS installer needs Windows or Wine.
+
 ## Installing on Linux (Ubuntu, Debian, Mint, Raspberry Pi, or any distro via AppImage)
 
 Two packages are built for each release: a `.deb` for Ubuntu, Debian and Mint, and an AppImage that

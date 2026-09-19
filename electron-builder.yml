@@ -20,11 +20,16 @@ electronLanguages:
   - en-GB
   - en-US
 win:
+  # The installer, and a portable zip (the same files, no installer, no shortcuts) for machines
+  # where the installer is blocked, e.g. by Controlled folder access refusing the Start Menu shortcut.
   target:
     - target: nsis
       arch: [x64]
+    - target: zip
+      arch: [x64]
   icon: build/icon.ico
-  artifactName: ${productName}-Setup-${version}.${ext}
+  # Names the zip; the nsis section below names the installer.
+  artifactName: ${productName}-${version}-win-x64.${ext}
   # Unsigned beta: SmartScreen will warn on first run.
   signAndEditExecutable: true
   # serialport ships prebuilt bindings for every platform; only win32-x64 is needed here.

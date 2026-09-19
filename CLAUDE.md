@@ -114,7 +114,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   container); the .deb is for Ubuntu / Debian / Mint and its post-install script prints the
   `dialout` reminder. Cross-building arm64 on an x64 runner works (electron-builder downloads the
   arm64 Electron); CI does both.
-- `npm run dist` builds the Windows installer into `release/` (electron-builder, NSIS,
+- `npm run dist` builds the Windows installer and a portable zip (`win.target` zip, named by
+  `win.artifactName`, `TRXController-<version>-win-x64.zip`: the same files, no installer, for machines
+  where the installer is blocked, e.g. Controlled folder access refusing the Start Menu shortcut; the
+  update check only ever links the `Setup-*.exe`) into `release/` (electron-builder, NSIS,
   per-user, config in `electron-builder.yml`, icon in `build/`). `npm run dist:dir` stops at
   `release/win-unpacked`, which also works on Linux; the NSIS step needs Wine there, so build
   the installer itself on Windows. `npmRebuild` is off:
