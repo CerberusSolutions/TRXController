@@ -133,6 +133,21 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   version bump; blank leaves them as workflow artifacts. `ci.yml` runs test / typecheck /
   build on pushes and PRs.
 
+## Website (GitHub Pages)
+
+- `docs/index.html` is the public page at https://cerberussolutions.github.io/TRXController/ (downloads,
+  install steps for Windows / macOS / Linux, a user guide, the data sources, shortcuts, FAQ). It is a
+  single self-contained file: inline CSS on the app's colour tokens (dark, light via
+  `prefers-color-scheme`), no build step, no external assets; the download cards are filled at run time
+  from GitHub's `/releases/latest` API (falling back to the release page), and the Get-started tabs
+  preselect the visitor's OS. Screenshots live in `docs/img/` and come from the mock scanner preview
+  (see below) at 1320 x 780, DPR 1.5; `docs/icon.png` is a copy of `build/icon.png`.
+- `.github/workflows/static.yml` (Pages source "GitHub Actions") uploads `docs/` on every push to main
+  that touches it; `docs/.nojekyll` keeps Pages from running Jekyll if the source is ever switched to
+  "Deploy from a branch". The protocol PDF and notes in `docs/` are published with it.
+- Keep the page in step with the app: a new feature, data source, shortcut or install step goes in the
+  README, the help screen and here.
+
 ## UI preview without a scanner
 
 The renderer only needs `window.trx`. To eyeball it outside Electron, build, serve
