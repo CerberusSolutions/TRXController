@@ -197,3 +197,12 @@ describe('hex helpers', () => {
     expect(() => fromHex('ABC')).toThrow();
   });
 });
+
+describe("unsolicited 'p'", () => {
+  it('is delimited by its one-byte length like the P reply', () => {
+    const d = new FrameDecoder();
+    const events = d.push(encodeFrame('p', [0]));
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({ type: 'frame', frame: { codeChar: 'p' } });
+  });
+});

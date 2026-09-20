@@ -63,7 +63,8 @@ still wins, since the register knows no talkgroups). Untick a lookup to ignore i
 junk. The log's **Src** column (and the `source` column of the CSV export) says which
 lookup did: blank for the scanner's data, `WTR`, `RRUK` (RadioReference UK), `RRDB` (RadioReference), `UKR` (repeater list)
 or `RID` (radioid.net), and `MEM` when a log entry too brief to show the object on the display was
-named from an earlier entry on the same frequency. The log's **Detail** view shows what every source said, one column each
+named from an earlier entry on the same frequency. The log loads the newest 500 entries and fetches 500 more as you scroll towards the bottom (up to
+5,000); only the rows in view are drawn. The log's **Detail** view shows what every source said, one column each
 (Scanner, List, WTR, RRUK, RRDB, UKR, Sys), and the CSV carries the same columns, so a row where the
 scanner and the register disagree is easy to spot and reprogram. Drag a column divider in the
 log header to resize it; double-click the divider to reset.

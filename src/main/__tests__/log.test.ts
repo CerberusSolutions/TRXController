@@ -556,3 +556,29 @@ describe('ReceptionLogger', () => {
     db.close();
   });
 });
+
+describe('LogDb paging', () => {
+  it('returns the page after a cursor in the same order, open rows first, without gaps or repeats', () => {
+    const db = new LogDb(':memory:');
+    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 1, calls: 1 };
+    // Ten closed rows ending 1000..10000, two still open, and two closed rows ending at the same instant.
+    const ids: number[] = [];
+    for (let i = 1; i <= 10; i++) ids.push(db.insert({ ...base, startedAt: i * 1000 - 500, endedAt: i * 1000, frequencyHz: 100 + i }).id);
+    ids.push(db.insert({ ...base, startedAt: 20_000, frequencyHz: 200 }).id, db.insert({ ...base, startedAt: 21_000, frequencyHz: 201 }).id);
+    ids.push(db.insert({ ...base, startedAt: 4_100, endedAt: 5000, frequencyHz: 300 }).id, db.insert({ ...base, startedAt: 4_100, endedAt: 5000, frequencyHz: 301 }).id);
+    const all = db.recent(100);
+    expect(all).toHaveLength(14);
+    expect(all.slice(0, 2).map((r) => r.frequencyHz)).toEqual([201, 200]);
+    // Walk it three rows at a time: the pages concatenate to the whole list.
+    const paged: number[] = [];
+    let page = db.recent(3);
+    while (page.length) {
+      paged.push(...page.map((r) => r.id));
+      const last = page[page.length - 1]!;
+      page = db.recent(3, { endedAt: last.endedAt, startedAt: last.startedAt, id: last.id });
+    }
+    expect(paged).toEqual(all.map((r) => r.id));
+    expect(new Set(paged).size).toBe(14);
+    db.close();
+  });
+});

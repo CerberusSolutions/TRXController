@@ -10,6 +10,7 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type LogCursor,
   type TrafficGroup,
   type UpdateInfo,
   type WtrMatch,
@@ -49,7 +50,8 @@ const api = {
     ipcRenderer.on(IPC.ccdump, listener);
     return () => ipcRenderer.removeListener(IPC.ccdump, listener);
   },
-  logRecent: (limit?: number): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit),
+  /** The newest `limit` log rows, or the page after `before` (the last row already shown). */
+  logRecent: (limit?: number, before?: LogCursor): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit, before),
   logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
   /** Save CSV text through a file dialog; resolves to the path, or null if cancelled. */
   logExportCsv: (csv: string, suggestedName: string): Promise<string | null> => ipcRenderer.invoke(IPC.logExportCsv, csv, suggestedName),

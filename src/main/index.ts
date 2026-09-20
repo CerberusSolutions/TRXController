@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type LogCursor, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -212,6 +212,12 @@ async function autoConnectAttempt(): Promise<void> {
   scheduleAutoConnect();
 }
 
+function isLogCursor(v: unknown): v is LogCursor {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return (c.endedAt === null || typeof c.endedAt === 'number') && typeof c.startedAt === 'number' && typeof c.id === 'number';
+}
+
 function registerIpc(): void {
   ipcMain.handle(IPC.listPorts, async () => {
     // A system that cannot enumerate ports (no udev on a minimal Linux, say) shows none rather than an error.
@@ -254,7 +260,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
-  ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
+  ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
   ipcMain.handle(IPC.logExportCsv, async (_e, csv: unknown, suggestedName: unknown): Promise<string | null> => {
     if (typeof csv !== 'string') throw new Error('Bad CSV');
     const res = await dialog.showSaveDialog({

@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
 import { formatPlace, type Units } from "../../../shared/geo";
 import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
-import { rowMatches, useLog } from "../store/log";
+import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
 import { logToCsv } from "../lib/csv";
@@ -49,7 +50,8 @@ interface RenderCtx {
   tune: (hz: number) => void;
   units: Units;
   /** Rows whose candidate list is unfolded beneath them. */
-  expanded: ReadonlySet<number>;
+  /** Whether this row's candidate list is unfolded beneath it. */
+  unfolded: boolean;
   toggle: (id: number) => void;
 }
 
@@ -80,9 +82,8 @@ const moreCell: Column = {
   title: "Click + on a row to see every candidate the lookups offered for its frequency",
   track: "1.1rem",
   minPx: 1.1 * REM,
-  render: (r, { expanded, toggle }) => {
+  render: (r, { unfolded: open, toggle }) => {
     const n = r.candidates?.length ?? 0;
-    const open = expanded.has(r.id);
     return (
       <button
         type="button"
@@ -571,6 +572,44 @@ function saveJson(key: string, value: unknown): void {
   }
 }
 
+/** Estimated row height for the virtual list, px; measured once rendered (unfolded rows are taller). */
+const ROW_PX = 25;
+
+interface RowProps {
+  r: ReceptionRow;
+  columns: readonly Column[];
+  template: string;
+  /** The clock for an open row's duration; 0 for a closed row, so the per-second tick leaves it alone. */
+  now: number;
+  canTune: boolean;
+  tuning: boolean;
+  tune: (hz: number) => void;
+  units: Units;
+  unfolded: boolean;
+  toggle: (id: number) => void;
+}
+
+/** One log row (and its unfolded candidates). Memoised: only rows whose props change re-render. */
+const Row = memo(function Row({ r, columns, template, now, canTune, tuning, tune, units, unfolded, toggle }: RowProps) {
+  const open = r.endedAt === null;
+  const ctx: RenderCtx = { now, canTune, tuning, tune, units, unfolded, toggle };
+  return (
+    <>
+      <div
+        className={`grid items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
+        style={{ gridTemplateColumns: template }}
+      >
+        {columns.map((c) => (
+          <span key={c.key} className={`min-w-0 truncate ${c.align === "right" ? "text-right" : ""}`}>
+            {c.render(r, ctx)}
+          </span>
+        ))}
+      </div>
+      {unfolded && <Candidates r={r} units={units} />}
+    </>
+  );
+});
+
 export default function LogTable() {
   const rows = useLog((s) => s.rows);
   const filter = useLog((s) => s.filter);
@@ -585,6 +624,11 @@ export default function LogTable() {
     (s) => (s.snapshot.link.status === "connected" || s.snapshot.link.status === "unresponsive") && !s.snapshot.link.stall,
   );
   const tuning = tuneState?.phase === "tuning";
+  const tuneCb = useCallback((hz: number) => void tune(hz), [tune]);
+  const loadMore = useLog((s) => s.loadMore);
+  const exhausted = useLog((s) => s.exhausted);
+  const loadingMore = useLog((s) => s.loadingMore);
+  const capped = useLog((s) => s.capped);
   const units = useIdentities((s) => s.settings.units ?? "km");
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set());
   const toggle = useCallback((id: number) => {
@@ -654,7 +698,27 @@ export default function LogTable() {
     () => rows.filter((r) => rowMatches(r, filter)),
     [rows, filter],
   );
-  const ctx: RenderCtx = { now, canTune, tuning, tune: (hz) => void tune(hz), units, expanded, toggle };
+
+  // Only the rows in view (plus a margin) are in the page, however many are loaded; the rest is
+  // one tall spacer. Rows are measured once rendered, so unfolded ones take the room they need.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const footer = visible.length > 0 && (loadingMore || capped);
+  const virtualizer = useVirtualizer({
+    count: visible.length + (footer ? 1 : 0),
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_PX,
+    overscan: 12,
+    getItemKey: (i) => (i < visible.length ? visible[i]!.id : "footer"),
+  });
+  const items = virtualizer.getVirtualItems();
+  const lastIndex = items.length ? items[items.length - 1]!.index : -1;
+  // Continuous scroll: fetch the next page when the view nears the end of what is loaded. With a
+  // filter that matches little, that keeps reaching further back until something matches or the
+  // log (or the memory cap) runs out.
+  useEffect(() => {
+    if (exhausted || loadingMore) return;
+    if (visible.length === 0 || lastIndex >= visible.length - 30) void loadMore();
+  }, [lastIndex, visible.length, exhausted, loadingMore, loadMore]);
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -717,7 +781,7 @@ export default function LogTable() {
 
       {/* One scroll container for header and rows: a narrow window scrolls the table sideways
           (header stays aligned and pinned) instead of the fixed columns overflowing the panel. */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-auto">
         <div
           ref={headerRef}
           className="sticky top-0 z-10 grid gap-x-2 whitespace-nowrap border-b border-edge bg-panel px-2 pb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2"
@@ -741,30 +805,38 @@ export default function LogTable() {
           ))}
         </div>
 
-        <div className="select-text font-mono text-[12.5px]" style={{ minWidth }}>
+        <div className="relative select-text font-mono text-[12.5px]" style={{ minWidth, height: visible.length > 0 ? virtualizer.getTotalSize() : undefined }}>
           {visible.length === 0 && (
             <p className="px-2 py-6 text-center font-sans text-sm text-ink-3">
               {rows.length === 0
                 ? "No log entries yet. Connect and let the scanner run."
-                : "Nothing matches the filter."}
+                : loadingMore
+                  ? "Nothing matches yet; looking further back…"
+                  : "Nothing matches the filter."}
             </p>
           )}
-          {visible.map((r) => {
-            const open = r.endedAt === null;
-            const unfolded = expanded.has(r.id);
+          {items.map((vi) => {
+            const r = visible[vi.index];
             return (
-              <div key={r.id}>
-                <div
-                  className={`grid items-center gap-x-2 whitespace-nowrap border-b border-edge/60 px-2 py-1 ${open ? "bg-green/10 text-ink" : "text-ink-2 hover:bg-panel-2"}`}
-                  style={{ gridTemplateColumns: template }}
-                >
-                  {columns.map((c) => (
-                    <span key={c.key} className={`min-w-0 truncate ${c.align === "right" ? "text-right" : ""}`}>
-                      {c.render(r, ctx)}
-                    </span>
-                  ))}
-                </div>
-                {unfolded && <Candidates r={r} units={units} />}
+              <div key={vi.key} data-index={vi.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full" style={{ transform: `translateY(${vi.start}px)` }}>
+                {r ? (
+                  <Row
+                    r={r}
+                    columns={columns}
+                    template={template}
+                    now={r.endedAt === null ? now : 0}
+                    canTune={canTune}
+                    tuning={tuning}
+                    tune={tuneCb}
+                    units={units}
+                    unfolded={expanded.has(r.id)}
+                    toggle={toggle}
+                  />
+                ) : (
+                  <p className="px-2 py-2 text-center font-sans text-xs text-ink-3">
+                    {capped ? `Showing the newest ${MAX_ROWS.toLocaleString()} entries; narrow the filter or clear the log to go further back.` : "Loading older entries…"}
+                  </p>
+                )}
               </div>
             );
           })}

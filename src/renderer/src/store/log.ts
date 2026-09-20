@@ -2,16 +2,25 @@ import { create } from 'zustand';
 import type { ReceptionRow } from '../../../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../../../shared/confirm';
 
-export const MAX_ROWS = 1000;
+/** Rows fetched per page: the first load, and each fetch as the user scrolls towards the bottom. */
+export const PAGE = 500;
+/** The most rows kept in memory. Beyond this the table says so instead of loading more. */
+export const MAX_ROWS = 5000;
 
 interface LogState {
   rows: ReceptionRow[];
   filter: string;
   loaded: boolean;
+  /** No more pages: the log has been read to its end, or `MAX_ROWS` are loaded (`capped`). */
+  exhausted: boolean;
+  capped: boolean;
+  loadingMore: boolean;
   /** Identities the user has confirmed by hand, every frequency. */
   confirmations: Confirmation[];
   setFilter: (f: string) => void;
   load: () => Promise<void>;
+  /** Fetch the page after the oldest row loaded. A no-op while one is in flight or nothing is left. */
+  loadMore: () => Promise<void>;
   upsert: (row: ReceptionRow) => void;
   clear: () => Promise<void>;
   confirm: (c: NewConfirmation) => Promise<void>;
@@ -22,14 +31,42 @@ export const useLog = create<LogState>((set, get) => ({
   rows: [],
   filter: '',
   loaded: false,
+  exhausted: false,
+  capped: false,
+  loadingMore: false,
   confirmations: [],
 
   setFilter: (filter) => set({ filter }),
 
+  // Reloads as many rows as are already shown (at least a page), so a reload after a confirmation
+  // does not throw away the pages the user has scrolled through.
   load: async () => {
     if (!window.trx) return;
-    const [rows, confirmations] = await Promise.all([window.trx.logRecent(MAX_ROWS), window.trx.logConfirmations?.() ?? []]);
-    set({ rows, confirmations, loaded: true });
+    const n = Math.min(MAX_ROWS, Math.max(PAGE, get().rows.length));
+    const [rows, confirmations] = await Promise.all([window.trx.logRecent(n), window.trx.logConfirmations?.() ?? []]);
+    set({ rows, confirmations, loaded: true, exhausted: rows.length < n, capped: false });
+  },
+
+  loadMore: async () => {
+    const { rows, exhausted, loadingMore } = get();
+    if (!window.trx || exhausted || loadingMore) return;
+    const last = rows[rows.length - 1];
+    if (!last) return;
+    if (rows.length >= MAX_ROWS) {
+      set({ exhausted: true, capped: true });
+      return;
+    }
+    set({ loadingMore: true });
+    try {
+      const more = await window.trx.logRecent(PAGE, { endedAt: last.endedAt, startedAt: last.startedAt, id: last.id });
+      // Rows that moved up while the page was in flight (a reopened conversation) are already here.
+      const seen = new Set(get().rows.map((r) => r.id));
+      const next = [...get().rows, ...more.filter((r) => !seen.has(r.id))].slice(0, MAX_ROWS);
+      const capped = next.length >= MAX_ROWS && more.length >= PAGE;
+      set({ rows: next, exhausted: more.length < PAGE || capped, capped });
+    } finally {
+      set({ loadingMore: false });
+    }
   },
 
   // A confirmation renames every row it applies to, so the log is reloaded rather than patched.
@@ -55,7 +92,7 @@ export const useLog = create<LogState>((set, get) => ({
     } else {
       next = [row, ...rows].slice(0, MAX_ROWS);
     }
-    // A new reception on a frequency bumps the hit count of earlier rows too.
+    // A new entry on a frequency bumps the hit count of earlier rows too.
     if (i < 0) next = next.map((r) => (r.id !== row.id && r.frequencyHz === row.frequencyHz ? { ...r, hits: r.hits + 1 } : r));
     // A reopened row moves back to the top: order by last activity, open rows first.
     next.sort((a, b) => lastActivity(b) - lastActivity(a) || b.startedAt - a.startedAt || b.id - a.id);
@@ -65,7 +102,7 @@ export const useLog = create<LogState>((set, get) => ({
   clear: async () => {
     if (!window.trx) return;
     await window.trx.logClear();
-    set({ rows: [] });
+    set({ rows: [], exhausted: true, capped: false });
   },
 }));
 

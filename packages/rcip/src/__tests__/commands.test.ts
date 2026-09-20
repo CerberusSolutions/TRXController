@@ -59,3 +59,10 @@ describe('parseResponse', () => {
     expect('unknown' in u && u.unknown).toBe(true);
   });
 });
+
+describe('power notification', () => {
+  it("decodes the unsolicited lowercase 'p' the scanner sends when it is switched off", () => {
+    const p = parseResponse(decodeFrame(encodeFrame('p', [0])));
+    expect(p).toMatchObject({ code: 'p', power: { on: false, raw: 0 } });
+  });
+});

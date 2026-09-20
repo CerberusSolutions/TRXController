@@ -9,6 +9,7 @@ import {
   getVersion,
   parseActiveChannel,
   parseLcd,
+  parsePower,
   parseStatus,
   parseVersion,
   sendKey,
@@ -210,9 +211,16 @@ export class ScannerSession {
         this.opts.log?.(`scanner back after ${((Date.now() - stall.since) / 1000).toFixed(1)} s`);
         stall = null;
       }
+      // A reply after the scanner said it was off means it is on again.
+      let power = this.snapshot.power;
+      if (power && !power.on && (l || a)) {
+        power = { on: true, at: Date.now() };
+        this.opts.log?.('scanner back on');
+      }
       this.snapshot = {
         ...this.snapshot,
         link: { ...this.snapshot.link, status: linkStatus, stall },
+        power,
         lcd,
         status,
         active,
@@ -248,8 +256,24 @@ export class ScannerSession {
         if (active) { next.active = active; changed = true; }
         break;
       }
+      case 'P':
+      case 'p': {
+        // 'p' is the scanner announcing its power state, unprompted, when it is switched off.
+        const power = safe(() => parsePower(frame.data));
+        if (power) {
+          next.power = { on: power.on, at: Date.now() };
+          changed = true;
+          this.opts.log?.(`scanner reports power ${power.on ? 'on' : 'off'}`);
+        }
+        break;
+      }
       default:
         this.opts.log?.(`unexpected frame '${frame.codeChar}' (${frame.data.length} bytes)`);
+    }
+    // Any other reply means it is on again.
+    if (changed && frame.codeChar !== 'p' && frame.codeChar !== 'P' && next.power && !next.power.on) {
+      next.power = { on: true, at: Date.now() };
+      this.opts.log?.('scanner back on');
     }
     if (!late) this.opts.log?.(`unsolicited frame '${frame.codeChar}'`);
     if (changed && this.link) {
@@ -273,7 +297,7 @@ export class ScannerSession {
   }
 
   private setLink(status: LinkStatus, port: string | null, error: string | null): void {
-    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, updatedAt: Date.now() };
+    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, power: status === 'disconnected' ? null : this.snapshot.power, updatedAt: Date.now() };
     this.publish();
   }
 
@@ -285,6 +309,7 @@ export class ScannerSession {
 export function emptySnapshot(): ScannerSnapshot {
   return {
     link: { status: 'disconnected', port: null, error: null, stall: null },
+    power: null,
     version: null,
     status: null,
     lcd: null,

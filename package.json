@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.0",
+    "@tanstack/react-virtual": "^3.14.13",
     "@trxcontroller/rcip": "*",
     "@types/node": "^22.0.0",
     "@types/react": "^19.1.0",

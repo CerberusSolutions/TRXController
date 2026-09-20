@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
@@ -339,8 +339,16 @@ export class LogDb {
     return row ? toRow(row as unknown as Raw) : undefined;
   }
 
-  recent(limit = 500): ReceptionRow[] {
-    const rows = this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
+  /**
+   * The newest rows in last-activity order (open rows first), or with `before` the page that follows
+   * that row, so the renderer can fetch the log a page at a time as the user scrolls.
+   */
+  recent(limit = 500, before?: LogCursor): ReceptionRow[] {
+    const rows = before
+      ? this.db
+          .prepare(`${ROW_SQL} WHERE (COALESCE(r.ended_at, 9223372036854775807), r.started_at, r.id) < (COALESCE(?, 9223372036854775807), ?, ?) ${ORDER_SQL} LIMIT ?`)
+          .all(before.endedAt, before.startedAt, before.id, limit)
+      : this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
   }
 

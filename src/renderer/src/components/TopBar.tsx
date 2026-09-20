@@ -24,12 +24,16 @@ export default function TopBar() {
     const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(t);
   }, [stall]);
-  const style = stall
-    ? {
-        dot: 'bg-amber animate-pulse',
-        text: `${stall.loading ? 'Loading scanlists' : 'Scanner busy'} · ${Math.max(0, Math.round((Date.now() - stall.since) / 1000))} s`,
-      }
-    : STATUS_STYLE[link.status];
+  // The scanner announces when it is switched off; that beats the stall it then causes.
+  const off = snapshot.power?.on === false;
+  const style = off
+    ? { dot: 'bg-ink-3', text: 'Scanner off' }
+    : stall
+      ? {
+          dot: 'bg-amber animate-pulse',
+          text: `${stall.loading ? 'Loading scanlists' : 'Scanner busy'} · ${Math.max(0, Math.round((Date.now() - stall.since) / 1000))} s`,
+        }
+      : STATUS_STYLE[link.status];
   const connected = link.status === 'connected' || link.status === 'unresponsive' || link.status === 'connecting';
   const v = snapshot.version;
   const app = useUi((s) => s.app);
@@ -115,7 +119,16 @@ export default function TopBar() {
 
       <div className="no-drag flex items-center gap-2 whitespace-nowrap border-l border-edge pl-4 text-sm">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${style.dot}`} />
-        <span className="text-ink-2" title={stall ? 'The scanner stops answering while it loads scanlists; key presses would queue up and fire afterwards, so the keypad is held.' : undefined}>
+        <span
+          className="text-ink-2"
+          title={
+            off
+              ? 'The scanner said it has switched off. Switch it back on and the app carries on; nothing needs reconnecting.'
+              : stall
+                ? 'The scanner stops answering while it loads scanlists; key presses would queue up and fire afterwards, so the keypad is held.'
+                : undefined
+          }
+        >
           {style.text}
         </span>
         {v && (

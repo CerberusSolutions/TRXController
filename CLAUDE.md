@@ -81,6 +81,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   and the keypad is held so presses are not queued into the scanner.
 - The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
   text or icon bytes (checked with `probe --log`): nothing to show for it.
+- Switching the scanner off makes it send an unsolicited lowercase **`p`** frame (one data byte, taken as
+  the same 0 = off / 1 = on as the `P` reply; reported by a user from the app's dev log on 20 Sep 2026,
+  not in the spec and not yet probed). The session keeps it on the snapshot as `power`; the top bar and
+  keypad say "Scanner off" in place of the stall that follows, and any later reply flips it back on.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 
 ## Layout
@@ -311,7 +315,13 @@ captured on 14 Sep 2026.
   confirmed one code at a time.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
-- The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
+- The renderer loads the newest 500 rows (`PAGE` in `store/log.ts`) and fetches the next 500 as the
+  user scrolls near the end of what is loaded (continuous scroll: `loadMore`, `LogDb.recent(limit, before)`
+  with a `LogCursor` of the last row's ended_at / started_at / id, the same last-activity order), up to
+  `MAX_ROWS` (5000) in memory, after which a footer row says so. A filter that matches nothing keeps
+  paging back until it does or the log runs out. The table is virtualised (`@tanstack/react-virtual`:
+  only the rows in view are in the page, rows measured so unfolded ones fit) and `Row` is memoised,
+  the per-second duration tick reaching open rows only. Live-updated over `log:upsert`, in a tab
   that shares the panel under the hero with the raw scanner display. The CSV button saves
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
