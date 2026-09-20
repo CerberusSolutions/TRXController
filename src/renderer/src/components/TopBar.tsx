@@ -14,7 +14,7 @@ const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
 };
 
 export default function TopBar() {
-  const { snapshot, ports, selectedPort, busy, selectPort, connect, disconnect, refreshPorts } = useScanner();
+  const { snapshot, ports, portsError, selectedPort, busy, selectPort, connect, disconnect, refreshPorts } = useScanner();
   const link = snapshot.link;
   const stall = link.stall;
   // Elapsed-time ticker for the busy notice.
@@ -82,7 +82,7 @@ export default function TopBar() {
           disabled={connected || busy}
           onChange={(e) => selectPort(e.target.value)}
         >
-          {ports.length === 0 && <option value="">No serial ports</option>}
+          {ports.length === 0 && <option value="">{portsError ? 'Cannot list ports' : 'No serial ports'}</option>}
           {ports.map((p) => (
             <option key={p.path} value={p.path}>
               {p.path}
@@ -137,6 +137,11 @@ export default function TopBar() {
           </span>
         )}
         {link.error && <span className="ml-2 text-xs text-red">{link.error}</span>}
+        {!link.error && portsError && (
+          <span className="ml-2 text-xs text-red" title={portsError}>
+            Cannot list ports: {portsError}
+          </span>
+        )}
       </div>
       <ThemeToggle />
       <button

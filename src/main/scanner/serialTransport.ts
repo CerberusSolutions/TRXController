@@ -3,10 +3,26 @@ import { SERIAL_SETTINGS } from '@trxcontroller/rcip';
 import type { PortInfo } from '../../shared/ipc';
 import type { Transport, TransportFactory } from './transport';
 
+/** Ports every Mac has and none of which is ever a scanner: the debug console, the Wi-Fi debug port, Bluetooth. */
+const MAC_BUILT_IN = /\/(?:tty|cu)\.(?:debug-console|wlan-debug|Bluetooth-.*)$/i;
+
+export function isBuiltInPort(path: string, platform: NodeJS.Platform = process.platform): boolean {
+  return platform === 'darwin' && MAC_BUILT_IN.test(path);
+}
+
+/**
+ * On macOS every serial device has two names: `/dev/tty.X`, which waits for carrier detect on open,
+ * and `/dev/cu.X`, the call-out side meant for outgoing connections. The library lists the tty
+ * names; the app lists, remembers and opens the cu one. Elsewhere the path is returned as is.
+ */
+export function preferredPath(path: string, platform: NodeJS.Platform = process.platform): string {
+  return platform === 'darwin' ? path.replace(/^\/dev\/tty\./, '/dev/cu.') : path;
+}
+
 export async function listPorts(): Promise<PortInfo[]> {
   const ports = await SerialPort.list();
-  return ports.map((p) => ({
-    path: p.path,
+  return ports.filter((p) => !isBuiltInPort(p.path)).map((p) => ({
+    path: preferredPath(p.path),
     manufacturer: p.manufacturer,
     friendlyName: (p as { friendlyName?: string }).friendlyName,
     vendorId: p.vendorId,
@@ -59,7 +75,7 @@ export const serialTransportFactory: TransportFactory = {
     return new Promise((resolve, reject) => {
       const port = new SerialPort(
         {
-          path,
+          path: preferredPath(path),
           baudRate: SERIAL_SETTINGS.baudRate,
           dataBits: SERIAL_SETTINGS.dataBits,
           stopBits: SERIAL_SETTINGS.stopBits,

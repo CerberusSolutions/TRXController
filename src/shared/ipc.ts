@@ -81,6 +81,12 @@ export interface LogCursor {
   id: number;
 }
 
+/** The serial ports the OS lists, or why it could not list them (shown in the top bar). */
+export interface PortsResult {
+  ports: PortInfo[];
+  error: string | null;
+}
+
 export interface ReceptionRow {
   id: number;
   /** ms since epoch */

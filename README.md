@@ -213,7 +213,11 @@ that is needed:
    with a note in **System Settings › Privacy & Security**; scroll to the bottom of that page and
    choose **Open Anyway**.
 5. Plug the scanner in over USB and switch it on. No driver is needed; it appears in the port
-   selector in the top bar as `/dev/tty.usbserial-…` or `/dev/tty.usbmodem…`. Press **Connect**.
+   selector in the top bar as `/dev/cu.usbmodem…` (the Mac's own debug-console, wlan-debug and
+   Bluetooth ports are never a scanner, so the app leaves them out). Press **Connect**. If the box
+   stays empty with the scanner on, run `ls /dev/cu.*` in Terminal: a `usbmodem` entry means macOS
+   sees the scanner and the fault is ours, so please report it; none means macOS has not created a
+   port for it, so check the lead, any hub or dock in the way, and System Information › USB.
    The port is remembered for next time.
 
 Everything else is the same as on Windows, with Cmd in place of Ctrl (Cmd+Shift+D for

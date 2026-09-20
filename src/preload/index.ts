@@ -11,6 +11,7 @@ import {
   type Settings,
   type ThemeMode,
   type LogCursor,
+  type PortsResult,
   type TrafficGroup,
   type UpdateInfo,
   type WtrMatch,
@@ -32,7 +33,8 @@ const api = {
     node: process.versions.node,
     chrome: process.versions.chrome,
   },
-  listPorts: (): Promise<PortInfo[]> => ipcRenderer.invoke(IPC.listPorts),
+  /** The ports the OS lists (the Mac's own built-in ones left out), or the reason it could not list them. */
+  listPorts: (): Promise<PortsResult> => ipcRenderer.invoke(IPC.listPorts),
   connect: (path: string): Promise<void> => ipcRenderer.invoke(IPC.connect, path),
   disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.disconnect),
   sendKey: (code: number): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code),

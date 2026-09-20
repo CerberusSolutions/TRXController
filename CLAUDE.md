@@ -14,7 +14,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the title-bar overlay on Windows,
   the window manager's own frame on Linux, which has no overlay), the top bar's padding
   (`window.trx.platform`), the help / status text (data folder, Cmd vs Ctrl, serial port names and
-  the `dialout` group on Linux), the update link (`.dmg` on macOS, the AppImage for the running
+  the `dialout` group on Linux), the port list (`serialTransport.ts`: on macOS the Mac's own
+  debug-console / wlan-debug / Bluetooth ports are hidden, `isBuiltInPort`, and the call-out `/dev/cu.*`
+  name is listed, remembered and opened in place of the library's `/dev/tty.*`, `preferredPath`; an
+  enumeration failure comes back as `PortsResult.error` and the top bar shows it), the update link (`.dmg` on macOS, the AppImage for the running
   architecture on Linux), and the RadioReference password store: `safeStorage` uses DPAPI / the
   Keychain, or a Linux keyring; on Linux without one the app switches `safeStorage` to its
   `basic_text` backend (obfuscated, not encrypted) and `RrStatus.passwordStore` lets the Data
