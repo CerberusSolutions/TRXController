@@ -51,6 +51,7 @@ export class LogDb {
         calls        INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS receptions_started ON receptions(started_at DESC);
+      CREATE INDEX IF NOT EXISTS receptions_activity ON receptions(COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS receptions_freq ON receptions(frequency_hz);
       CREATE TABLE IF NOT EXISTS dmr_users (
         id       INTEGER PRIMARY KEY,
@@ -344,11 +345,15 @@ export class LogDb {
    * that row, so the renderer can fetch the log a page at a time as the user scrolls.
    */
   recent(limit = 500, before?: LogCursor): ReceptionRow[] {
-    const rows = before
-      ? this.db
-          .prepare(`${ROW_SQL} WHERE (COALESCE(r.ended_at, 9223372036854775807), r.started_at, r.id) < (COALESCE(?, 9223372036854775807), ?, ?) ${ORDER_SQL} LIMIT ?`)
-          .all(before.endedAt, before.startedAt, before.id, limit)
-      : this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
+    // The page is cut first (an indexed sort), and only then are hits counted and the radio user joined,
+    // for those rows alone: a big log would otherwise pay both for every row on every page.
+    const where = before ? 'WHERE (COALESCE(ended_at, 9223372036854775807), started_at, id) < (COALESCE(?, 9223372036854775807), ?, ?)' : '';
+    const page = `SELECT * FROM receptions ${where} ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
+    const sql = `SELECT r.*,
+      (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
+      u.callsign AS radio_callsign, u.name AS radio_name
+      FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
+    const rows = before ? this.db.prepare(sql).all(before.endedAt, before.startedAt, before.id, limit) : this.db.prepare(sql).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
   }
 

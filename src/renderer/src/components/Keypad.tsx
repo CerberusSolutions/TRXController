@@ -12,7 +12,9 @@ export default function Keypad() {
   const stalled = useScanner((s) => s.snapshot.link.stall !== null);
   const off = useScanner((s) => s.snapshot.power?.on === false);
   // Held while the scanner is not answering: it queues every key and fires them all when it wakes.
-  const enabled = useScanner((s) => (s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive') && s.snapshot.link.stall === null);
+  const enabled = useScanner(
+    (s) => (s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive') && s.snapshot.link.stall === null && s.snapshot.power?.on !== false,
+  );
   const tune = useScanner((s) => s.tune);
   const resumeScan = useScanner((s) => s.resumeScan);
   const tuneState = useScanner((s) => s.tuneState);
@@ -58,7 +60,7 @@ export default function Keypad() {
     <section className="rounded-xl border border-edge bg-panel p-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Keypad</span>
-        {stalled ? (
+        {stalled || off ? (
           <span className="rounded-md border border-amber/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber" title="The scanner is not answering; key presses would queue up and fire later, so the keypad is held.">
             {off ? 'Scanner off' : 'Scanner busy'}
           </span>

@@ -90,13 +90,16 @@ export const useLog = create<LogState>((set, get) => ({
       next = rows.slice();
       next[i] = row;
     } else {
-      next = [row, ...rows].slice(0, MAX_ROWS);
+      next = [row, ...rows];
     }
     // A new entry on a frequency bumps the hit count of earlier rows too.
     if (i < 0) next = next.map((r) => (r.id !== row.id && r.frequencyHz === row.frequencyHz ? { ...r, hits: r.hits + 1 } : r));
     // A reopened row moves back to the top: order by last activity, open rows first.
     next.sort((a, b) => lastActivity(b) - lastActivity(a) || b.startedAt - a.startedAt || b.id - a.id);
-    set({ rows: next });
+    // Live entries push the oldest past the cap: say so in the footer rather than let them vanish.
+    const trimmed = next.length > MAX_ROWS;
+    if (trimmed) next = next.slice(0, MAX_ROWS);
+    set(trimmed ? { rows: next, exhausted: true, capped: true } : { rows: next });
   },
 
   clear: async () => {

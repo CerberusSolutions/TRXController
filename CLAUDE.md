@@ -86,8 +86,11 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   text or icon bytes (checked with `probe --log`): nothing to show for it.
 - Switching the scanner off makes it send an unsolicited lowercase **`p`** frame (one data byte, taken as
   the same 0 = off / 1 = on as the `P` reply; reported by a user from the app's dev log on 20 Sep 2026,
-  not in the spec and not yet probed). The session keeps it on the snapshot as `power`; the top bar and
-  keypad say "Scanner off" in place of the stall that follows, and any later reply flips it back on.
+  not in the spec and not yet probed). `ScannerLink.onFrame` hands every frame, in wire order, to
+  `ScannerSession.onAnyFrame`, the one place that sets the snapshot's `power` (off on `p` 0, on at any other
+  frame after it, so a reply already on the wire before the `p` cannot undo it; cleared when the link is not
+  up). The top bar shows "Scanner off" while connected, and the keypad is held from that moment, not
+  from the stall that follows a couple of seconds later.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 
 ## Layout

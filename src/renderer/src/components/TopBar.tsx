@@ -25,7 +25,7 @@ export default function TopBar() {
     return () => clearInterval(t);
   }, [stall]);
   // The scanner announces when it is switched off; that beats the stall it then causes.
-  const off = snapshot.power?.on === false;
+  const off = snapshot.power?.on === false && (link.status === 'connected' || link.status === 'unresponsive');
   const style = off
     ? { dot: 'bg-ink-3', text: 'Scanner off' }
     : stall

@@ -702,12 +702,23 @@ export default function LogTable() {
   // Only the rows in view (plus a margin) are in the page, however many are loaded; the rest is
   // one tall spacer. Rows are measured once rendered, so unfolded ones take the room they need.
   const scrollRef = useRef<HTMLDivElement>(null);
+  // The sticky header sits above the rows in the same scroll box; the virtualiser needs to know by how much.
+  const [headerH, setHeaderH] = useState(0);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    setHeaderH(el.offsetHeight);
+    const ro = new ResizeObserver(() => setHeaderH(el.offsetHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const footer = visible.length > 0 && (loadingMore || capped);
   const virtualizer = useVirtualizer({
     count: visible.length + (footer ? 1 : 0),
     getScrollElement: () => scrollRef.current,
     estimateSize: () => ROW_PX,
     overscan: 12,
+    scrollMargin: headerH,
     getItemKey: (i) => (i < visible.length ? visible[i]!.id : "footer"),
   });
   const items = virtualizer.getVirtualItems();
@@ -818,7 +829,7 @@ export default function LogTable() {
           {items.map((vi) => {
             const r = visible[vi.index];
             return (
-              <div key={vi.key} data-index={vi.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full" style={{ transform: `translateY(${vi.start}px)` }}>
+              <div key={vi.key} data-index={vi.index} ref={virtualizer.measureElement} className="absolute top-0 left-0 w-full" style={{ transform: `translateY(${vi.start - headerH}px)` }}>
                 {r ? (
                   <Row
                     r={r}

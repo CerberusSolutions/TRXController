@@ -91,6 +91,7 @@ export class ScannerSession {
       timeoutMs: this.opts.timeoutMs,
       onNoise: (b) => this.onNoise(b),
       onFrameError: (m) => this.opts.log?.(`frame error: ${m}`),
+      onFrame: (f) => this.onAnyFrame(f),
       onUnexpectedFrame: (f, late) => this.applyFrame(f, late),
     });
 
@@ -211,16 +212,9 @@ export class ScannerSession {
         this.opts.log?.(`scanner back after ${((Date.now() - stall.since) / 1000).toFixed(1)} s`);
         stall = null;
       }
-      // A reply after the scanner said it was off means it is on again.
-      let power = this.snapshot.power;
-      if (power && !power.on && (l || a)) {
-        power = { on: true, at: Date.now() };
-        this.opts.log?.('scanner back on');
-      }
       this.snapshot = {
         ...this.snapshot,
         link: { ...this.snapshot.link, status: linkStatus, stall },
-        power,
         lcd,
         status,
         active,
@@ -257,23 +251,11 @@ export class ScannerSession {
         break;
       }
       case 'P':
-      case 'p': {
-        // 'p' is the scanner announcing its power state, unprompted, when it is switched off.
-        const power = safe(() => parsePower(frame.data));
-        if (power) {
-          next.power = { on: power.on, at: Date.now() };
-          changed = true;
-          this.opts.log?.(`scanner reports power ${power.on ? 'on' : 'off'}`);
-        }
+      case 'p':
+        // The scanner's power word; already taken by onAnyFrame.
         break;
-      }
       default:
         this.opts.log?.(`unexpected frame '${frame.codeChar}' (${frame.data.length} bytes)`);
-    }
-    // Any other reply means it is on again.
-    if (changed && frame.codeChar !== 'p' && frame.codeChar !== 'P' && next.power && !next.power.on) {
-      next.power = { on: true, at: Date.now() };
-      this.opts.log?.('scanner back on');
     }
     if (!late) this.opts.log?.(`unsolicited frame '${frame.codeChar}'`);
     if (changed && this.link) {
@@ -282,6 +264,27 @@ export class ScannerSession {
       this.snapshot = next;
       this.publish();
     }
+  }
+
+  /**
+   * Every frame in the order it arrived, matched to a request or not. 'p' is the scanner announcing
+   * its power state, unprompted, as it is switched off; any other frame after that means it is on
+   * again. Done here, once, so a reply that was already on the wire before the 'p' cannot undo it.
+   */
+  private onAnyFrame(frame: Frame): void {
+    if (frame.codeChar === 'p' || frame.codeChar === 'P') {
+      const power = safe(() => parsePower(frame.data));
+      if (power) this.setPower(power.on, `scanner reports power ${power.on ? 'on' : 'off'}`);
+    } else if (this.snapshot.power && !this.snapshot.power.on) {
+      this.setPower(true, 'scanner back on');
+    }
+  }
+
+  private setPower(on: boolean, note: string): void {
+    if (this.snapshot.power?.on === on) return;
+    this.opts.log?.(note);
+    this.snapshot = { ...this.snapshot, power: { on, at: Date.now() }, updatedAt: Date.now() };
+    this.publish();
   }
 
   private onNoise(bytes: Uint8Array): void {
@@ -297,7 +300,7 @@ export class ScannerSession {
   }
 
   private setLink(status: LinkStatus, port: string | null, error: string | null): void {
-    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, power: status === 'disconnected' ? null : this.snapshot.power, updatedAt: Date.now() };
+    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, power: status === 'connected' || status === 'unresponsive' ? this.snapshot.power : null, updatedAt: Date.now() };
     this.publish();
   }
 
