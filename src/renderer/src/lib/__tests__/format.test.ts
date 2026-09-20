@@ -17,6 +17,7 @@ function snap(over: { rf?: boolean; hz?: number; lcd?: string[] }): ScannerSnaps
   data[11] = hz & 0xff; data[12] = (hz >> 8) & 0xff; data[13] = (hz >> 16) & 0xff; data[14] = (hz >>> 24) & 0xff;
   return {
     link: { status: 'connected', port: 'COM7', error: null, stall: null },
+    power: null,
     version: null,
     status: parseStatus(data),
     lcd: parseLcd(lcdData(over.lcd ?? ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 2352157'])),

@@ -14,7 +14,10 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the title-bar overlay on Windows,
   the window manager's own frame on Linux, which has no overlay), the top bar's padding
   (`window.trx.platform`), the help / status text (data folder, Cmd vs Ctrl, serial port names and
-  the `dialout` group on Linux), the update link (`.dmg` on macOS, the AppImage for the running
+  the `dialout` group on Linux), the port list (`serialTransport.ts`: on macOS the Mac's own
+  debug-console / wlan-debug / Bluetooth ports are hidden, `isBuiltInPort`, and the call-out `/dev/cu.*`
+  name is listed, remembered and opened in place of the library's `/dev/tty.*`, `preferredPath`; an
+  enumeration failure comes back as `PortsResult.error` and the top bar shows it), the update link (`.dmg` on macOS, the AppImage for the running
   architecture on Linux), and the RadioReference password store: `safeStorage` uses DPAPI / the
   Keychain, or a Linux keyring; on Linux without one the app switches `safeStorage` to its
   `basic_text` backend (obfuscated, not encrypted) and `RrStatus.passwordStore` lets the Data
@@ -81,6 +84,13 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   and the keypad is held so presses are not queued into the scanner.
 - The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
   text or icon bytes (checked with `probe --log`): nothing to show for it.
+- Switching the scanner off makes it send an unsolicited lowercase **`p`** frame (one data byte, taken as
+  the same 0 = off / 1 = on as the `P` reply; reported by a user from the app's dev log on 20 Sep 2026,
+  not in the spec and not yet probed). `ScannerLink.onFrame` hands every frame, in wire order, to
+  `ScannerSession.onAnyFrame`, the one place that sets the snapshot's `power` (off on `p` 0, on at any other
+  frame after it, so a reply already on the wire before the `p` cannot undo it; cleared when the link is not
+  up). The top bar shows "Scanner off" while connected, and the keypad is held from that moment, not
+  from the stall that follows a couple of seconds later.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 
 ## Layout
@@ -165,6 +175,10 @@ The renderer only needs `window.trx`. To eyeball it outside Electron, build, ser
 captured on 14 Sep 2026.
 
 ## Reception log
+
+- **Wording**: in the UI, the help screen, the website and the README a row is a **log entry**, never a
+  "reception" ("No log entries yet", "Delete every log entry?", "3 entries"); "reception" stays an internal
+  term (`ReceptionRow`, `ReceptionTracker`, the `receptions` table). Users read "receptions" as radio jargon.
 
 - A reception is a period with RF squelch open on one frequency. `ReceptionTracker`
   opens on squelch, keeps absorbing better details (the `a` header often lands a poll
@@ -307,12 +321,18 @@ captured on 14 Sep 2026.
   confirmed one code at a time.
 - Rows live in `trx-log.sqlite` under Electron's userData folder
   (`%APPDATA%\TRXController` on Windows). Hits = receptions on the same frequency.
-- The renderer shows the newest 1000 rows, live-updated over `log:upsert`, in a tab
+- The renderer loads the newest 500 rows (`PAGE` in `store/log.ts`) and fetches the next 500 as the
+  user scrolls near the end of what is loaded (continuous scroll: `loadMore`, `LogDb.recent(limit, before)`
+  with a `LogCursor` of the last row's ended_at / started_at / id, the same last-activity order), up to
+  `MAX_ROWS` (5000) in memory, after which a footer row says so. A filter that matches nothing keeps
+  paging back until it does or the log runs out. The table is virtualised (`@tanstack/react-virtual`:
+  only the rows in view are in the page, rows measured so unfolded ones fit) and `Row` is memoised,
+  the per-second duration tick reaching open rows only. Live-updated over `log:upsert`, in a tab
   that shares the panel under the hero with the raw scanner display. The CSV button saves
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
   columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
-  `*` bare), followed by `LOG_EXTRA_HEADER` (times, receptions, calls, RSSI, every source's answer,
+  `*` bare), followed by `LOG_EXTRA_HEADER` (times, entries, calls, RSSI, every source's answer,
   distance, bearing, candidates), every name prefixed `trx_`: EZ Scan's importer matches columns by name
   (verified 19 Sep 2026: it mapped bare `scanlist`, `type` and `tgid` onto Scanlists, Tone Type and
   Talkgroup ID) and ignores the rest. `ezObjects` folds the rows into one

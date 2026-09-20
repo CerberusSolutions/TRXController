@@ -201,6 +201,10 @@ versions as `major<<4 | minor`. Observed: boot 1.3, CPU 7.4, DSP1 3.2, DSP2 1.6.
 
 One byte: 0 off, 1 on.
 
+Not in the spec: switching the scanner off makes it send an unsolicited lowercase `p`
+with one data byte (user report from the app's log, 20 Sep 2026; the byte is taken to be
+0 = off like the `P` reply, unverified). The app shows "Scanner off" until the next reply.
+
 ## `C` CC Dump control
 
 One byte, 0 off / 1 on. Turning it on makes the scanner stream ASCII control-channel

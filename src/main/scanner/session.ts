@@ -9,6 +9,7 @@ import {
   getVersion,
   parseActiveChannel,
   parseLcd,
+  parsePower,
   parseStatus,
   parseVersion,
   sendKey,
@@ -90,6 +91,7 @@ export class ScannerSession {
       timeoutMs: this.opts.timeoutMs,
       onNoise: (b) => this.onNoise(b),
       onFrameError: (m) => this.opts.log?.(`frame error: ${m}`),
+      onFrame: (f) => this.onAnyFrame(f),
       onUnexpectedFrame: (f, late) => this.applyFrame(f, late),
     });
 
@@ -248,6 +250,10 @@ export class ScannerSession {
         if (active) { next.active = active; changed = true; }
         break;
       }
+      case 'P':
+      case 'p':
+        // The scanner's power word; already taken by onAnyFrame.
+        break;
       default:
         this.opts.log?.(`unexpected frame '${frame.codeChar}' (${frame.data.length} bytes)`);
     }
@@ -258,6 +264,27 @@ export class ScannerSession {
       this.snapshot = next;
       this.publish();
     }
+  }
+
+  /**
+   * Every frame in the order it arrived, matched to a request or not. 'p' is the scanner announcing
+   * its power state, unprompted, as it is switched off; any other frame after that means it is on
+   * again. Done here, once, so a reply that was already on the wire before the 'p' cannot undo it.
+   */
+  private onAnyFrame(frame: Frame): void {
+    if (frame.codeChar === 'p' || frame.codeChar === 'P') {
+      const power = safe(() => parsePower(frame.data));
+      if (power) this.setPower(power.on, `scanner reports power ${power.on ? 'on' : 'off'}`);
+    } else if (this.snapshot.power && !this.snapshot.power.on) {
+      this.setPower(true, 'scanner back on');
+    }
+  }
+
+  private setPower(on: boolean, note: string): void {
+    if (this.snapshot.power?.on === on) return;
+    this.opts.log?.(note);
+    this.snapshot = { ...this.snapshot, power: { on, at: Date.now() }, updatedAt: Date.now() };
+    this.publish();
   }
 
   private onNoise(bytes: Uint8Array): void {
@@ -273,7 +300,7 @@ export class ScannerSession {
   }
 
   private setLink(status: LinkStatus, port: string | null, error: string | null): void {
-    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, updatedAt: Date.now() };
+    this.snapshot = { ...this.snapshot, link: { status, port, error, stall: null }, power: status === 'connected' || status === 'unresponsive' ? this.snapshot.power : null, updatedAt: Date.now() };
     this.publish();
   }
 
@@ -285,6 +312,7 @@ export class ScannerSession {
 export function emptySnapshot(): ScannerSnapshot {
   return {
     link: { status: 'disconnected', port: null, error: null, stall: null },
+    power: null,
     version: null,
     status: null,
     lcd: null,

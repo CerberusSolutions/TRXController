@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
@@ -51,6 +51,7 @@ export class LogDb {
         calls        INTEGER NOT NULL DEFAULT 1
       );
       CREATE INDEX IF NOT EXISTS receptions_started ON receptions(started_at DESC);
+      CREATE INDEX IF NOT EXISTS receptions_activity ON receptions(COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS receptions_freq ON receptions(frequency_hz);
       CREATE TABLE IF NOT EXISTS dmr_users (
         id       INTEGER PRIMARY KEY,
@@ -339,8 +340,20 @@ export class LogDb {
     return row ? toRow(row as unknown as Raw) : undefined;
   }
 
-  recent(limit = 500): ReceptionRow[] {
-    const rows = this.db.prepare(`${ROW_SQL} ${ORDER_SQL} LIMIT ?`).all(limit);
+  /**
+   * The newest rows in last-activity order (open rows first), or with `before` the page that follows
+   * that row, so the renderer can fetch the log a page at a time as the user scrolls.
+   */
+  recent(limit = 500, before?: LogCursor): ReceptionRow[] {
+    // The page is cut first (an indexed sort), and only then are hits counted and the radio user joined,
+    // for those rows alone: a big log would otherwise pay both for every row on every page.
+    const where = before ? 'WHERE (COALESCE(ended_at, 9223372036854775807), started_at, id) < (COALESCE(?, 9223372036854775807), ?, ?)' : '';
+    const page = `SELECT * FROM receptions ${where} ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
+    const sql = `SELECT r.*,
+      (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
+      u.callsign AS radio_callsign, u.name AS radio_name
+      FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
+    const rows = before ? this.db.prepare(sql).all(before.endedAt, before.startedAt, before.id, limit) : this.db.prepare(sql).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
   }
 

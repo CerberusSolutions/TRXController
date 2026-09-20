@@ -13,7 +13,7 @@ digital scanners, replacing Whistler's own remote control software.
 ## Stack
 
 Electron + Vite + React + TypeScript, Tailwind, `serialport` in the main process,
-Zustand in the renderer, Node's built-in `node:sqlite` for the reception log. Windows first; macOS (Apple silicon) and Linux (AppImage and .deb, x64 and arm64) builds are provided as well.
+Zustand in the renderer, Node's built-in `node:sqlite` for the log. Windows first; macOS (Apple silicon) and Linux (AppImage and .deb, x64 and arm64) builds are provided as well.
 
 ## Getting started
 
@@ -62,8 +62,9 @@ then RadioReference UK, then RadioReference, then the repeater list; a RadioRefe
 still wins, since the register knows no talkgroups). Untick a lookup to ignore it while it is offline or returning
 junk. The log's **Src** column (and the `source` column of the CSV export) says which
 lookup did: blank for the scanner's data, `WTR`, `RRUK` (RadioReference UK), `RRDB` (RadioReference), `UKR` (repeater list)
-or `RID` (radioid.net), and `MEM` when a reception too brief to show the object on the display was
-named from an earlier reception on the same frequency. The log's **Detail** view shows what every source said, one column each
+or `RID` (radioid.net), and `MEM` when a log entry too brief to show the object on the display was
+named from an earlier entry on the same frequency. The log loads the newest 500 entries and fetches 500 more as you scroll towards the bottom (up to
+5,000); only the rows in view are drawn. The log's **Detail** view shows what every source said, one column each
 (Scanner, List, WTR, RRUK, RRDB, UKR, Sys), and the CSV carries the same columns, so a row where the
 scanner and the register disagree is easy to spot and reprogram. Drag a column divider in the
 log header to resize it; double-click the divider to reset.
@@ -83,7 +84,7 @@ conversations with one become one), the alpha tag from the log's name (cut to EZ
 characters, else the scanner's own label such as "453.0625 CC12", else the frequency), the mode,
 CTCSS / DCS / NAC, DMR colour code and slot filled in. The scanlist column is left empty, so EZ Scan
 files the objects under its default import scanlist (normally scanlist 1; the default is yours to change
-in EZ Scan). The log's own columns (first and last heard, receptions, calls, peak
+in EZ Scan). The log's own columns (first and last heard, entries, calls, peak
 RSSI, every source's answer, `trx_distance_km`, `trx_bearing_deg`, `trx_candidates`) follow EZ Scan's, all
 prefixed `trx_` so its importer, which matches columns by name, leaves them alone; any other program reads
 them as a normal CSV.
@@ -91,14 +92,14 @@ them as a normal CSV.
 When you know which one it is, say so: in the unfolded list press **confirm** on the right candidate,
 or type a name none of them offer. The confirmation is keyed to the frequency and the tone or colour
 code the row showed (and the talkgroup on a trunked object), so co-channel users stay apart. It
-outranks every lookup and the scanner's own programming: every logged reception it fits is renamed
-with a green **CONF** pill, new receptions take it as they arrive, and the hero shows it while the
+outranks every lookup and the scanner's own programming: every log entry it fits is renamed
+with a green **CONF** pill, new entries take it as they arrive, and the hero shows it while the
 scanner is on the frequency. **remove** withdraws it. Data > Confirmed identities lists them all.
 
 Codes count: a candidate whose tone or DMR colour code matches the one the scanner shows ("CC 12",
 "CTCSS 94.8", "NAC 293") is listed first and names the row whatever the lookup order; one whose code
 differs sinks. The unfolded row also shows the traffic heard on that frequency by code: how many
-receptions, first and last heard, which radio IDs and which names, so the users sharing a channel
+entries, first and last heard, which radio IDs and which names, so the users sharing a channel
 can be told apart and confirmed one code at a time.
 
 Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
@@ -212,7 +213,11 @@ that is needed:
    with a note in **System Settings › Privacy & Security**; scroll to the bottom of that page and
    choose **Open Anyway**.
 5. Plug the scanner in over USB and switch it on. No driver is needed; it appears in the port
-   selector in the top bar as `/dev/tty.usbserial-…` or `/dev/tty.usbmodem…`. Press **Connect**.
+   selector in the top bar as `/dev/cu.usbmodem…` (the Mac's own debug-console, wlan-debug and
+   Bluetooth ports are never a scanner, so the app leaves them out). Press **Connect**. If the box
+   stays empty with the scanner on, run `ls /dev/cu.*` in Terminal: a `usbmodem` entry means macOS
+   sees the scanner and the fault is ours, so please report it; none means macOS has not created a
+   port for it, so check the lead, any hub or dock in the way, and System Information › USB.
    The port is remembered for next time.
 
 Everything else is the same as on Windows, with Cmd in place of Ctrl (Cmd+Shift+D for

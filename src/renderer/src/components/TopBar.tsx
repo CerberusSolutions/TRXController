@@ -14,7 +14,7 @@ const STATUS_STYLE: Record<LinkStatus, { dot: string; text: string }> = {
 };
 
 export default function TopBar() {
-  const { snapshot, ports, selectedPort, busy, selectPort, connect, disconnect, refreshPorts } = useScanner();
+  const { snapshot, ports, portsError, selectedPort, busy, selectPort, connect, disconnect, refreshPorts } = useScanner();
   const link = snapshot.link;
   const stall = link.stall;
   // Elapsed-time ticker for the busy notice.
@@ -24,12 +24,16 @@ export default function TopBar() {
     const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => clearInterval(t);
   }, [stall]);
-  const style = stall
-    ? {
-        dot: 'bg-amber animate-pulse',
-        text: `${stall.loading ? 'Loading scanlists' : 'Scanner busy'} · ${Math.max(0, Math.round((Date.now() - stall.since) / 1000))} s`,
-      }
-    : STATUS_STYLE[link.status];
+  // The scanner announces when it is switched off; that beats the stall it then causes.
+  const off = snapshot.power?.on === false && (link.status === 'connected' || link.status === 'unresponsive');
+  const style = off
+    ? { dot: 'bg-ink-3', text: 'Scanner off' }
+    : stall
+      ? {
+          dot: 'bg-amber animate-pulse',
+          text: `${stall.loading ? 'Loading scanlists' : 'Scanner busy'} · ${Math.max(0, Math.round((Date.now() - stall.since) / 1000))} s`,
+        }
+      : STATUS_STYLE[link.status];
   const connected = link.status === 'connected' || link.status === 'unresponsive' || link.status === 'connecting';
   const v = snapshot.version;
   const app = useUi((s) => s.app);
@@ -78,7 +82,7 @@ export default function TopBar() {
           disabled={connected || busy}
           onChange={(e) => selectPort(e.target.value)}
         >
-          {ports.length === 0 && <option value="">No serial ports</option>}
+          {ports.length === 0 && <option value="">{portsError ? 'Cannot list ports' : 'No serial ports'}</option>}
           {ports.map((p) => (
             <option key={p.path} value={p.path}>
               {p.path}
@@ -115,7 +119,16 @@ export default function TopBar() {
 
       <div className="no-drag flex items-center gap-2 whitespace-nowrap border-l border-edge pl-4 text-sm">
         <span className={`inline-block h-2.5 w-2.5 rounded-full ${style.dot}`} />
-        <span className="text-ink-2" title={stall ? 'The scanner stops answering while it loads scanlists; key presses would queue up and fire afterwards, so the keypad is held.' : undefined}>
+        <span
+          className="text-ink-2"
+          title={
+            off
+              ? 'The scanner said it has switched off. Switch it back on and the app carries on; nothing needs reconnecting.'
+              : stall
+                ? 'The scanner stops answering while it loads scanlists; key presses would queue up and fire afterwards, so the keypad is held.'
+                : undefined
+          }
+        >
           {style.text}
         </span>
         {v && (
@@ -124,6 +137,11 @@ export default function TopBar() {
           </span>
         )}
         {link.error && <span className="ml-2 text-xs text-red">{link.error}</span>}
+        {!link.error && portsError && (
+          <span className="ml-2 text-xs text-red" title={portsError}>
+            Cannot list ports: {portsError}
+          </span>
+        )}
       </div>
       <ThemeToggle />
       <button

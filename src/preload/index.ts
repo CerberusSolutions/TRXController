@@ -10,6 +10,8 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type LogCursor,
+  type PortsResult,
   type TrafficGroup,
   type UpdateInfo,
   type WtrMatch,
@@ -31,7 +33,8 @@ const api = {
     node: process.versions.node,
     chrome: process.versions.chrome,
   },
-  listPorts: (): Promise<PortInfo[]> => ipcRenderer.invoke(IPC.listPorts),
+  /** The ports the OS lists (the Mac's own built-in ones left out), or the reason it could not list them. */
+  listPorts: (): Promise<PortsResult> => ipcRenderer.invoke(IPC.listPorts),
   connect: (path: string): Promise<void> => ipcRenderer.invoke(IPC.connect, path),
   disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.disconnect),
   sendKey: (code: number): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code),
@@ -49,7 +52,8 @@ const api = {
     ipcRenderer.on(IPC.ccdump, listener);
     return () => ipcRenderer.removeListener(IPC.ccdump, listener);
   },
-  logRecent: (limit?: number): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit),
+  /** The newest `limit` log rows, or the page after `before` (the last row already shown). */
+  logRecent: (limit?: number, before?: LogCursor): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit, before),
   logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
   /** Save CSV text through a file dialog; resolves to the path, or null if cancelled. */
   logExportCsv: (csv: string, suggestedName: string): Promise<string | null> => ipcRenderer.invoke(IPC.logExportCsv, csv, suggestedName),

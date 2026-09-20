@@ -7,6 +7,7 @@ import { DEFAULT_LOOKUPS } from '../../../shared/sources';
 function emptySnapshot(): ScannerSnapshot {
   return {
     link: { status: 'disconnected', port: null, error: null, stall: null },
+    power: null,
     version: null,
     status: null,
     lcd: null,
@@ -32,6 +33,8 @@ interface ScannerState {
   /** TGID / radio ID / slot seen so far on the current reception; null once the signal has dropped. */
   held: HeldDetails | null;
   ports: PortInfo[];
+  /** Why the ports could not be listed, when they could not. */
+  portsError: string | null;
   selectedPort: string | null;
   busy: boolean;
   ccdump: string[];
@@ -64,6 +67,7 @@ export const useScanner = create<ScannerState>((set, get) => ({
   snapshot: emptySnapshot(),
   held: null,
   ports: [],
+  portsError: null,
   selectedPort: null,
   busy: false,
   ccdump: [],
@@ -115,13 +119,15 @@ export const useScanner = create<ScannerState>((set, get) => ({
   },
 
   refreshPorts: async () => {
-    const [ports, settings] = await Promise.all([api().listPorts(), api().settingsGet().catch(() => null)]);
+    const [listed, settings] = await Promise.all([api().listPorts(), api().settingsGet().catch(() => null)]);
+    // The preview mock still answers with a bare array.
+    const { ports, error: portsError } = Array.isArray(listed) ? { ports: listed as PortInfo[], error: null } : listed;
     const current = get().selectedPort ?? settings?.port ?? null;
     // Keep the current (or remembered) choice if present, else the Whistler USB port, else first.
     const whistler = ports.find((p) => (p.vendorId ?? '').toUpperCase() === '2A59');
     const selectedPort =
       current && ports.some((p) => p.path === current) ? current : (whistler ?? ports[0])?.path ?? null;
-    set({ ports, selectedPort });
+    set({ ports, portsError, selectedPort });
   },
 
   selectPort: (path) => set({ selectedPort: path }),

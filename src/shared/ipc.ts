@@ -44,6 +44,12 @@ export interface ScannerSnapshot {
      */
     stall: { since: number; loading: boolean } | null;
   };
+  /**
+   * The scanner's own word on its power: it sends an unsolicited `p` (0) when switched off, and any
+   * later reply means it is on again. Null until it has said anything. Off is shown in place of the
+   * stall it causes ("Scanner off" rather than "Scanner busy").
+   */
+  power: { on: boolean; at: number } | null;
   version: Version | null;
   status: Status | null;
   lcd: Lcd | null;
@@ -68,6 +74,19 @@ export interface ScannerSnapshot {
 }
 
 /** One logged reception (a period with squelch open on one frequency). */
+/** Where a page of the log ends: the last row's place in the last-activity order, for the next page. */
+export interface LogCursor {
+  endedAt: number | null;
+  startedAt: number;
+  id: number;
+}
+
+/** The serial ports the OS lists, or why it could not list them (shown in the top bar). */
+export interface PortsResult {
+  ports: PortInfo[];
+  error: string | null;
+}
+
 export interface ReceptionRow {
   id: number;
   /** ms since epoch */

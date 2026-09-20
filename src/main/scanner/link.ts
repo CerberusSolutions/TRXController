@@ -27,6 +27,8 @@ export interface LinkOptions {
    * reply to a request that timed out; its data is still current, so callers
    * should use it.
    */
+  /** Every well-formed frame, in the order it arrived, before it is matched to a request. */
+  onFrame?: (frame: Frame) => void;
   onUnexpectedFrame?: (frame: Frame, late: boolean) => void;
   onFrameError?: (message: string) => void;
 }
@@ -158,6 +160,7 @@ export class ScannerLink {
 
   private onFrame(frame: Frame): void {
     this.lastFrameAt = Date.now();
+    this.opts.onFrame?.(frame);
     // Any well-formed frame means the scanner is talking, however far behind.
     this.stats.consecutiveTimeouts = 0;
     const p = this.pending;

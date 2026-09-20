@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type LogCursor, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -17,7 +17,7 @@ import { RrService } from './identities/rrService';
 import { RrukService } from './identities/rrukService';
 import { ScannerSession } from './scanner/session';
 import { ScanTimeout } from './scanner/scanTimeout';
-import { listPorts, serialTransportFactory } from './scanner/serialTransport';
+import { listPorts, preferredPath, serialTransportFactory } from './scanner/serialTransport';
 
 let win: BrowserWindow | null = null;
 
@@ -200,10 +200,11 @@ async function autoConnectAttempt(): Promise<void> {
   const link = session.getSnapshot().link.status;
   if (s?.port && s.autoConnect && (link === 'disconnected' || link === 'error')) {
     try {
-      const present = (await listPorts()).some((p) => p.path === s.port);
+      const want = preferredPath(s.port);
+      const present = (await listPorts()).some((p) => p.path === want);
       if (present) {
-        await session.connect(s.port);
-        console.log(`[scanner] auto-connected to ${s.port}`);
+        await session.connect(want);
+        console.log(`[scanner] auto-connected to ${want}`);
       }
     } catch (err) {
       console.log(`[scanner] auto-connect to ${s.port} failed: ${(err as Error).message}`);
@@ -212,20 +213,28 @@ async function autoConnectAttempt(): Promise<void> {
   scheduleAutoConnect();
 }
 
+function isLogCursor(v: unknown): v is LogCursor {
+  if (!v || typeof v !== 'object') return false;
+  const c = v as Record<string, unknown>;
+  return (c.endedAt === null || typeof c.endedAt === 'number') && typeof c.startedAt === 'number' && typeof c.id === 'number';
+}
+
 function registerIpc(): void {
-  ipcMain.handle(IPC.listPorts, async () => {
-    // A system that cannot enumerate ports (no udev on a minimal Linux, say) shows none rather than an error.
+  ipcMain.handle(IPC.listPorts, async (): Promise<PortsResult> => {
+    // A system that cannot enumerate ports (no udev on a minimal Linux, say) gets an empty list with the
+    // reason attached, which the top bar shows, rather than a bare "No serial ports".
     try {
-      return await listPorts();
+      return { ports: await listPorts(), error: null };
     } catch (e) {
       console.log(`[scanner] cannot list serial ports: ${(e as Error).message}`);
-      return [];
+      return { ports: [], error: (e as Error).message };
     }
   });
   ipcMain.handle(IPC.connect, async (_e, path: unknown) => {
     if (typeof path !== 'string' || !path) throw new Error('Port path required');
-    await session.connect(path);
-    settings?.set({ port: path, autoConnect: true });
+    const want = preferredPath(path);
+    await session.connect(want);
+    settings?.set({ port: want, autoConnect: true });
   });
   ipcMain.handle(IPC.disconnect, () => {
     // A deliberate disconnect must stick until the user connects again.
@@ -254,7 +263,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
-  ipcMain.handle(IPC.logRecent, (_e, limit: unknown) => db?.recent(typeof limit === 'number' ? limit : 500) ?? []);
+  ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
   ipcMain.handle(IPC.logExportCsv, async (_e, csv: unknown, suggestedName: unknown): Promise<string | null> => {
     if (typeof csv !== 'string') throw new Error('Bad CSV');
     const res = await dialog.showSaveDialog({
@@ -447,7 +456,7 @@ function openLog(): void {
   const path = join(app.getPath('userData'), 'trx-log.sqlite');
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
-  console.log(`[log] ${path} (${db.count()} receptions)`);
+  console.log(`[log] ${path} (${db.count()} log entries)`);
   rr = new RrService({
     db,
     appKey: __RR_APP_KEY__,
