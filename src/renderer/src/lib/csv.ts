@@ -40,7 +40,7 @@ export const EZSCAN_HEADER = [
  * Scanlists, Tone Type and Talkgroup ID fields.
  */
 export const LOG_EXTRA_HEADER = [
-  'first_heard', 'last_heard', 'receptions', 'calls', 'rssi_peak', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'tone',
+  'first_heard', 'last_heard', 'entries', 'calls', 'rssi_peak', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'tone',
   'squelch', 'site', 'licensee', 'source', 'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'rruk', 'distance_km',
   'bearing_deg', 'candidates',
 ].map((c) => `trx_${c}`);

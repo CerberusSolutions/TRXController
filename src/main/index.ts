@@ -447,7 +447,7 @@ function openLog(): void {
   const path = join(app.getPath('userData'), 'trx-log.sqlite');
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
-  console.log(`[log] ${path} (${db.count()} receptions)`);
+  console.log(`[log] ${path} (${db.count()} log entries)`);
   rr = new RrService({
     db,
     appKey: __RR_APP_KEY__,

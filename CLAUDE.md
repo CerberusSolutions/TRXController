@@ -166,6 +166,10 @@ captured on 14 Sep 2026.
 
 ## Reception log
 
+- **Wording**: in the UI, the help screen, the website and the README a row is a **log entry**, never a
+  "reception" ("No log entries yet", "Delete every log entry?", "3 entries"); "reception" stays an internal
+  term (`ReceptionRow`, `ReceptionTracker`, the `receptions` table). Users read "receptions" as radio jargon.
+
 - A reception is a period with RF squelch open on one frequency. `ReceptionTracker`
   opens on squelch, keeps absorbing better details (the `a` header often lands a poll
   later), closes after the squelch has been shut for 400 ms (it flutters), and splits
@@ -312,7 +316,7 @@ captured on 14 Sep 2026.
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
   columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
-  `*` bare), followed by `LOG_EXTRA_HEADER` (times, receptions, calls, RSSI, every source's answer,
+  `*` bare), followed by `LOG_EXTRA_HEADER` (times, entries, calls, RSSI, every source's answer,
   distance, bearing, candidates), every name prefixed `trx_`: EZ Scan's importer matches columns by name
   (verified 19 Sep 2026: it mapped bare `scanlist`, `type` and `tgid` onto Scanlists, Tone Type and
   Talkgroup ID) and ignores the rest. `ezObjects` folds the rows into one

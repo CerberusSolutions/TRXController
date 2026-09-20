@@ -296,7 +296,7 @@ const fromLegacy = (r: ReceptionRow, source: ReceptionRow["source"]): string => 
 const scannerCell: Column = {
   key: "scanner",
   label: "Scanner",
-  title: "The object name programmed in the scanner (dimmed when remembered from an earlier reception on the frequency)",
+  title: "The object name programmed in the scanner (dimmed when remembered from an earlier log entry on the frequency)",
   track: "minmax(6rem,1.2fr)",
   minPx: 4 * REM,
   render: (r) => {
@@ -403,12 +403,12 @@ function Traffic({ r }: { r: ReceptionRow }) {
         Traffic on {(r.frequencyHz / 1e6).toFixed(4)} by code
       </li>
       {groups.map((g, i) => (
-        <li key={i} className={`flex min-w-0 items-center gap-2 py-px ${mine(g) ? "text-ink" : "text-ink-2"}`} title={`${g.calls} squelch openings in ${g.receptions} logged receptions`}>
+        <li key={i} className={`flex min-w-0 items-center gap-2 py-px ${mine(g) ? "text-ink" : "text-ink-2"}`} title={`${g.calls} squelch openings in ${g.receptions} log ${g.receptions === 1 ? "entry" : "entries"}`}>
           <span className="w-9 shrink-0" />
           <span className="w-24 shrink-0 truncate" title="Tone / colour code and talkgroup">
             {[g.tone.replace("CTCSS ", "CT "), g.tgid !== null ? `TG ${g.tgid}` : ""].filter(Boolean).join(" · ") || <span className="text-ink-3">no code</span>}
           </span>
-          <span className="w-14 shrink-0 text-right">{g.receptions} rx</span>
+          <span className="w-16 shrink-0 text-right">{g.receptions} {g.receptions === 1 ? "entry" : "entries"}</span>
           <span className="w-32 shrink-0 truncate text-ink-3" title="First heard">
             {fmtStamp(g.firstAt)}
           </span>
@@ -465,7 +465,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
     }
   };
   const btn = "shrink-0 rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink disabled:opacity-40";
-  const keyHint = `Applies to ${(r.frequencyHz / 1e6).toFixed(4)} MHz with ${keyText(key)}; renames every logged reception it fits and names new ones, over the scanner's own programming`;
+  const keyHint = `Applies to ${(r.frequencyHz / 1e6).toFixed(4)} MHz with ${keyText(key)}; renames every log entry it fits and names new ones, over the scanner's own programming`;
   const confirmedMark = (
     <span className="shrink-0 font-sans text-[10px] font-bold text-green" title={current ? `Confirmed ${new Date(current.confirmedAt).toLocaleString()} for ${keyText(current)}` : undefined}>
       ✓ confirmed
@@ -708,7 +708,7 @@ export default function LogTable() {
           className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"
           disabled={rows.length === 0}
           onClick={() => {
-            if (window.confirm("Delete the whole reception log?")) void clear();
+            if (window.confirm("Delete every log entry?")) void clear();
           }}
         >
           Clear log
@@ -745,7 +745,7 @@ export default function LogTable() {
           {visible.length === 0 && (
             <p className="px-2 py-6 text-center font-sans text-sm text-ink-3">
               {rows.length === 0
-                ? "No receptions logged yet. Connect and let the scanner run."
+                ? "No log entries yet. Connect and let the scanner run."
                 : "Nothing matches the filter."}
             </p>
           )}

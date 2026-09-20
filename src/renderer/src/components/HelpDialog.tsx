@@ -36,7 +36,7 @@ const DATA_SOURCES = [
     size: 'about 20 MB',
     url: 'https://radioid.net/static/user.csv',
     then: 'Data › Import radioid.net CSV or JSON….',
-    gives: 'Turns a DMR radio ID into a callsign and name on amateur DMR receptions.',
+    gives: 'Turns a DMR radio ID into a callsign and name on amateur DMR transmissions.',
   },
 ] as const;
 
@@ -107,7 +107,7 @@ export default function HelpDialog() {
             <Section title="About">
               <p>
                 Beta software from {PUBLISHER} for the Whistler TRX-1, TRX-1E and TRX-2 scanners (and the WS-1080 / 1088 / 1095 / 1098). It
-                replaces Whistler's own remote-control program: live display, keypad, reception log and band occupancy over the USB serial link.
+                replaces Whistler's own remote-control program: live display, keypad, log and band occupancy over the USB serial link.
               </p>
               <p className="mt-2 text-ink-3">
                 Provided as is, with no warranty or guarantee of any kind, express or implied. Use at your own risk. Not affiliated with Whistler,
