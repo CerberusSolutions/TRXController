@@ -125,8 +125,8 @@ export class ScannerSession {
     await this.pollOnce(true);
   }
 
-  /** Reach Tune Mode through the menus and enter `hz`; see macros.ts. */
-  tuneTo(hz: number): Promise<void> {
+  /** Reach Tune Mode through the menus and enter `hz`; resolves to the frequency the scanner settled on (see macros.ts). */
+  tuneTo(hz: number): Promise<number> {
     return this.runMacro((host) => tuneToMacro(host, hz));
   }
 

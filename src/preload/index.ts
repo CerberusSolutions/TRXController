@@ -43,7 +43,8 @@ const api = {
   disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.disconnect),
   sendKey: (code: number): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code),
   /** Tune Mode via the menus, then the frequency as keystrokes; rejects with the reason if the display disagrees. */
-  tune: (hz: number): Promise<void> => ipcRenderer.invoke(IPC.tune, hz),
+  /** Tune to `hz` through the menus; resolves to the frequency the scanner settled on (its raster may snap the entry). */
+  tune: (hz: number): Promise<number> => ipcRenderer.invoke(IPC.tune, hz),
   resumeScan: (): Promise<void> => ipcRenderer.invoke(IPC.resumeScan),
   getSnapshot: (): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot),
   onSnapshot: (cb: (s: ScannerSnapshot) => void): (() => void) => {

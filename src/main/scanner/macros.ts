@@ -33,7 +33,14 @@ export class MacroError extends Error {
   }
 }
 
-export const MACRO_TIMEOUT_MS = 3000;
+export const MACRO_TIMEOUT_MS = 5000;
+/**
+ * How far the frequency the scanner settles on may sit from the one typed: it snaps an entry to the
+ * band's raster, and on the 8.33 kHz airband the channel name is not the carrier (126.595 is tuned as
+ * 126.591667). Under half of 12.5 kHz, so a neighbouring channel still left on the screen from
+ * before is never mistaken for the new one.
+ */
+export const TUNE_SNAP_HZ = 6250;
 /** Longest menu the navigator will walk before deciding an item is absent. */
 export const MENU_MAX_MOVES = 40;
 const POLL_MS = 120;
@@ -161,16 +168,27 @@ export async function enterTuneMode(host: MacroHost): Promise<void> {
   await waitFor(host, 'the Tune Mode screen', isTuneScreen);
 }
 
-/** Tune the scanner to `hz`: reach Tune Mode, type the frequency, press SEL, confirm on screen. */
-export async function tuneTo(host: MacroHost, hz: number): Promise<void> {
+/**
+ * Tune the scanner to `hz`: reach Tune Mode, type the frequency, press SEL, confirm on screen. Resolves
+ * to the frequency the scanner settled on, which is the entry snapped to the band's raster (within
+ * `TUNE_SNAP_HZ`); a frequency still on the screen from before only counts if it is itself that near.
+ */
+export async function tuneTo(host: MacroHost, hz: number): Promise<number> {
   if (!Number.isFinite(hz) || hz < TUNE_MIN_HZ || hz > TUNE_MAX_HZ) {
     throw new MacroError(`${(hz / 1e6).toFixed(6)} MHz is outside the scanner's range`, []);
   }
   const target = Math.round(hz);
   await enterTuneMode(host);
+  const near = (shown: number | null): shown is number => shown !== null && Math.abs(shown - target) < TUNE_SNAP_HZ;
+  const before = host.lcd() ? tuneScreenHz(host.lcd()!) : null;
   for (const key of entryKeys(target)) await host.press(key);
   await host.press(Key.SEL);
-  await waitFor(host, `the display to show ${entryText(target)} MHz`, (l) => isTuneScreen(l) && tuneScreenHz(l) === target);
+  const lcd = await waitFor(host, `the display to show ${entryText(target)} MHz`, (l) => {
+    if (!isTuneScreen(l)) return false;
+    const shown = tuneScreenHz(l);
+    return near(shown) && (shown !== before || near(before));
+  });
+  return tuneScreenHz(lcd) ?? target;
 }
 
 /** Main Menu > Scan. */
