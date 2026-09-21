@@ -182,7 +182,8 @@ export default function HelpDialog() {
               </p>
               <p className="mt-2">
                 Click a bar on the Band tab, a frequency in the log, or type one into the Tune box under the keypad, and the app walks the
-                scanner's own menus (Searches › Tune Mode) to tune there. <b className="text-ink">Scan</b> takes it back to scanning.
+                scanner's own menus (Searches › Tune Mode) to tune there. The scanner snaps the entry to its band plan, so an airband channel
+                such as 126.595 lands on its carrier, 126.5917; the app accepts that and says so. <b className="text-ink">Scan</b> takes it back to scanning.
               </p>
             </Section>
 

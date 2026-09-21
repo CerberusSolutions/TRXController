@@ -77,8 +77,9 @@ export const useScanner = create<ScannerState>((set, get) => ({
   tune: async (hz) => {
     set({ tuneState: { hz, phase: 'tuning' } });
     try {
-      await api().tune(hz);
-      set({ tuneState: { hz, phase: 'done' } });
+      const tuned = await api().tune(hz);
+      // "Tuned to" names the frequency the scanner settled on: an airband channel name snaps to its carrier.
+      set({ tuneState: { hz: typeof tuned === 'number' ? tuned : hz, phase: 'done' } });
       setTimeout(() => {
         if (get().tuneState?.phase === 'done') set({ tuneState: null });
       }, 2500);

@@ -267,8 +267,9 @@ function registerIpc(): void {
   ipcMain.handle(IPC.tune, async (_e, hz: unknown) => {
     if (typeof hz !== 'number' || !Number.isFinite(hz)) throw new Error('Frequency required');
     try {
-      await session.tuneTo(hz);
-      console.log(`[scanner] tuned to ${(hz / 1e6).toFixed(6)} MHz`);
+      const tuned = await session.tuneTo(hz);
+      console.log(`[scanner] tuned to ${(tuned / 1e6).toFixed(6)} MHz${tuned !== Math.round(hz) ? ` (asked for ${(hz / 1e6).toFixed(6)}: the scanner snapped it to its raster)` : ''}`);
+      return tuned;
     } catch (err) {
       const screen = (err as { screen?: string[] }).screen;
       console.log(`[scanner] tune failed: ${(err as Error).message}${screen?.length ? ` | display: ${screen.map((l) => `|${l}|`).join(' ')}` : ''}`);

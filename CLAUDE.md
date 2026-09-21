@@ -50,7 +50,12 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   on the Band tab, on a frequency in the log table, and the Tune box under the keypad are
   Main Menu > Searches > Tune Mode,
   the digits with the decimal point, then SEL (the scanner's ENTER); "Scan" is
-  Main Menu > Scan. One macro runs at a time (`ScannerSession.runMacro`).
+  Main Menu > Scan. One macro runs at a time (`ScannerSession.runMacro`). The scanner snaps an entry
+  to the band's raster (on the 8.33 kHz airband the channel name 126.595 is tuned as its carrier
+  126.591667, seen in UAT on 21 Sep 2026), so `tuneTo` accepts a displayed frequency within
+  `TUNE_SNAP_HZ` (6.25 kHz, under half a 12.5 kHz step so a neighbouring channel left on the screen
+  from before is never taken for the new one unless it is itself that near) and resolves to it; the
+  IPC returns it and "Tuned to" names it. `MACRO_TIMEOUT_MS` is 5 s per display check.
 - Serial: 115200 baud, 8N1, no flow control. Remote control mode is always active;
   no special mode switch is needed.
 - Frame format: `STX code data ETX sum`, `sum = (sum of bytes from code through ETX) & 0xFF`.

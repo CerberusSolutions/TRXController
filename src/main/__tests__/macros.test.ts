@@ -142,6 +142,53 @@ describe('tuneTo', () => {
     expect(s.hz).toBe(145_500_000);
   });
 
+  it('accepts the frequency the scanner snaps to on the 8.33 kHz airband and reports it', async () => {
+    // A TRX tunes the channel name 126.595 as its carrier 126.591667: the display never shows 126.595000.
+    class Airband extends FakeScanner {
+      override async press(code: number): Promise<void> {
+        await super.press(code);
+        if (code === Key.SEL && this.mode === 'tune' && this.hz >= 108e6 && this.hz < 137e6) this.hz = Math.round(Math.round(this.hz / (25000 / 3)) * (25000 / 3));
+      }
+    }
+    const s = new Airband();
+    await expect(tuneTo(s, 126_595_000)).resolves.toBe(126_591_667);
+    expect(s.hz).toBe(126_591_667);
+  });
+
+  it('does not take a neighbouring channel still on the screen for the new one', async () => {
+    // Already on 126.591667; asked for 126.600, one 8.33 kHz step up. The stale screen is within the snap
+    // tolerance of the new target only if the tolerance were loose; it must wait for the scanner to move.
+    class Stuck extends FakeScanner {
+      override async press(code: number): Promise<void> {
+        if (code === Key.SEL && this.mode === 'tune') {
+          this.entry = '';
+          return;
+        }
+        await super.press(code);
+      }
+    }
+    const s = new Stuck();
+    s.mode = 'tune';
+    s.hz = 126_591_667;
+    await expect(tuneTo(s, 126_600_000)).rejects.toBeInstanceOf(MacroError);
+  }, 10_000);
+
+  it('is satisfied at once when the scanner already sits on the snapped channel', async () => {
+    class Stuck extends FakeScanner {
+      override async press(code: number): Promise<void> {
+        if (code === Key.SEL && this.mode === 'tune') {
+          this.entry = '';
+          return;
+        }
+        await super.press(code);
+      }
+    }
+    const s = new Stuck();
+    s.mode = 'tune';
+    s.hz = 126_591_667;
+    await expect(tuneTo(s, 126_595_000)).resolves.toBe(126_591_667);
+  });
+
   it('refuses a frequency the scanner cannot tune', async () => {
     const s = new FakeScanner();
     await expect(tuneTo(s, 5_000_000)).rejects.toBeInstanceOf(MacroError);
