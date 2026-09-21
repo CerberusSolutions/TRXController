@@ -361,12 +361,13 @@ captured on 14 Sep 2026.
   `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
   position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
   source's pin marks (a WTR pin is the licence holder, not necessarily the transmitter), fit-to-bounds once
-  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (follow) in
+  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), D (dock), ? (help) in
   `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
 - Docking (`dockMap` / `undockMap` / `followDock` in `src/main/index.ts`, `map:dock` IPC with `auto` /
   `left` / `right` / `off`, state pushed as `map:dock-state`): the map is set against the side of the main
-  window that has room (`dockedBounds`: same y and height, filling to the display's work-area edge), else
-  the other side, else the display is split (main ~62%, `win.setBounds`). While docked the main window's
+  window that has room (`dockedBounds`: same y and height, square, i.e. as wide as the main window is tall, or as wide as the
+  room allows if less, so an ultrawide does not hand it the whole remainder), else the other side, else the
+  display is split (the map a square of the display's height, `win.setBounds` for the main window). While docked the main window's
   move / resize events re-place it (`placingMap` guards our own moves); a hand drag or resize that leaves
   the docked bounds undocks; maximising the main window undocks. `settings.mapDock` remembers the side
   (re-docked on open), `settings.mapWindow` the free placement (restored via `savedBounds`). The map's
@@ -376,6 +377,9 @@ captured on 14 Sep 2026.
   county centre: `RrConventional` / `RrSystemInfo` got `lat` / `lon` in `rrService`); the tracker moves it
   with the placement (`placementAfter`), `LogDb.confirm` carries it onto renamed rows. Rows from before
   20 Sep 2026 have null and can be reconstructed from the user's position plus bearing and distance.
+  Every pair passes `point()` in `src/shared/geo.ts` on the way in (candidate builders, `normaliseCandidates`,
+  the tracker, the map, the log's map buttons): finite, in range, and not the 0,0 / -0 a register writes for
+  "unknown", which would pin the Gulf of Guinea and drag the fit-to-bounds with it.
 
 ## Scan timeout
 

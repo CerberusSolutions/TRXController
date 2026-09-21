@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapTarget, ReceptionRow } from '../../../shared/ipc';
 import { candidatesFor } from '../../../shared/listed';
-import { normaliseUnits } from '../../../shared/geo';
+import { normaliseUnits, point } from '../../../shared/geo';
 import { attachLogEvents, useLog } from '../store/log';
 import { attachScannerEvents, useScanner } from '../store/scanner';
 import { useIdentities } from '../store/identities';
 import { initTheme } from '../store/theme';
 import MapView, { type MapPoint } from './MapView';
+
+/** Within about a metre: the same place, whatever rounding the two sources applied. */
+const samePoint = (a: { lat: number; lon: number }, b: { lat: number; lon: number }): boolean => Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lon - b.lon) < 1e-5;
 
 /**
  * The map window (`#map` route): you and every candidate for a frequency pinned on OpenStreetMap,
@@ -47,6 +50,17 @@ export default function MapApp() {
     };
   }, []);
 
+  // F, or the Following button: following → hold the entry on show (nothing to hold before anything is
+  // logged on the frequency); held → follow the scanner again.
+  const rowRef = useRef<ReceptionRow | null>(null);
+  const toggleFollow = useCallback(() => {
+    setTarget((t) => {
+      if (t.kind === 'row') return { kind: 'follow' };
+      return rowRef.current ? { kind: 'row', row: rowRef.current } : t;
+    });
+    setPicked(null);
+  }, []);
+
   const toggleDock = useCallback(() => {
     const p = window.trx?.mapDock?.(docked ? 'off' : 'auto');
     if (p) void p.then((s) => setDocked(s.docked));
@@ -68,16 +82,14 @@ export default function MapApp() {
       const k = e.key.toLowerCase();
       if (k === 'a') setCommand({ n: Date.now(), what: 'fit' });
       else if (k === 'z' || k === 'h') setCommand({ n: Date.now(), what: 'home' });
-      else if (k === 'f') {
-        setTarget({ kind: 'follow' });
-        setPicked(null);
-      } else if (k === 'd') toggleDock();
+      else if (k === 'f') toggleFollow();
+      else if (k === 'd') toggleDock();
       else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [toggleDock]);
+  }, [toggleDock, toggleFollow]);
 
   const userLat = settings.lat;
   const userLon = settings.lon;
@@ -90,6 +102,7 @@ export default function MapApp() {
     if (hz === null) return null;
     return rows.find((r) => r.frequencyHz === hz) ?? null;
   }, [target, rows, hz]);
+  rowRef.current = row;
 
   // Pins: the row's candidates (they carry their own position), else, before anything is logged on the
   // frequency, whatever the lookups offer right now.
@@ -106,12 +119,19 @@ export default function MapApp() {
       ? row.candidates
       : candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups);
     list.forEach((c, i) => {
-      if (c.lat === null || c.lon === null || c.lat === undefined || c.lon === undefined) return;
-      add({ key: `c${i}`, source: c.source, name: c.name, detail: c.detail, lat: c.lat, lon: c.lon, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg, ...(c.match === undefined ? {} : { match: c.match }) });
+      const at = point(c.lat, c.lon);
+      if (!at) return;
+      add({ key: `c${i}`, source: c.source, name: c.name, detail: c.detail, ...at, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg, ...(c.match === undefined ? {} : { match: c.match }) });
     });
     // A confirmed or otherwise placed identity that no candidate carries gets its own pin.
-    if (row && row.lat !== null && row.lon !== null && row.name && !out.some((p) => p.name === row.name)) {
-      add({ key: 'row', source: row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'CONF', name: row.name, detail: row.system, lat: row.lat, lon: row.lon, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
+    // `!= null` on purpose: rows from before the columns existed (and the preview mock) carry undefined, not null.
+    // The row's own point gets a pin only when no candidate already stands there: a scanner-named row is
+    // placed by the lookup that identified it, so that candidate's pin is the row's. A pin of its own is a
+    // confirmation (CONF), a lookup's placement that no longer appears in the list, or the scanner's object.
+    const own = row ? point(row.lat, row.lon) : null;
+    if (row && own && row.name && !out.some((p) => samePoint(p, own))) {
+      const source: MapPoint['source'] = row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'SCAN';
+      add({ key: 'row', source, name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
     }
     return out;
   }, [row, snapshot]);
@@ -122,12 +142,16 @@ export default function MapApp() {
   if (stable.current.key !== pointsKey) stable.current = { key: pointsKey, points: rawPoints };
   const points = stable.current.points;
 
-  // The line goes to the pin the user clicked, else the identity the log chose for the entry, else the top candidate.
+  // The line goes to the pin the user clicked, else the identity the log chose for the entry (by name, else the
+  // candidate standing on the row's own point, which is how a scanner-named row was placed), else the top candidate.
   const chosenKey = useMemo(() => {
     if (picked && points.some((p) => p.key === picked)) return picked;
     if (row) {
       const byName = points.find((p) => p.name === row.name && (p.source === row.source || row.source === 'CONF' || row.source === ''));
       if (byName) return byName.key;
+      const at = point(row.lat, row.lon);
+      const byPoint = at ? points.find((p) => samePoint(p, at)) : undefined;
+      if (byPoint) return byPoint.key;
       const own = points.find((p) => p.key === 'row');
       if (own) return own.key;
     }
@@ -160,23 +184,25 @@ export default function MapApp() {
         <span className="ml-auto flex items-center gap-2">
           {target.kind === 'row' ? (
             <>
-              <span className="text-[11px] text-ink-3" title="Pinned to one log entry">{when}</span>
+              <span className="text-[11px] text-ink-3" title="Held on one log entry">{when}</span>
               <button
                 type="button"
                 className="no-drag rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink"
                 title="Follow the scanner again (F)"
-                onClick={() => {
-                  setTarget({ kind: 'follow' });
-                  setPicked(null);
-                }}
+                onClick={toggleFollow}
               >
                 Follow
               </button>
             </>
           ) : (
-            <span className="rounded-md border border-green/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-green" title="Following the scanner: the pins change with the frequency">
+            <button
+              type="button"
+              className="no-drag rounded-md border border-green/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-green hover:bg-panel-2"
+              title={row ? 'Following the scanner: the pins change with the frequency. Click (or F) to hold this entry.' : 'Following the scanner: the pins change with the frequency.'}
+              onClick={toggleFollow}
+            >
               Following
-            </span>
+            </button>
           )}
           <button
             type="button"
@@ -231,7 +257,7 @@ export default function MapApp() {
                     ['Arrows', 'Pan'],
                     ['A', 'Fit everything in: you and every pin'],
                     ['Z', 'Centre on your location'],
-                    ['F', 'Follow the scanner again'],
+                    ['F', 'Hold the entry on show, or follow the scanner again'],
                     ['D', 'Dock beside the main window, or set it free'],
                     ['Click a pin', 'Its card, and the line moves to it'],
                     ['Esc', 'Close this'],
@@ -247,7 +273,7 @@ export default function MapApp() {
                 <p>
                   <span className="map-legend map-pin-wtr" /> WTR is the Ofcom licence holder, often a reseller's address rather than the transmitter.{' '}
                   <span className="map-legend map-pin-rruk" /> RRUK and <span className="map-legend map-pin-rrdb" /> RRDB pins are the sites those databases list.{' '}
-                  <span className="map-legend map-pin-ukr" /> UKR is the repeater itself. The larger pin is the one the log chose; the dashed line carries its distance and bearing.
+                  <span className="map-legend map-pin-ukr" /> UKR is the repeater itself. <span className="map-legend map-pin-scan" /> A grey pin is the scanner's own object where it was placed. <span className="map-legend map-pin-conf" /> CONF is one you confirmed. The larger pin is the one the log chose; the dashed line carries its distance and bearing.
                 </p>
               </div>
             </div>

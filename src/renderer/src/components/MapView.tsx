@@ -8,7 +8,7 @@ import { SOURCE_NAME } from '../lib/sources';
 /** One pin: a candidate (or the row's own placed identity) with a position. */
 export interface MapPoint {
   key: string;
-  source: LookupId | 'CONF';
+  source: LookupId | 'CONF' | 'SCAN';
   name: string;
   detail: string;
   lat: number;
@@ -44,7 +44,10 @@ const PIN_MEANING: Record<MapPoint['source'], string> = {
   RRDB: 'RadioReference site, or the system\'s centre when the site has no position.',
   UKR: 'Repeater site from the RSGB list.',
   CONF: 'Confirmed by you.',
+  SCAN: 'The scanner\'s own object, placed by the lookup that identified it.',
 };
+
+const PIN_TITLE: Partial<Record<MapPoint['source'], string>> = { SCAN: 'Scanner object', CONF: 'Confirmed by you' };
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
@@ -65,7 +68,7 @@ function card(p: MapPoint, units: Units): string {
   return `<div class="map-card">
     <div class="map-card-name">${esc(p.name)}</div>
     ${p.detail ? `<div class="map-card-detail">${esc(p.detail)}</div>` : ''}
-    <div class="map-card-src"><b>${esc(SOURCE_NAME[p.source] ?? p.source)}</b>${where ? ` · ${esc(where)} from you` : ''}${p.match ? ' · tone matches' : ''}</div>
+    <div class="map-card-src"><b>${esc(PIN_TITLE[p.source] ?? SOURCE_NAME[p.source as LookupId] ?? p.source)}</b>${where ? ` · ${esc(where)} from you` : ''}${p.match ? ' · tone matches' : ''}</div>
     <div class="map-card-note">${esc(PIN_MEANING[p.source])}</div>
   </div>`;
 }

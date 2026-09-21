@@ -1,5 +1,21 @@
 import { describe, expect, it } from 'vitest';
-import { bearingDeg, compassPoint, distanceKm, formatBearing, formatDistance, formatPlace, normaliseUnits, placeFrom } from '../geo';
+import { bearingDeg, compassPoint, distanceKm, formatBearing, formatDistance, formatPlace, normaliseUnits, placeFrom, point } from '../geo';
+
+describe('point', () => {
+  it('believes a real pair and rejects unknown, zero and out-of-range ones', () => {
+    expect(point(51.8468, -0.9211)).toEqual({ lat: 51.8468, lon: -0.9211 });
+    expect(point(null, -0.9)).toBeNull();
+    expect(point(undefined, undefined)).toBeNull();
+    expect(point(0, 0)).toBeNull();
+    expect(point(-0, 0)).toBeNull();
+    expect(point(0.004, -0.003)).toBeNull();
+    expect(point(91, 0)).toBeNull();
+    expect(point(51, 181)).toBeNull();
+    expect(point(Number.NaN, 1)).toBeNull();
+    // A real place near the meridian is fine: only both-near-zero is the "unknown" pattern.
+    expect(point(51.48, 0.0)).toEqual({ lat: 51.48, lon: 0 });
+  });
+});
 
 describe('geo', () => {
   it('measures great-circle distance', () => {

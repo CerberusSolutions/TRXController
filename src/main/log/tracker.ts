@@ -15,6 +15,7 @@
  * - Channel details often arrive a poll or two after the squelch opens, so an
  *   open reception keeps absorbing better information until it closes.
  */
+import { point } from '../../shared/geo';
 import { NO_ID, isFrequencyLabel, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
@@ -334,8 +335,7 @@ export function describe(s: ScannerSnapshot): Description {
     rruk,
     distanceKm: placedBy?.distanceKm ?? null,
     bearingDeg: placedBy?.bearingDeg ?? null,
-    lat: placedBy?.lat ?? null,
-    lon: placedBy?.lon ?? null,
+    ...(point(placedBy?.lat, placedBy?.lon) ?? { lat: null, lon: null }),
     candidates,
     rssiPeak: status.rssi,
   };

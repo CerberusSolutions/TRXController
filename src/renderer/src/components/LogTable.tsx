@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
-import { formatPlace, type Units } from "../../../shared/geo";
+import { formatPlace, point, type Units } from "../../../shared/geo";
 import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
 import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
@@ -486,7 +486,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           </span>
           <span className="shrink-0 truncate font-sans text-[12.5px] text-ink">{current.name}</span>
           <span className="min-w-0 flex-1 truncate text-ink-3">{current.detail || "typed in by you"}</span>
-          {r.lat !== null && r.lon !== null && (
+          {point(r.lat, r.lon) && (
             <button type="button" className={btn} title="Show this entry on the map" onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r })}>
               map
             </button>
@@ -509,7 +509,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
               {c.match === true && !c.detail.includes("✓") ? " ✓" : ""}
             </span>
             <span className="shrink-0 text-ink-2">{formatPlace(c, units) || <span className="text-ink-3">not placed</span>}</span>
-            {c.lat !== null && c.lat !== undefined && c.lon !== null && c.lon !== undefined && (
+            {point(c.lat, c.lon) && (
               <button
                 type="button"
                 className={btn}

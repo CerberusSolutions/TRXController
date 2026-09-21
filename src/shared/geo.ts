@@ -31,6 +31,17 @@ export interface Placement {
 }
 
 /** Where a point lies relative to the user; both null when either side is unknown. */
+/**
+ * A coordinate pair worth believing: both finite and in range, and not the 0,0 (or -0) that a register
+ * writes for "unknown", which would put a pin in the Gulf of Guinea. Returns the pair, else null.
+ */
+export function point(lat: number | null | undefined, lon: number | null | undefined): { lat: number; lon: number } | null {
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  if (Math.abs(lat) < 0.01 && Math.abs(lon) < 0.01) return null;
+  return { lat, lon };
+}
+
 export function placeFrom(here: { lat: number; lon: number } | null | undefined, lat: number | null | undefined, lon: number | null | undefined): Placement {
   if (!here || lat === null || lat === undefined || lon === null || lon === undefined) return { distanceKm: null, bearingDeg: null };
   return { distanceKm: distanceKm(here.lat, here.lon, lat, lon), bearingDeg: bearingDeg(here.lat, here.lon, lat, lon) };
