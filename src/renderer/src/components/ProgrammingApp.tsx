@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CdatCandidate, ProgObject, ProgSaveResult, ProgSaveTarget, ProgScanlist, Programming } from '../../../shared/programming';
+import { defaultModulation } from '../../../shared/bandDefaults';
 import { attachLogEvents } from '../store/log';
 import { initTheme } from '../store/theme';
 import ProgLogImport from './ProgLogImport';
@@ -32,11 +33,14 @@ function problems(p: Programming): string[] {
   return out;
 }
 
+/** The mode a new channel starts with, replaced from its band the first time a frequency is typed in. */
+const NEW_MODE = 'NFM';
+
 const newObject = (index: number, scanlist: number): ProgObject => ({
   index,
   name: 'New channel',
   frequencyHz: 0,
-  modulation: 'NFM',
+  modulation: NEW_MODE,
   dmode: 'Auto',
   tone: { type: 'None', value: '' },
   skip: false,
@@ -134,7 +138,9 @@ export default function ProgrammingApp() {
       const bulk = selected.has(index) && selected.size > 1 && Object.keys(patch).every((k) => BULK_FIELDS.has(k as keyof ObjectPatch));
       const targets = bulk ? selected : new Set([index]);
       setFocus(null);
-      commit({ ...prog, objects: prog.objects.map((o) => (targets.has(o.index) ? { ...o, ...patch } : o)) });
+      // A new channel's first frequency also sets its mode from the band, unless a mode was picked already.
+      const withMode = (o: ProgObject): ObjectPatch => (o.frequencyHz === 0 && o.modulation === NEW_MODE && patch.frequencyHz && !('modulation' in patch) ? { ...patch, modulation: defaultModulation(patch.frequencyHz) } : patch);
+      commit({ ...prog, objects: prog.objects.map((o) => (targets.has(o.index) ? { ...o, ...withMode(o) } : o)) });
     },
     [prog, selected, commit],
   );

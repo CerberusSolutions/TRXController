@@ -539,7 +539,7 @@ captured on 14 Sep 2026.
   it carries), with undo / redo (a snapshot per edit), Add channel, Duplicate, Delete, Add to / Remove from lists
   for a selection, **Name from lookups** (`ProgNameFromLookups.tsx`: every selected frequency through the registers and RadioReference / RRUK's caches only, `LookupMode` 'cache' on `rr:lookup` / `rruk:lookup`, since a card holds thousands of frequencies; the top candidate proposes the tag, each row can take another or be edited, one undo step), and **From log** (`ProgLogImport.tsx`): the log's entries folded into channels exactly as the
   CSV export folds them (`ezObjects`, `alphaTag`, `ezToneOf`, `ezModeOf`), those already on the card unticked,
-  into one scanlist. Save is refused while an object has no alpha tag or a frequency outside 25-1300 MHz. Nothing
+  into one scanlist. A new channel's mode follows its band the first time a frequency is typed into it (`defaultModulation` in `src/shared/bandDefaults.ts`: AM on the civil and military airbands, FM on VHF Marine's 25 kHz channels, NFM everywhere else, the UK's land mobile and amateur channels being 12.5 kHz), as does a log entry the scanner never reported a mode for; a mode already set is never overwritten. Save is refused while an object has no alpha tag or a frequency outside 25-1300 MHz. Nothing
   about it goes in the README, the website or the help screen, on the author's instruction. `CONFIG__.BIN`
   (EZ Scan's own, 91 KB, rewritten on every change) is not the CDAT keystream at any phase and has no period: not
   understood, not needed for the card.
