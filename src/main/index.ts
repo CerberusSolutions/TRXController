@@ -4,8 +4,8 @@ import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { isDayKey } from '../shared/dayMap';
-import { locateCdat, readCdat } from './programming/locate';
-import type { Programming } from '../shared/programming';
+import { locateCdat, readCdat, writeCdat } from './programming/locate';
+import type { ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -235,7 +235,11 @@ function registerIpc(): void {
   // renderer's calls resolve to nothing there and no window can be opened.
   if (!app.isPackaged) {
     ipcMain.handle(IPC.programmingOpen, () => openProgramming());
-    ipcMain.handle(IPC.programmingLocate, () => locateCdat());
+    ipcMain.handle(IPC.programmingLocate, (_e, near: unknown) => locateCdat(process.platform, typeof near === 'string' && near ? near : undefined));
+    ipcMain.handle(IPC.programmingSave, (_e, prog: unknown, target: unknown): Promise<ProgSaveResult> => {
+      if (!isProgramming(prog) || !isSaveTarget(target)) throw new Error('Bad programming payload');
+      return writeCdat(prog, target);
+    });
     ipcMain.handle(IPC.programmingLoad, async (_e, dir: unknown): Promise<Programming | null> => {
       let folder = typeof dir === 'string' && dir ? dir : null;
       if (!folder) {
@@ -457,6 +461,11 @@ function registerIpc(): void {
   ipcMain.handle(IPC.rrClearCache, () => {
     rr?.clearCache();
     return rr?.status() ?? null;
+  });
+  ipcMain.handle(IPC.rrukLookup, (_e, hz: unknown) => {
+    if (!rruk || typeof hz !== 'number') return null;
+    rruk.request(hz, true);
+    return rruk.info(hz);
   });
   ipcMain.handle(IPC.rrLookup, (_e, hz: unknown) => {
     if (!rr || typeof hz !== 'number') return null;
@@ -754,6 +763,19 @@ function openProgramming(): void {
     return { action: 'deny' };
   });
   loadRenderer(progWin, 'programming');
+}
+
+/** The shape check for a programming coming back from the editor; the writer validates the values. */
+function isProgramming(v: unknown): v is Programming {
+  if (!v || typeof v !== 'object') return false;
+  const p = v as Record<string, unknown>;
+  return typeof p.dir === 'string' && typeof p.description === 'string' && Array.isArray(p.objects) && Array.isArray(p.scanlists) && Array.isArray(p.scanSets) && !!p.globals && typeof p.globals === 'object';
+}
+
+function isSaveTarget(v: unknown): v is ProgSaveTarget {
+  if (!v || typeof v !== 'object') return false;
+  const t = v as { kind?: unknown; description?: unknown };
+  return t.kind === 'inplace' || (t.kind === 'vscanner' && typeof t.description === 'string');
 }
 
 function isMapTarget(v: unknown): v is MapTarget {

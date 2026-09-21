@@ -494,18 +494,40 @@ captured on 14 Sep 2026.
   Updates section with the installer link. Notification only, never an auto-install (the exe is
   unsigned). Failures are silent (null).
 - **Programming window (development builds only, deliberately undocumented):** `src/main/programming/` reads
-  the scanner's SD-card programming, EZ Scan's CDAT folder (the card mounts as a drive while the scanner is
-  off): `keystream.ts` is the 13,568-byte repeating XOR key every CDAT file is obfuscated with (recovered from a
-  near-empty index file, confirmed identical on a second card); `cdat.ts` is the pure parser, its header comment
-  the field map (126-byte object records: name at 49, Hz at 98, modulation 102, squelch 103/104, scanlist bitmap
-  at 12, LED 68-71, delay 66, skip 39, backlight 81, DMR flag 122; scanlists from PLDEF.DAT with membership from
+  and writes the scanner's SD-card programming, EZ Scan's CDAT folder (the card mounts as a drive while the scanner
+  is off), and the `CDAT_VS.nnn` V-Scanner folders beside it (EZ Scan's alternative programmings, which the scanner
+  loads from Main Menu › V-Scanner; `CURVS.DAT` at the card root names the one loaded at power-up): `keystream.ts` is
+  the 13,568-byte repeating XOR key every CDAT file is obfuscated with (recovered from a near-empty index file,
+  confirmed identical on a second card); `cdat.ts` is the pure parser, its header comment the field map (126-byte
+  object records: name at 49, Hz at 98, modulation 102, squelch 103/104, scanlist bitmap at 12, LED 68-71, delay 66,
+  skip 39, backlight 81, DMR flag 122, NXDN 123, object ID uint32 at 8; scanlists from PLDEF.DAT with membership from
   the bitmaps, scan sets from PLSETS.DAT, welcome text and signal bars from ISCAN___.GLB, trunked systems from
   TSnnnnnn._TS/_GD), worked out against two cards' EZ Scan CSV exports (every varying column matched on all
-  7,412 objects); `locate.ts` finds mounted CDAT folders and reads one. Main registers the `programming:*` IPC and
-  the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General / Scanlists
-  / Conventional / Trunked, read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top bar's Program
-  button. Nothing about it goes in the README, the website or the help screen, on the author's instruction;
-  writing to the card is not attempted (the object file's 17-byte header signature is not understood).
+  7,412 objects); `write.ts` is the inverse (`buildCdat`): an edited object is its original record with the known
+  fields rewritten (unknown bytes kept), a new one starts from `TEMPLATE` (the bytes constant on every record seen),
+  the object file's 17-character header is copied verbatim (a length-prefixed random string referenced nowhere
+  else), `CG000000._CI` is derived (the object ID, else -2), the per-list `PLnnn.DAT` files are the members in
+  record order as ten-byte entries (0, uint16 record, zeros; a list's talkgroup entries, first byte 1, are kept
+  after them; the tenth byte is EZ Scan's memory garbage, written 0), PLDEF / PLSETS keep the other bits of their
+  flag bytes, DESCRIPT.TXT is 16 characters of plain text. DCS and NAC squelch have not been seen on a card, so
+  the editor offers them greyed out and never writes them (a log entry with one imports as Search); DMR colour
+  code, slot and talkgroup are wildcards on every object seen and are left alone. `locate.ts` finds the folders,
+  reads one, and `writeCdat` writes an edited programming over its folder after copying it to `<name>.bak-<stamp>`
+  beside it, or into the next free `CDAT_VS.nnn` (a copy of the folder with the regenerated files over it). Main
+  registers the `programming:*` IPC (`open`, `locate` with an optional folder whose siblings list first, `load`,
+  `save`) and the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General
+  / Scanlists / Conventional / Trunked, the last read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
+  bar's Program button. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
+  Enter, Esc reverts; a change to a row inside the selection applies to every selected row, which is the bulk
+  edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK
+  (`rruk:lookup` IPC), RadioReference and the repeater list, and a pick names the channel with the tone and mode
+  it carries), with undo / redo (a snapshot per edit), Add channel, Duplicate, Delete, Add to / Remove from lists
+  for a selection, and **From log** (`ProgLogImport.tsx`): the log's entries folded into channels exactly as the
+  CSV export folds them (`ezObjects`, `alphaTag`, `ezToneOf`, `ezModeOf`), those already on the card unticked,
+  into one scanlist. Save is refused while an object has no alpha tag or a frequency outside 25-1300 MHz. Nothing
+  about it goes in the README, the website or the help screen, on the author's instruction. `CONFIG__.BIN`
+  (EZ Scan's own, 91 KB, rewritten on every change) is not the CDAT keystream at any phase and has no period: not
+  understood, not needed for the card.
 - Testing aids stay out of the normal UI: `useUi.diagnostics` (Ctrl+Shift+D, persisted in
   localStorage, `DIAG` tag in the status bar) adds the **Debug** tab (`DebugPanel`: the display's raw bytes line by line with
   the text beside them, its icon flags spelled out, a copy button; the screen itself stays over the keypad) beside Log and Band; it disappears with the
