@@ -396,14 +396,14 @@ export default function MapApp() {
             }}
             role="presentation"
           >
-            <div role="dialog" aria-label="Map help" className="w-80 max-w-full rounded-xl border border-edge bg-panel p-4 text-sm text-ink-2 shadow-2xl">
+            <div role="dialog" aria-label="Map help" className="w-[27rem] max-w-full rounded-xl border border-edge bg-panel p-4 text-sm text-ink-2 shadow-2xl">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Map keys</span>
                 <button type="button" className="text-ink-3 hover:text-ink" onClick={() => setHelpOpen(false)} aria-label="Close" title="Close (Esc)">
                   ×
                 </button>
               </div>
-              <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1">
+              <dl className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-1">
                 {(
                   [
                     ['+ / −', 'Zoom in and out (scroll wheel too)'],

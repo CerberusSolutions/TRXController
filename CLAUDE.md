@@ -361,7 +361,9 @@ captured on 14 Sep 2026.
   `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
   position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
   source's pin marks (a WTR pin is the licence holder, not necessarily the transmitter), fit-to-bounds once
-  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), L (the Log view, below), [ / ] (its day), D (dock), ? (help) in
+  per distinct pin set. The host's click handler sends a link to the system browser only when its `href`
+  attribute is an absolute http(s) URL (the attribution): Leaflet's popup × is `href="#close"`, and testing the
+  resolved `a.href` opened it in the browser whenever the page was served over http (the dev build). Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), L (the Log view, below), [ / ] (its day), D (dock), ? (help) in
   `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
 - Log view (`MapTarget` `{ kind: 'day', day?, filter? }`, from the log's Map button, the map's Log button or L; Live / L
   again returns to `follow`): one local calendar day of the log (`src/shared/dayMap.ts`: `dayKey` / `isDayKey` /
