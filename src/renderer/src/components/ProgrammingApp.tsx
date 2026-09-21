@@ -271,11 +271,11 @@ export default function ProgrammingApp() {
         </span>
         {prog && (
           <>
-            {cands.length > 1 ? (
+            {cands.length > 1 || cands[0]?.kind === 'recent' ? (
               <select className="no-drag max-w-[16rem] rounded-md border border-edge bg-panel-2 px-2 py-1 text-[12px] text-ink" value={prog.dir} onChange={(e) => loadChecked(e.target.value)} title="The card's CDAT folder and the V-Scanner folders beside it">
                 {cands.map((c) => (
-                  <option key={c.dir} value={c.dir}>
-                    {c.kind === 'vscanner' ? `V-Scanner · ${c.description || c.dir}` : c.description || 'Card'}
+                  <option key={c.dir} value={c.dir} title={c.dir}>
+                    {c.kind === 'vscanner' ? `V-Scanner · ${c.description || c.dir}` : c.kind === 'recent' ? `Recent · ${c.description || c.dir.replace(/^.*[\\/]/, '')}` : c.description || 'Card'}
                   </option>
                 ))}
               </select>
@@ -351,7 +351,7 @@ export default function ProgrammingApp() {
               <>
                 <p>Switch the scanner off with the USB lead in: its SD card mounts as a drive, and the programming EZ Scan wrote to it is in the card's CDAT folder. Plug the card into a reader if you prefer.</p>
                 <p>
-                  Nothing found on the mounted drives just now. Press <b className="text-ink">Open folder…</b> to point at a CDAT folder (or a copy of one), or <b className="text-ink">Reload</b> once the card is in.
+                  Nothing found on the mounted drives just now. Press <b className="text-ink">Open folder…</b> to point at a CDAT folder (or a copy of one), or <b className="text-ink">Reload</b> once the card is in. Folders opened before are offered first.
                 </p>
               </>
             )}

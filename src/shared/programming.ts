@@ -84,7 +84,48 @@ export interface ProgGlobals {
   wxButton: number | null;
   /** Search lockouts, Hz, lowest first. */
   lockoutsHz: number[];
+  /** The search bands and options decoded so far; null when the file is too short to hold them. */
+  search: ProgSearch | null;
 }
+
+/** EZ Scan's Search Options as far as decoded (Delay and Attenuator bits are not: they are kept as read). */
+export interface SearchOptions {
+  attenuator: boolean;
+  zeromatic: boolean;
+  delay: boolean;
+}
+export interface ProgSearch {
+  publicSafety: SearchOptions & { groups: boolean[] };
+  limit: SearchOptions & { lowHz: number; highHz: number };
+  uvhfAm: SearchOptions & { groups: boolean[] };
+  /** The Sweeper's flags byte has its own layout; only Special Mode is decoded. */
+  sweeper: { specialMode: boolean; groups: boolean[] };
+  amateur: { groups: boolean[] };
+}
+
+/** The search groups' ranges on the United Kingdom band plan, for labelling; the card holds only the ticks. */
+export const SEARCH_GROUPS = {
+  publicSafety: ['66.0 - 87.5 MHz', '138 - 174 MHz', '425 - 440 MHz', '440 - 463 MHz', '851 - 869 MHz'],
+  sweeper: ['25 - 52 MHz', '52 - 88 MHz', '108 - 137 MHz', '137 - 220 MHz', '220 - 225 MHz', '225 - 400 MHz', '400 - 512 MHz', '806 - 869 MHz', '894 - 960 MHz', '1240 - 1300 MHz'],
+  uvhfAm: ['108 - 118 MHz', '118 - 137 MHz', '138 - 150 MHz', '230 - 400 MHz'],
+  amateur: ['28.0 - 29.7 MHz', '50.0 - 52.0 MHz', '70.0 - 71.0 MHz', '144 - 148 MHz', '222 - 225 MHz', '420 - 450 MHz', '902 - 928 MHz', '1240 - 1300 MHz'],
+} as const;
+/** Offsets in ISCAN___.GLB (EZ Scan's one-change saves, 21 Sep 2026). */
+export const GLB_SWEEPER_GROUPS = 571;
+export const GLB_SWEEPER_FLAGS = 573;
+export const GLB_LIMIT_FLAGS = 575;
+export const GLB_UVHF_FLAGS = 589;
+export const GLB_UVHF_GROUPS = 590;
+/** In a search's flags byte: bit 0 Zeromatic, bit 2 Attenuator, bit 3 Delay (bit 1 is always set). */
+export const FLAG_ZEROMATIC = 0x01;
+export const FLAG_ATTENUATOR = 0x04;
+export const FLAG_DELAY = 0x08;
+export const GLB_LIMIT_LOW = 576;
+export const GLB_LIMIT_HIGH = 580;
+export const GLB_AMATEUR_GROUPS = 599;
+export const GLB_PS_FLAGS = 607;
+export const GLB_PS_GROUPS = 608;
+export const GLB_SEARCH_END = 613;
 
 /** WX button operations by code, as far as seen (EZ Scan's list has more; unknown codes are shown as "Mode N"). */
 export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 3: 'Amateur' };
@@ -106,11 +147,11 @@ export interface Programming {
   readAt: number;
 }
 
-/** A CDAT folder found on a mounted volume: the card's live `CDAT`, or a `CDAT_VS.nnn` V-Scanner folder beside it. */
+/** A CDAT folder found on a mounted volume: the card's live `CDAT`, a `CDAT_VS.nnn` V-Scanner folder beside it, or one opened before. */
 export interface CdatCandidate {
   dir: string;
   description: string;
-  kind: 'card' | 'vscanner';
+  kind: 'card' | 'vscanner' | 'recent';
 }
 
 /** Where a save goes: over the folder that was read (after a backup beside it), or into a new V-Scanner folder beside it. */

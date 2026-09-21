@@ -62,9 +62,10 @@ async function foldersUnder(root: string): Promise<CdatCandidate[]> {
 
 /**
  * Every mounted CDAT folder found, cards first as the OS lists them, each with its V-Scanner folders;
- * with `near`, a folder opened by hand, that folder and its siblings are listed first.
+ * with `near`, a folder opened by hand, that folder and its siblings are listed first; `recent`, folders
+ * opened before (most recent first), follow when they still exist.
  */
-export async function locateCdat(platform: NodeJS.Platform = process.platform, near?: string): Promise<CdatCandidate[]> {
+export async function locateCdat(platform: NodeJS.Platform = process.platform, near?: string, recent: readonly string[] = []): Promise<CdatCandidate[]> {
   const out: CdatCandidate[] = [];
   const seen = new Set<string>();
   const add = (c: CdatCandidate): void => {
@@ -78,6 +79,7 @@ export async function locateCdat(platform: NodeJS.Platform = process.platform, n
     for (const c of await foldersUnder(dirname(near))) add(c);
   }
   for (const root of await volumeRoots(platform)) for (const c of await foldersUnder(root)) add(c);
+  for (const dir of recent) if (await isCdat(dir)) add({ dir, description: await description(dir), kind: 'recent' });
   return out;
 }
 

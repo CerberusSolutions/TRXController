@@ -16,10 +16,14 @@
  *   entries, then the name); ._GD: its talkgroups as 126-byte object-shaped records, scattered.
  * - ISCAN___.GLB: a 15-byte header (bytes 2-3 the check, see write.ts; 8-12 backlight timeout, contrast, speaker,
  *   headphone and key volume), the five welcome lines (16 each, centred) at 15, the five signal-bar thresholds at 100,
- *   the last Tune Mode frequency at 153, the search delay in tenths at 512, the WX button's search at 566, and the
- *   lockouts from 694 to the end as uint32 Hz (found by EZ Scan's own saves, one change each, 21 Sep 2026).
+ *   the last Tune Mode frequency at 153, the search delay in tenths at 512, the WX button's search at 566, the search
+ *   blocks (Sweeper groups as bits at 571-572 and its flags at 573, bit 5 Special Mode; Limit flags at 575 with its
+ *   range as uint32 Hz at 576 and 580; U/VHF AM flags at 589 and groups at 590; Amateur groups at 599; Public Safety
+ *   flags at 607 and groups at 608; the four channel-table searches at 615, 633, 651 and 669, a flags byte then 128
+ *   channel bits, not decoded; in a flags byte bit 0 is Zeromatic, bit 2 Attenuator, bit 3 Delay, bit 1 always set), and the lockouts from 694 to the end
+ *   as uint32 Hz (found by EZ Scan's own saves, one change each, 21 Sep 2026).
  */
-import { CTCSS_TONES, GLB_LOCKOUTS, GLB_SEARCH_DELAY, GLB_WX_BUTTON, type DMode, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
+import { CTCSS_TONES, FLAG_ATTENUATOR, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type DMode, type ProgSearch, type SearchOptions, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
 import { keystream } from './keystream';
 
 export const OBJECT_RECORD = 126;
@@ -189,6 +193,8 @@ function findSiteStart(ts: Uint8Array): number | null {
   return null;
 }
 
+const options = (flags: number): SearchOptions => ({ attenuator: (flags & FLAG_ATTENUATOR) !== 0, zeromatic: (flags & FLAG_ZEROMATIC) !== 0, delay: (flags & FLAG_DELAY) !== 0 });
+
 export function parseGlobals(glb: Uint8Array): ProgGlobals {
   const welcome: string[] = [];
   // Five 16-character slots from byte 15, the text centred with spaces as the scanner draws it.
@@ -202,6 +208,17 @@ export function parseGlobals(glb: Uint8Array): ProgGlobals {
     if (plausibleHz(hz)) lockoutsHz.push(hz);
   }
   lockoutsHz.sort((a, b) => a - b);
+  const bits = (o: number, n: number): boolean[] => Array.from({ length: n }, (_, i) => ((glb[o + (i >> 3)]! >> (i & 7)) & 1) === 1);
+  const search: ProgSearch | null =
+    glb.length >= GLB_SEARCH_END
+      ? {
+          publicSafety: { ...options(glb[GLB_PS_FLAGS]!), groups: bits(GLB_PS_GROUPS, 5) },
+          limit: { ...options(glb[GLB_LIMIT_FLAGS]!), lowHz: u32(glb, GLB_LIMIT_LOW), highHz: u32(glb, GLB_LIMIT_HIGH) },
+          uvhfAm: { ...options(glb[GLB_UVHF_FLAGS]!), groups: bits(GLB_UVHF_GROUPS, 4) },
+          sweeper: { specialMode: (glb[GLB_SWEEPER_FLAGS]! & 0x20) !== 0, groups: bits(GLB_SWEEPER_GROUPS, 10) },
+          amateur: { groups: bits(GLB_AMATEUR_GROUPS, 8) },
+        }
+      : null;
   return {
     welcome,
     signalBars,
@@ -209,6 +226,7 @@ export function parseGlobals(glb: Uint8Array): ProgGlobals {
     searchDelayS: glb.length > GLB_SEARCH_DELAY ? glb[GLB_SEARCH_DELAY]! / 10 : null,
     wxButton: glb.length > GLB_WX_BUTTON ? glb[GLB_WX_BUTTON]! : null,
     lockoutsHz,
+    search,
   };
 }
 
@@ -240,7 +258,7 @@ export function parseCdat(dir: string, files: ReadonlyMap<string, Uint8Array>, r
   return {
     dir,
     description,
-    globals: glb ? parseGlobals(glb) : { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [] },
+    globals: glb ? parseGlobals(glb) : { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [], search: null },
     objects,
     scanlists: pldef ? parseScanlists(pldef, objects) : [],
     scanSets: plsets ? parseScanSets(plsets) : [],

@@ -11,7 +11,7 @@
  * zeros); talkgroup entries (first byte 1) already in a list are kept after them, and the tenth byte,
  * which EZ Scan leaves as memory garbage (always a multiple of 8), is written as 0.
  */
-import { CTCSS_TONES, GLB_LOCKOUTS, GLB_SEARCH_DELAY, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
+import { CTCSS_TONES, FLAG_ATTENUATOR, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
 import { CG_HEADER, OBJECT_RECORD, decode, parseObjects } from './cdat';
 
 /** A blank record: the bytes constant across 7,412 objects on two cards. */
@@ -174,11 +174,40 @@ export function glbChecksum(glb: Uint8Array): number {
   return ~sum & 0xffff;
 }
 
-export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' | 'searchDelayS' | 'wxButton' | 'lockoutsHz'>): Uint8Array {
+export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' | 'searchDelayS' | 'wxButton' | 'lockoutsHz' | 'search'>): Uint8Array {
   const out = new Uint8Array(base);
   for (let i = 0; i < 5; i++) if (15 + (i + 1) * NAME_LENGTH <= out.length) putText(out, 15 + i * NAME_LENGTH, NAME_LENGTH, centre(globals.welcome[i] ?? ''));
   if (globals.searchDelayS !== null && out.length > GLB_SEARCH_DELAY) out[GLB_SEARCH_DELAY] = Math.max(0, Math.min(255, Math.round(globals.searchDelayS * 10)));
   if (globals.wxButton !== null && out.length > GLB_WX_BUTTON) out[GLB_WX_BUTTON] = globals.wxButton & 0xff;
+  const s = globals.search;
+  if (s && out.length >= GLB_SEARCH_END) {
+    const setBits = (o: number, flags: readonly boolean[]): void => {
+      const n = Math.ceil(flags.length / 8);
+      for (let b = 0; b < n; b++) {
+        let v = out[o + b]!;
+        for (let i = 0; i < 8 && b * 8 + i < flags.length; i++) v = flags[b * 8 + i] ? v | (1 << i) : v & ~(1 << i);
+        out[o + b] = v;
+      }
+    };
+    const setBit = (o: number, mask: number, on: boolean): void => {
+      out[o] = on ? out[o]! | mask : out[o]! & ~mask;
+    };
+    const setOptions = (o: number, opt: SearchOptions): void => {
+      setBit(o, FLAG_ZEROMATIC, opt.zeromatic);
+      setBit(o, FLAG_ATTENUATOR, opt.attenuator);
+      setBit(o, FLAG_DELAY, opt.delay);
+    };
+    setBits(GLB_PS_GROUPS, s.publicSafety.groups.slice(0, 5));
+    setOptions(GLB_PS_FLAGS, s.publicSafety);
+    setOptions(GLB_LIMIT_FLAGS, s.limit);
+    setOptions(GLB_UVHF_FLAGS, s.uvhfAm);
+    setBits(GLB_UVHF_GROUPS, s.uvhfAm.groups.slice(0, 4));
+    putU32(out, GLB_LIMIT_LOW, Math.round(s.limit.lowHz));
+    putU32(out, GLB_LIMIT_HIGH, Math.round(s.limit.highHz));
+    setBits(GLB_SWEEPER_GROUPS, s.sweeper.groups.slice(0, 10));
+    setBit(GLB_SWEEPER_FLAGS, 0x20, s.sweeper.specialMode);
+    setBits(GLB_AMATEUR_GROUPS, s.amateur.groups.slice(0, 8));
+  }
   // Lockouts: lowest first as EZ Scan keeps them, the rest of the table zero.
   const slots = Math.max(0, Math.floor((out.length - GLB_LOCKOUTS) / 4));
   const lockouts = [...new Set(globals.lockoutsHz.map((hz) => Math.round(hz)))].sort((a, b) => a - b).slice(0, slots);

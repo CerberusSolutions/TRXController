@@ -131,12 +131,32 @@ describe('patchPldef / patchGlb', () => {
     expect(centre('Trunking Scanner')).toBe('Trunking Scanner');
     expect(centre('a much longer line than fits')).toBe('a much longer li');
     const glb = new Uint8Array(1706);
-    const out = patchGlb(glb, { welcome: ['WHISTLER', 'TRX-1e', '', '', 'MOONRAKER UK'], searchDelayS: 2.5, wxButton: 3, lockoutsHz: [450_500_000, 145_500_000, 145_500_000] });
+    glb[573] = 0x16;
+    glb[575] = 0x0b;
+    glb[589] = 0x06;
+    glb[607] = 0x0b;
+    const out = patchGlb(glb, {
+      welcome: ['WHISTLER', 'TRX-1e', '', '', 'MOONRAKER UK'],
+      searchDelayS: 2.5,
+      wxButton: 3,
+      lockoutsHz: [450_500_000, 145_500_000, 145_500_000],
+      search: {
+        publicSafety: { attenuator: false, zeromatic: false, delay: true, groups: [false, true, true, true, true] },
+        limit: { attenuator: true, zeromatic: false, delay: false, lowHz: 25_000_000, highHz: 1_300_000_000 },
+        uvhfAm: { attenuator: false, zeromatic: true, delay: true, groups: [true, true, false, false] },
+        sweeper: { specialMode: true, groups: [false, false, true, false, false, true, false, true, true, false] },
+        amateur: { groups: [true, true, true, true, true, true, true, true] },
+      },
+    });
     expect(new TextDecoder().decode(out.subarray(15, 31))).toBe('    WHISTLER    ');
     expect(new TextDecoder().decode(out.subarray(31, 47))).toBe('     TRX-1e     ');
     expect(new TextDecoder().decode(out.subarray(47, 63))).toBe(' '.repeat(16));
     expect(out[512]).toBe(25);
     expect(out[566]).toBe(3);
+    // Search blocks: only the decoded bits move, the others in each flags byte stay.
+    expect([out[571], out[572], out[573], out[575], out[589], out[590], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0xff, 0x0a, 0x1e]);
+    expect(new DataView(out.buffer).getUint32(576, true)).toBe(25_000_000);
+    expect(new DataView(out.buffer).getUint32(580, true)).toBe(1_300_000_000);
     // Lockouts lowest first, once each, the rest of the table clear.
     expect(new DataView(out.buffer).getUint32(694, true)).toBe(145_500_000);
     expect(new DataView(out.buffer).getUint32(698, true)).toBe(450_500_000);
@@ -256,6 +276,6 @@ describe('buildCdat', () => {
   });
 
   it('refuses a folder without an object file', () => {
-    expect(() => buildCdat(new Map(), { dir: 'x', description: '', globals: { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [] }, objects: [], scanlists: [], scanSets: [], trunked: [], readAt: 0 })).toThrow(/object file/);
+    expect(() => buildCdat(new Map(), { dir: 'x', description: '', globals: { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [], search: null }, objects: [], scanlists: [], scanSets: [], trunked: [], readAt: 0 })).toThrow(/object file/);
   });
 });
