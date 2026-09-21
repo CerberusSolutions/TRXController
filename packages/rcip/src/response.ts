@@ -11,8 +11,6 @@ export type ParsedResponse =
   | { code: 'L'; lcd: Lcd; frame: Frame }
   | { code: 'a'; activeChannel: ActiveChannel; frame: Frame }
   | { code: 'P'; power: PowerStatus; frame: Frame }
-  /** Unsolicited power notification: the scanner announcing it has switched off (or on). */
-  | { code: 'p'; power: PowerStatus; frame: Frame }
   | { code: 'V'; version: Version; frame: Frame }
   | { code: string; unknown: true; frame: Frame };
 
@@ -27,8 +25,6 @@ export function parseResponse(frame: Frame, opts: RecordingHeaderOptions = {}): 
       return { code: 'a', activeChannel: parseActiveChannel(frame.data, opts), frame };
     case Code.POWER:
       return { code: 'P', power: parsePower(frame.data), frame };
-    case 'p':
-      return { code: 'p', power: parsePower(frame.data), frame };
     case Code.VERSION:
       return { code: 'V', version: parseVersion(frame.data), frame };
     default:

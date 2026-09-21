@@ -84,12 +84,11 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   and the keypad is held so presses are not queued into the scanner.
 - The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
   text or icon bytes (checked with `probe --log`): nothing to show for it.
-- Switching the scanner off makes it send an unsolicited lowercase **`p`** frame (one data byte, taken as
-  the same 0 = off / 1 = on as the `P` reply; reported by a user from the app's dev log on 20 Sep 2026,
-  not in the spec and not yet probed). `ScannerLink.onFrame` hands every frame, in wire order, to
-  `ScannerSession.onAnyFrame`, the one place that sets the snapshot's `power` (off on `p` 0, on at any other
-  frame after it, so a reply already on the wire before the `p` cannot undo it; cleared when the link is not
-  up). The top bar shows "Scanner off" while connected, and the keypad is held from that moment, not
+- Switching the scanner off makes it send its **`P`** power-status reply unprompted (one data byte, 0 = off;
+  seen in the app's dev log on 20 Sep 2026 as "unexpected frame 'P' (1 bytes)" followed by the stall; not in
+  the spec). `ScannerLink.onFrame` hands every frame, in wire order, to `ScannerSession.onAnyFrame`, the one
+  place that sets the snapshot's `power` (off on an unrequested `P` 0, on at any other frame after it, so a
+  reply already on the wire before the `P` cannot undo it; cleared when the link is not up). The top bar shows "Scanner off" while connected, and the keypad is held from that moment, not
   from the stall that follows a couple of seconds later.
 - See `docs/probe-results-2026-09-14.md` for the raw frames.
 

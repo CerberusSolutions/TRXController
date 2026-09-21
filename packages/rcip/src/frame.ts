@@ -95,8 +95,6 @@ export const RESPONSE_DATA_LENGTH: Readonly<Record<string, readonly number[] | n
   L: [99],
   V: [13],
   P: [1],
-  // Lowercase, undocumented: the scanner sends it unsolicited when it is switched off (data 0).
-  p: [1],
   a: null,
 };
 

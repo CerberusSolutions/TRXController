@@ -61,8 +61,8 @@ describe('parseResponse', () => {
 });
 
 describe('power notification', () => {
-  it("decodes the unsolicited lowercase 'p' the scanner sends when it is switched off", () => {
-    const p = parseResponse(decodeFrame(encodeFrame('p', [0])));
-    expect(p).toMatchObject({ code: 'p', power: { on: false, raw: 0 } });
+  it("decodes the 'P' the scanner sends unprompted when it is switched off", () => {
+    const p = parseResponse(decodeFrame(encodeFrame('P', [0])));
+    expect(p).toMatchObject({ code: 'P', power: { on: false, raw: 0 } });
   });
 });

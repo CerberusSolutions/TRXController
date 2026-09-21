@@ -251,8 +251,7 @@ export class ScannerSession {
         break;
       }
       case 'P':
-      case 'p':
-        // The scanner's power word; already taken by onAnyFrame.
+        // The scanner's power word, sent unprompted as it switches off; already taken by onAnyFrame.
         break;
       default:
         this.opts.log?.(`unexpected frame '${frame.codeChar}' (${frame.data.length} bytes)`);
@@ -267,12 +266,12 @@ export class ScannerSession {
   }
 
   /**
-   * Every frame in the order it arrived, matched to a request or not. 'p' is the scanner announcing
-   * its power state, unprompted, as it is switched off; any other frame after that means it is on
-   * again. Done here, once, so a reply that was already on the wire before the 'p' cannot undo it.
+   * Every frame in the order it arrived, matched to a request or not. An unrequested 'P' is the scanner
+   * announcing its power state as it is switched off; any other frame after that means it is on again.
+   * Done here, once, so a reply that was already on the wire before the 'P' cannot undo it.
    */
   private onAnyFrame(frame: Frame): void {
-    if (frame.codeChar === 'p' || frame.codeChar === 'P') {
+    if (frame.codeChar === 'P') {
       const power = safe(() => parsePower(frame.data));
       if (power) this.setPower(power.on, `scanner reports power ${power.on ? 'on' : 'off'}`);
     } else if (this.snapshot.power && !this.snapshot.power.on) {
