@@ -105,7 +105,8 @@ can be told apart and confirmed one code at a time.
 The **map** button beside the hero's Listed block, or beside any placed candidate in a log entry, opens a second
 window with you (your Data-dialog location) and every candidate for the frequency pinned on
 OpenStreetMap, coloured by source, with a dashed line to the one the log chose carrying its distance
-and bearing. It follows the scanner, or stays pinned to the log entry it was opened from; F toggles
+and bearing. It follows the scanner, moving to each station it stops on (or a frequency it has sat on
+for a second and a half) and staying put while it sweeps, or stays pinned to the log entry it was opened from; F toggles
 between following and holding the entry on show. Dock (or D) parks it against whichever side of the main window has room, square and as tall as the
 main window, and keeps it there as the main window moves; drag it away or press Dock again to free it. Keys: + and - zoom, arrows pan, A fits
 everything in, Z centres on you, D docks; ? in the window's bar lists them. A WTR pin marks

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DayLog, MapTarget, ReceptionRow } from '../../../shared/ipc';
-import { candidatesFor } from '../../../shared/listed';
+import { candidatesFor, type Candidate } from '../../../shared/listed';
 import { normaliseUnits, point } from '../../../shared/geo';
 import { activeIn, dayKey, dayPins, dayRange, shiftDay } from '../../../shared/dayMap';
 import { attachLogEvents, rowMatches, useLog } from '../store/log';
@@ -10,6 +10,8 @@ import { initTheme } from '../store/theme';
 import MapView, { type MapPoint } from './MapView';
 
 const EMPTY_DAY: DayLog = { rows: [], total: 0, truncated: false };
+/** How long the scanner must sit on a frequency with the squelch closed before the map follows it there. */
+const SETTLE_MS = 1500;
 /** Entries listed on a log-view pin's card before "and N more". */
 const CARD_LINES = 12;
 const PIN_SOURCES = new Set<MapPoint['source']>(['WTR', 'RRUK', 'RRDB', 'UKR', 'CONF']);
@@ -30,6 +32,8 @@ const samePoint = (a: { lat: number; lon: number }, b: { lat: number; lon: numbe
  */
 export default function MapApp() {
   const [target, setTarget] = useState<MapTarget>({ kind: 'follow' });
+  /** F with nothing logged on the frequency: the frequency and the pins on show, frozen until Follow. */
+  const [hold, setHold] = useState<{ hz: number | null; candidates: Candidate[] } | null>(null);
   const [picked, setPicked] = useState<string | null>(null);
   const [day, setDay] = useState(() => dayKey(new Date()));
   const [dayFilter, setDayFilter] = useState('');
@@ -53,6 +57,7 @@ export default function MapApp() {
     const offTarget = window.trx?.onMapTarget
       ? window.trx.onMapTarget((t) => {
           setTarget(t);
+          setHold(null);
           setPicked(t.kind === 'row' && t.pick !== undefined ? `c${t.pick}` : null);
           if (t.kind === 'day') {
             setDay(t.day ?? dayKey(new Date()));
@@ -70,14 +75,23 @@ export default function MapApp() {
     };
   }, []);
 
-  // F, or the Following button: following → hold the entry on show (nothing to hold before anything is
-  // logged on the frequency); held → follow the scanner again.
+  // F, or the Following button: following → hold what is on show (the log entry when there is one, else the
+  // frequency and its pins as they stand); held → follow the scanner again.
   const rowRef = useRef<ReceptionRow | null>(null);
+  const liveRef = useRef<{ hz: number | null; candidates: Candidate[] }>({ hz: null, candidates: [] });
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const holdRef = useRef(hold);
+  holdRef.current = hold;
   const toggleFollow = useCallback(() => {
-    setTarget((t) => {
-      if (t.kind !== 'follow') return { kind: 'follow' };
-      return rowRef.current ? { kind: 'row', row: rowRef.current } : t;
-    });
+    if (holdRef.current || targetRef.current.kind !== 'follow') {
+      setHold(null);
+      setTarget({ kind: 'follow' });
+    } else if (rowRef.current) {
+      setTarget({ kind: 'row', row: rowRef.current });
+    } else {
+      setHold({ ...liveRef.current });
+    }
     setPicked(null);
   }, []);
 
@@ -160,7 +174,26 @@ export default function MapApp() {
   const userLat = settings.lat;
   const userLon = settings.lon;
   const user = useMemo(() => (userLat !== null && userLon !== null ? { lat: userLat, lon: userLon } : null), [userLat, userLon]);
-  const hz = snapshot.status?.frequencyHz ?? null;
+  // Follow mode follows where the scanner *stops*, not every frequency it sweeps past (a scan retargeting
+  // the map several times a second, each with its own fit-to-bounds, makes people queasy): the frequency
+  // moves the map at once when the squelch opens on it, or once it has sat there for SETTLE_MS with the
+  // squelch closed (Tune Mode, a hold), and stays put otherwise.
+  const liveHz = snapshot.status?.frequencyHz ?? null;
+  const receiving = snapshot.status?.squelch.rf === true;
+  const [hz, setHz] = useState<number | null>(null);
+  useEffect(() => {
+    if (hold) return;
+    if (liveHz === null) {
+      setHz(null);
+      return;
+    }
+    if (receiving) {
+      setHz(liveHz);
+      return;
+    }
+    const t = setTimeout(() => setHz(liveHz), SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [liveHz, receiving, hold]);
 
   // The entry on show: the pinned row, else the log's newest entry on the scanner's frequency.
   const row: ReceptionRow | null = useMemo(() => {
@@ -216,9 +249,9 @@ export default function MapApp() {
       seen.add(k);
       out.push(p);
     };
-    const list = row
-      ? row.candidates
-      : candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups);
+    const live = candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups);
+    liveRef.current = { hz, candidates: live };
+    const list = row ? row.candidates : hold ? hold.candidates : live;
     list.forEach((c, i) => {
       const at = point(c.lat, c.lon);
       if (!at) return;
@@ -235,7 +268,7 @@ export default function MapApp() {
       add({ key: 'row', source, name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
     }
     return out;
-  }, [row, snapshot, dayView, dayShown]);
+  }, [row, snapshot, dayView, dayShown, hold, hz]);
   // The snapshot changes several times a second; the pins must only change when their content does, or
   // the map would rebuild them on every poll and lose the popup the user is opening.
   const pointsKey = JSON.stringify(rawPoints);
@@ -263,9 +296,11 @@ export default function MapApp() {
   const onPick = useCallback((key: string) => setPicked(key), []);
   const onTiles = useCallback((failing: boolean) => setTilesFailing(failing), []);
 
-  const mhz = row ? row.frequencyHz / 1e6 : hz !== null ? hz / 1e6 : null;
-  const title = row ? row.name || row.licensee || 'Unnamed' : hz !== null ? 'Nothing logged here yet' : 'No scanner';
-  const when = target.kind === 'row' ? new Date(target.row.startedAt).toLocaleString() : null;
+  const shownHz = hold ? hold.hz : hz;
+  const mhz = row ? row.frequencyHz / 1e6 : shownHz !== null ? shownHz / 1e6 : null;
+  const title = row ? row.name || row.licensee || 'Unnamed' : shownHz !== null ? 'Nothing logged here yet' : 'No scanner';
+  const when = target.kind === 'row' ? new Date(target.row.startedAt).toLocaleString() : hold ? 'Held' : null;
+  const holding = target.kind === 'row' || hold !== null;
 
   return (
     <div className="flex h-full flex-col">
@@ -330,9 +365,9 @@ export default function MapApp() {
             <button type="button" className={dayBtn} title="Back to the scanner: the pins follow the frequency again (L)" onClick={toggleDayView}>
               Live
             </button>
-          ) : target.kind === 'row' ? (
+          ) : holding ? (
             <>
-              <span className="text-[11px] text-ink-3" title="Held on one log entry">{when}</span>
+              <span className="text-[11px] text-ink-3" title={hold ? 'Held on this frequency and its pins' : 'Held on one log entry'}>{when}</span>
               <button
                 type="button"
                 className="no-drag rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink"
@@ -346,7 +381,7 @@ export default function MapApp() {
             <button
               type="button"
               className="no-drag rounded-md border border-green/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-green hover:bg-panel-2"
-              title={row ? 'Following the scanner: the pins change with the frequency. Click (or F) to hold this entry.' : 'Following the scanner: the pins change with the frequency.'}
+              title={row ? 'Following the scanner: the pins move to each station it stops on, never while it sweeps. Click (or F) to hold this entry.' : 'Following the scanner: the pins move to each station it stops on, never while it sweeps.'}
               onClick={toggleFollow}
             >
               Following
@@ -410,7 +445,7 @@ export default function MapApp() {
                     ['Arrows', 'Pan'],
                     ['A', 'Fit everything in: you and every pin'],
                     ['Z', 'Centre on your location'],
-                    ['F', 'Hold the entry on show, or follow the scanner again'],
+                    ['F', 'Hold what is on show, or follow the scanner again (it follows where the scanner stops, not the sweep)'],
                     ['L', 'The Log view: one day of the log, a count on each pin; L again for the scanner'],
                     ['[ / ]', 'Log view: the day before / after'],
                     ['D', 'Dock beside the main window, or set it free'],
