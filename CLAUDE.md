@@ -370,7 +370,7 @@ captured on 14 Sep 2026.
   move / resize events re-place it (`placingMap` guards our own moves); a hand drag or resize that leaves
   the docked bounds undocks; maximising the main window undocks. `settings.mapDock` remembers the side
   (re-docked on open), `settings.mapWindow` the free placement (restored via `savedBounds`). The map's
-  bar has Dock / Undock and the D key. Linux tiling / Wayland compositors may refuse the placement.
+  bar has Dock / Undock, the D key, and a ? button (or the ? key) opening a keys-and-legend panel over the map. Linux tiling / Wayland compositors may refuse the placement.
 - Positions: `Candidate`, `ReceptionRow` (`lat` / `lon` columns, migrated) and `Confirmation` carry the
   point the distance was measured to (licence, repeater, RRUK entry, RadioReference site or system centre,
   county centre: `RrConventional` / `RrSystemInfo` got `lat` / `lon` in `rrService`); the tracker moves it
