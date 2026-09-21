@@ -30,9 +30,13 @@
   --t-key-active: #26334a;
   --t-scroll: #2a3648;
   --t-scroll-hover: #3b4b64;
-  --t-lcd: #0c1410;
-  --t-lcd-ink: #d7f4e3;
-  --t-lcd-dim: #3f5a4a;
+  /* The scanner's own display: amber backlight, dark segments, the same in both themes; unlit when
+     nothing is connected or the scanner is off. */
+  --t-lcd: #f2a83c;
+  --t-lcd-ink: #1c1407;
+  --t-lcd-dim: #6b4a17;
+  --t-lcd-off: #2b2a27;
+  --t-lcd-off-ink: #5a5750;
 }
 
 :root[data-theme="light"] {
@@ -81,6 +85,8 @@
   --color-lcd: var(--t-lcd);
   --color-lcd-ink: var(--t-lcd-ink);
   --color-lcd-dim: var(--t-lcd-dim);
+  --color-lcd-off: var(--t-lcd-off);
+  --color-lcd-off-ink: var(--t-lcd-off-ink);
   --font-mono: "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-sans: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
 }
@@ -99,7 +105,7 @@ body {
 .key {
   @apply relative flex flex-col items-center justify-center rounded-lg border border-edge bg-panel-2 text-ink
          transition-[transform,background-color,box-shadow] duration-75 select-none;
-  min-height: 3.1rem;
+  min-height: 2.5rem;
 }
 .key:hover { background: var(--t-key-hover); }
 .key:active, .key.pressed { transform: translateY(1px); background: var(--t-key-active); box-shadow: inset 0 0 0 1px var(--t-cyan); }
@@ -113,12 +119,13 @@ body {
 .key .sub { @apply text-[10px] text-ink-3 leading-none mt-0.5 tracking-wide uppercase; }
 
 .lcd-line { white-space: pre; }
-/* Six lines at up to 22px, shrinking (padding included) so the whole screen fits the tab
-   without scrolling: available height minus the 1.75rem header row, over 6 x 1.35 line
-   heights plus 2 x 0.55em padding. */
-.lcd-fit { container-type: size; }
-.lcd-screen { font-size: clamp(10px, calc((100cqh - 1.75rem) / 9.2), 22px); padding: 0.55em 0.75em; }
-.lcd-cursor { background: rgba(215, 244, 227, 0.14); }
+/* The screen in the radio panel: a fixed 13px so the column fits a 780px window. */
+.lcd-screen { padding: 0.5em 0.7em 0.55em; }
+.lcd-radio { font-size: 13px; }
+.lcd-icons { display: flex; flex-wrap: nowrap; gap: 0.55em; overflow: hidden; font-size: 0.72em; letter-spacing: 0.06em; line-height: 1.5; margin-bottom: 0.15em; font-weight: 700; }
+.lcd-icons span { white-space: nowrap; }
+.lcd-cursor { background: rgba(28, 20, 7, 0.16); }
+.lcd-off .lcd-cursor { background: transparent; }
 
 /* Frameless window: the top bar is the drag handle; controls opt out. */
 .app-drag { -webkit-app-region: drag; }

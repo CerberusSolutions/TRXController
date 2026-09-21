@@ -20,7 +20,7 @@ export const KEYPAD_ROWS: KeyDef[][] = [
   ],
   [
     { code: Key.LEFT, label: '◄', variant: 'nav', keys: ['ArrowLeft'] },
-    { code: Key.SEL, label: 'SEL', sub: 'PLAY · PAUSE', variant: 'sel', keys: ['Enter', ' '] },
+    { code: Key.SEL, label: 'SEL', variant: 'sel', keys: ['Enter', ' '] },
     { code: Key.RIGHT, label: '►', variant: 'nav', keys: ['ArrowRight'] },
   ],
   [
@@ -31,7 +31,7 @@ export const KEYPAD_ROWS: KeyDef[][] = [
   [
     { code: Key.FN, label: 'Fn', variant: 'fn', keys: ['f'] },
     { code: Key.PRI, label: 'PRI', variant: 'fn', keys: ['p'] },
-    { code: Key.POWER, label: '⏻', sub: 'hold', variant: 'power' },
+    { code: Key.POWER, label: '⏻', variant: 'power' },
   ],
   [
     { code: Key.DIGIT_1, label: '1', variant: 'digit', keys: ['1'] },

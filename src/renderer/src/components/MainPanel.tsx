@@ -1,22 +1,27 @@
 import { useEffect, useState } from 'react';
 import BandChart from './BandChart';
-import LcdPanel from './LcdPanel';
+import DebugPanel from './LcdPanel';
 import LogTable from './LogTable';
+import { useUi } from '../store/ui';
 
-type Tab = 'log' | 'band' | 'display';
+/** The scanner's display used to be a tab here ('display'); it now lives over the keypad, and the raw bytes moved to Debug. */
+type Tab = 'log' | 'band' | 'debug';
 const KEY = 'trx.mainTab';
 
 function loadTab(): Tab {
   try {
     const v = localStorage.getItem(KEY);
-    return v === 'display' || v === 'band' ? v : 'log';
+    return v === 'band' || v === 'debug' ? v : 'log';
   } catch {
     return 'log';
   }
 }
 
 export default function MainPanel() {
-  const [tab, setTab] = useState<Tab>(loadTab);
+  const [stored, setTab] = useState<Tab>(loadTab);
+  const diagnostics = useUi((s) => s.diagnostics);
+  // Debug is only there while diagnostics is on (Ctrl+Shift+D); switching it off drops back to the log.
+  const tab: Tab = stored === 'debug' && !diagnostics ? 'log' : stored;
   useEffect(() => {
     try {
       localStorage.setItem(KEY, tab);
@@ -41,10 +46,10 @@ export default function MainPanel() {
       <div className="mb-3 flex items-center gap-1">
         {btn('log', 'Log')}
         {btn('band', 'Band')}
-        {btn('display', 'Scanner display')}
+        {diagnostics && btn('debug', 'Debug')}
       </div>
-      <div className={`min-h-0 flex-1 ${tab === 'display' ? 'overflow-y-auto' : ''}`}>
-        {tab === 'log' ? <LogTable /> : tab === 'band' ? <BandChart /> : <LcdPanel embedded />}
+      <div className={`min-h-0 flex-1 ${tab === 'debug' ? 'overflow-y-auto' : ''}`}>
+        {tab === 'log' ? <LogTable /> : tab === 'band' ? <BandChart /> : <DebugPanel />}
       </div>
     </section>
   );

@@ -327,7 +327,7 @@ captured on 14 Sep 2026.
   paging back until it does or the log runs out. The table is virtualised (`@tanstack/react-virtual`:
   only the rows in view are in the page, rows measured so unfolded ones fit) and `Row` is memoised,
   the per-second duration tick reaching open rows only. Live-updated over `log:upsert`, in a tab
-  that shares the panel under the hero with the raw scanner display. The CSV button saves
+  that shares the panel under the hero with the Band view (and Debug, diagnostics only). The CSV button saves
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
   columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
@@ -422,7 +422,13 @@ captured on 14 Sep 2026.
 - Colour tokens live in `src/renderer/src/index.css` as `--t-*` on `:root` (dark) and
   `:root[data-theme="light"]`, mapped to Tailwind via `@theme inline`, so `bg-panel`,
   `text-ink` etc. follow the theme. Never hard-code a colour in a component; add a token.
-- The scanner display panel keeps its dark colours in both themes.
+- The scanner's display (`LcdScreen` in `components/LcdPanel.tsx`, over the keypad in the right column) is amber with dark segments in both themes (`--t-lcd`, `--t-lcd-ink`), as the TRX's own
+  backlit LCD is; UAT testers asked for it to look like the radio and be always visible. The icon strip along
+  its top (`iconStrip`: RSSI bars, S, BATT, EXT, Fn, G, A, T, ▶, ❚❚, the signal type, IF, TRUNK2, PRI, TRUNKS)
+  follows the TRX's own order. Unlit (`--t-lcd-off`, nothing drawn) while no scanner is connected or the
+  scanner is off; the "Scanner off" / "Scanner busy" badge sits on the screen. Sized at 13px so the whole
+  right column (screen, keys at 2.5rem, Tune box) fits the 1320 x 780 default without scrolling: check
+  that whenever the column changes.
 - `ThemeToggle` (sun / moon / monitor) in the top bar sets `trx.theme` in localStorage
   and tells main over IPC; main sets `nativeTheme.themeSource`, which also flips
   `prefers-color-scheme` in the renderer (how "system" resolves) and recolours the
@@ -465,8 +471,9 @@ captured on 14 Sep 2026.
   Updates section with the installer link. Notification only, never an auto-install (the exe is
   unsigned). Failures are silent (null).
 - Testing aids stay out of the normal UI: `useUi.diagnostics` (Ctrl+Shift+D, persisted in
-  localStorage, `DIAG` tag in the status bar) gates the hex / copy dump on the Scanner display
-  tab. Put any future debugging control behind the same flag.
+  localStorage, `DIAG` tag in the status bar) adds the **Debug** tab (`DebugPanel`: the display's raw bytes line by line with
+  the text beside them, its icon flags spelled out, a copy button; the screen itself stays over the keypad) beside Log and Band; it disappears with the
+  flag, dropping back to the log. Put any future debugging control behind the same flag.
 
 ## Window chrome
 
@@ -489,9 +496,9 @@ captured on 14 Sep 2026.
   supplied in session 2).
 - Layout decision (session 2): the frequency is the hero at the top of the main panel,
   the channel name and system/scanlist sit directly beneath it, then a parameter row
-  (type, TGID, radio ID, site, squelch, control channel, start time). The raw scanner
-  LCD sits below that, the keypad in a right-hand column, and the log table will go
-  under the LCD in session 3. Dark theme; amber frequency digits; segmented signal
+  (type, TGID, radio ID, site, squelch, control channel, start time). The log table goes
+  under that; the right-hand column is the radio, the scanner's own LCD over the keypad
+  (moved there from a tab on 21 Sep 2026 at the UAT testers' request). Dark theme; amber frequency digits; segmented signal
   meter driven by the LCD RSSI bars (0-5), with the raw RSSI shown as a number.
 - Channel identity comes from `a` while receiving (object tag, system tag), falling back
   to the scan-mode LCD lines (line 1 scanlist, line 3 object name). For conventional
@@ -507,7 +514,8 @@ captured on 14 Sep 2026.
   it drops or when the frequency changes, so TGID, radio ID and slot show together.
 - Keypad rows in `src/renderer/src/lib/keypad.ts` are a design choice, not the
   scanner's physical layout. Keyboard shortcuts map onto the same table. POWER needs a
-  second click within 2.5 s.
+  second click within 2.5 s. Only the knob keys carry a sub-label (SEL's "PLAY · PAUSE" and
+  POWER's "hold" went when the keys shrank to make room for the display).
 - Further references (Butel ARC DV1 PRO, ARC125): big frequency in a display panel,
   keypad beside it, history log table underneath.
 - Additional reference: ARC536PRO (Uniden SDS). Not the best, but clear: an LCD-like

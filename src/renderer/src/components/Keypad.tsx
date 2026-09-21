@@ -3,6 +3,7 @@ import { Key } from '@trxcontroller/rcip';
 import { KEYPAD_ROWS, keyDefForKeyboard, type KeyDef } from '../lib/keypad';
 import { useScanner } from '../store/scanner';
 import { useUi } from '../store/ui';
+import { LcdScreen } from './LcdPanel';
 
 const POWER_CONFIRM_MS = 2500;
 
@@ -56,19 +57,21 @@ export default function Keypad() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, armPower]);
 
+  // The radio: the scanner's own display over its keys, as on the front panel, then the Tune box.
   return (
-    <section className="rounded-xl border border-edge bg-panel p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Keypad</span>
-        {stalled || off ? (
-          <span className="rounded-md border border-amber/60 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber" title="The scanner is not answering; key presses would queue up and fire later, so the keypad is held.">
+    <section className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-edge bg-panel p-3">
+      <div className="relative mb-2.5">
+        <LcdScreen />
+        {(stalled || off) && (
+          <span
+            className="absolute right-2 bottom-2 rounded-md border border-amber/60 bg-panel/90 px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest text-amber"
+            title="The scanner is not answering; key presses would queue up and fire later, so the keypad is held."
+          >
             {off ? 'Scanner off' : 'Scanner busy'}
           </span>
-        ) : (
-          <span className="text-[11px] text-ink-3">arrows · Enter · Esc · 0-9</span>
         )}
       </div>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         {KEYPAD_ROWS.flat().map((def) => {
           const pressed = lastKey === def.code;
           const isPower = def.code === Key.POWER;
@@ -87,7 +90,7 @@ export default function Keypad() {
           );
         })}
       </div>
-      <div className="mt-3 border-t border-edge pt-3">
+      <div className="mt-2.5 border-t border-edge pt-2.5">
         <div className="mb-1.5 flex items-center justify-between">
           <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Tune</span>
           <span className="text-[11px] text-ink-3">via Searches › Tune Mode</span>
