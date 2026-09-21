@@ -24,7 +24,7 @@
  *   as uint32 Hz (found by EZ Scan's own saves, one change each, 21 Sep 2026).
  */
 import { CHANNEL_SEARCHES } from '../../shared/searchChannels';
-import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type DMode, type ProgSearch, type SearchOptions, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
+import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_LOCKOUTS_END, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type DMode, type ProgSearch, type SearchOptions, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
 import { keystream } from './keystream';
 
 export const OBJECT_RECORD = 126;
@@ -204,7 +204,7 @@ export function parseGlobals(glb: Uint8Array): ProgGlobals {
   for (let i = 0; i < 5; i++) signalBars.push(u16(glb, 100 + i * 2));
   const tune = glb.length >= 157 ? u32(glb, 153) : 0;
   const lockoutsHz: number[] = [];
-  for (let o = GLB_LOCKOUTS; o + 4 <= glb.length; o += 4) {
+  for (let o = GLB_LOCKOUTS; o + 4 <= Math.min(glb.length, GLB_LOCKOUTS_END); o += 4) {
     const hz = u32(glb, o);
     if (plausibleHz(hz)) lockoutsHz.push(hz);
   }

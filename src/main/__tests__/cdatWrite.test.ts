@@ -131,6 +131,7 @@ describe('patchPldef / patchGlb', () => {
     expect(centre('Trunking Scanner')).toBe('Trunking Scanner');
     expect(centre('a much longer line than fits')).toBe('a much longer li');
     const glb = new Uint8Array(1706);
+    glb.set([0x02, 0x00, 0x42, 0x01, 0x40, 0x00, 0xfc, 0x01, 0, 0, 0, 0], 1694);
     glb[573] = 0x16;
     glb[575] = 0x0b;
     glb[589] = 0x06;
@@ -169,6 +170,9 @@ describe('patchPldef / patchGlb', () => {
     expect([out[571], out[572], out[573], out[575], out[589], out[590], out[598], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0x06, 0xff, 0x0a, 0x1e]);
     // CB UK at 615, VHF Marine at 633, PMR446 at 651, Mosque at 669.
     expect([out[615], out[616], out[617], out[633], out[634], out[651], out[669]]).toEqual([0x0a, 0xfc, 0xff, 0x0a, 0xfd, 0x0a, 0x06]);
+    // The 12 bytes after the 250-slot lockout table are not the table's: the writer leaves them alone.
+    expect([...out.subarray(1694, 1706)]).toEqual([...glb.subarray(1694, 1706)]);
+    expect(out.subarray(694, 1694).filter((b) => b !== 0)).toHaveLength(8);
     // The signal bars as little-endian uint16 at 100.
     expect([...out.subarray(100, 110)]).toEqual([0xbe, 0x00, 0xe6, 0x00, 0x04, 0x01, 0x22, 0x01, 0x41, 0x01]);
     expect(out[616 + 5]).toBe(0xff); // CB has 40 rows: bits past them stay as read

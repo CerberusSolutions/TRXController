@@ -511,15 +511,19 @@ captured on 14 Sep 2026.
   after them; the tenth byte is EZ Scan's memory garbage, written 0), PLDEF / PLSETS keep the other bits of their
   flag bytes (EZ Scan's Default tick on a scanlist is not on the card: a save with it on AIR left every PLDEF byte alone,
   so the editor has no Default), DESCRIPT.TXT is plain text in four
-  16-character lines, 64 bytes (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 2-3
+  16-character lines, 64 bytes (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 0-1 are its length (1,706, or 1,717 on a live TRX-1e card seen 21 Sep 2026, which carries 11 more bytes
+  after the tail) and bytes 2-3
   are a check, the one's complement of the 16-bit byte sum from byte 4 (`glbChecksum`, rewritten on every change);
   the five signal-bar RSSI thresholds are uint16 at 100 (`GLB_SIGNAL_BARS`, edited on the General tab), the search delay is at 512 in tenths, the WX button's search at 566 (0 Pub Safety, 3 Amateur; `WX_BUTTON`) and the
-  lockout table runs from 694 to the end as uint32 Hz, lowest first (all found by EZ Scan's one-change saves, 21 Sep
+  lockout table is 250 uint32 Hz slots from 694 to 1694 (`GLB_LOCKOUT_SLOTS`), lowest first, zero after the last; the 12 bytes
+  after it (`02 00 42 0x 40 00 fc 0x 00 00 00 00` on every card) are not lockouts and are kept as read, as is anything past them
+  (they read as a 33.29 MHz lockout until the table was bounded, 21 Sep 2026) (all found by EZ Scan's one-change saves, 21 Sep
   2026); the Search tab (`ProgSearch.tsx`) edits those, plus the search blocks: Sweeper groups as bits at 571-572 with
   Special Mode bit 5 of 573 (the Sweeper's other option bits have their own layout, kept), Limit flags at 575 with its
   range as uint32 Hz at 576 / 580, U/VHF AM flags at 589 and four group bits at 590, Amateur flags at 598 and groups at 599, Public
   Safety flags at 607 and five group bits at 608; in a flags byte bit 0 is Zeromatic, bit 2 Attenuator, bit 3 Delay
-  (`FLAG_*`). The four channel-table searches (a flags byte then 128 channel bits, row n = bit n: CB UK at 615, VHF Marine 633,
+  (`FLAG_*`); after each block's group byte(s) comes a uint32 Hz, the search's resume position (25 MHz on a fresh card, mid-band on a
+  used one), then a byte or two of state, all kept as read. The four channel-table searches (a flags byte then 128 channel bits, row n = bit n: CB UK at 615, VHF Marine 633,
   PMR446 651, Mosque 669, all proven by EZ Scan's saves moving the expected bits, `GLB_CHANNEL_BLOCKS`) are ticks over the scanner's fixed tables in `src/shared/searchChannels.ts` (CB UK 40,
   Mosque 23, VHF Marine 97 rows on the ITU plan, PMR446 16 analogue + 16 digital, from EZ Scan's lists); bits past a
   table's rows are left as read. `settings.programmingRecent` is the folders opened, most recent
@@ -535,10 +539,14 @@ captured on 14 Sep 2026.
   bar's Program button. The General tab (`ProgGeneral.tsx`) is a card grid like the Search tab: welcome text, scanlist control,
   scan sets and signal bars are the card's; every other EZ Scan General Settings / Advanced Features group is a greyed
   "Not decoded" card showing EZ Scan's defaults (`GENERAL_PENDING` / `ADVANCED_PENDING`) until its bytes are found.
-  Candidates from two cards, unproven by a save: GLB bytes 8-12 read 5, 12, 20, 20, 15 on the UK Starter, EZ Scan's
-  Backlight Timeout, Contrast, Speaker, Headphone and Key (or Alert) Volume (the second card has 5, 12, 21, 25, 5);
+  Candidates from three cards, unproven by a save: GLB bytes 8-12 read 5, 12, 20, 20, 15 on the UK Starter, EZ Scan's
+  Backlight Timeout, Contrast, Speaker, Headphone and Key (or Alert) Volume (the second card has 5, 12, 21, 25, 5; the author's
+  own V-Scanner 5, 12, 19, 19, 8 with bytes 5-6 `04 00` where every other card has `03 03` and 13-14 `0f 13` against `1f 1f`,
+  so reading EZ Scan's General screen for that folder places them by value);
   uint16 at 176 = 1180, 178 = 520 and 192 = 50 match ZeroMatic's Threshold, Slope and Delay; the ten SAME weather
-  entries (name, six-digit FIPS, `***`) run from 209 in 29-byte records. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
+  entries (name, six-digit FIPS, `***`) run from 209 in 29-byte records. `ISCAN___.TSM` is 8 bytes per `TSnnnnnn` file (copied
+  verbatim, like the fixed-size `_GI` / `_PD` / `_PI` files beside a trunked system). The author's V-Scanner has WX button code 20
+  and three objects with squelch type bytes 2 and 3 (index 0x6f, 0x77, 0x77 at 104), not yet named: DCS is never written until they are. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
   Enter, Esc reverts; a change to a row inside the selection applies to every selected row, which is the bulk
   edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK
   (`rruk:lookup` IPC), RadioReference and the repeater list, and a pick names the channel with the tone and mode

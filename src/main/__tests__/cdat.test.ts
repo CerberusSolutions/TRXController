@@ -106,6 +106,8 @@ describe('parseCdat', () => {
     glb.set([tune & 0xff, (tune >> 8) & 0xff, (tune >> 16) & 0xff, (tune >>> 24) & 0xff], 153);
     glb[512] = 30;
     glb[566] = 3;
+    // The bytes after the 250-slot lockout table, as a real card has them: 0x01fc0040 would read as 33.29 MHz.
+    glb.set([0x02, 0x00, 0x42, 0x01, 0x40, 0x00, 0xfc, 0x01, 0, 0, 0, 0], 1694);
     // The search blocks as EZ Scan's save 3 left them (sweeper 1 off, special mode on; PS 1 and zeromatic off).
     glb.set([0xa4, 0x7d, 0x36, 0x06, 0x0b, 0x40, 0x78, 0x7d, 0x01, 0x00, 0x6d, 0x7c, 0x4d], 571);
     glb.set([0x03, 0x06, 0x02], 588);

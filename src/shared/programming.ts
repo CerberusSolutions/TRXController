@@ -141,8 +141,14 @@ export const GLB_CHANNELS_END = 669 + 17;
 
 /** WX button operations by code: EZ Scan's dropdown order (Amateur = 3 seen on a card). */
 export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 1: 'U/VHF AM', 2: 'Mosque', 3: 'Amateur', 4: 'CB UK', 5: 'VHF Mar', 6: 'PMR446' };
-/** How many lockouts ISCAN___.GLB holds: its table runs from `GLB_LOCKOUTS` to the end of the 1,706-byte file. */
+/**
+ * ISCAN___.GLB's lockout table: 250 uint32 Hz slots from 694 to 1694, lowest first, zero after the last. The 12 bytes
+ * after it (`02 00 42 0x 40 00 fc 0x 00 00 00 00` on every card seen) are something else and are kept as read, as are
+ * the 11 further bytes a 1,717-byte file carries; bytes 0-1 of the file are its length.
+ */
 export const GLB_LOCKOUTS = 694;
+export const GLB_LOCKOUT_SLOTS = 250;
+export const GLB_LOCKOUTS_END = GLB_LOCKOUTS + GLB_LOCKOUT_SLOTS * 4;
 /** The five signal-bar RSSI thresholds, uint16 each, ascending (EZ Scan's defaults 190, 230, 260, 290, 320). */
 export const GLB_SIGNAL_BARS = 100;
 export const GLB_SEARCH_DELAY = 512;
