@@ -365,8 +365,9 @@ captured on 14 Sep 2026.
   `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
 - Docking (`dockMap` / `undockMap` / `followDock` in `src/main/index.ts`, `map:dock` IPC with `auto` /
   `left` / `right` / `off`, state pushed as `map:dock-state`): the map is set against the side of the main
-  window that has room (`dockedBounds`: same y and height, filling to the display's work-area edge), else
-  the other side, else the display is split (main ~62%, `win.setBounds`). While docked the main window's
+  window that has room (`dockedBounds`: same y and height, square, i.e. as wide as the main window is tall, or as wide as the
+  room allows if less, so an ultrawide does not hand it the whole remainder), else the other side, else the
+  display is split (the map a square of the display's height, `win.setBounds` for the main window). While docked the main window's
   move / resize events re-place it (`placingMap` guards our own moves); a hand drag or resize that leaves
   the docked bounds undocks; maximising the main window undocks. `settings.mapDock` remembers the side
   (re-docked on open), `settings.mapWindow` the free placement (restored via `savedBounds`). The map's

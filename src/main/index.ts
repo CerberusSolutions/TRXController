@@ -627,16 +627,21 @@ function rememberMapBounds(): void {
   }, 400);
 }
 
-/** Where the map goes on one side of the main window, filling that side of the display; null when the side has no room. */
+/**
+ * Where the map goes on one side of the main window: the main window's height, and square (as wide as it
+ * is tall) or as wide as the room allows, whichever is less, so an ultrawide display does not hand it a
+ * mile of map. Null when the side has no room for the smallest useful map.
+ */
 function dockedBounds(side: MapDockSide): Rectangle | null {
   if (!win || win.isDestroyed()) return null;
   const main = win.getBounds();
   const area = screen.getDisplayMatching(main).workArea;
   const right = area.x + area.width - (main.x + main.width);
   const left = main.x - area.x;
-  if (side === 'right' && right >= MAP_MIN_WINDOW.width) return { x: main.x + main.width, y: main.y, width: right, height: main.height };
-  if (side === 'left' && left >= MAP_MIN_WINDOW.width) return { x: area.x, y: main.y, width: left, height: main.height };
-  return null;
+  const room = side === 'right' ? right : left;
+  if (room < MAP_MIN_WINDOW.width) return null;
+  const width = Math.min(room, Math.max(MAP_MIN_WINDOW.width, main.height));
+  return { x: side === 'right' ? main.x + main.width : main.x - width, y: main.y, width, height: main.height };
 }
 
 function placeMap(b: Rectangle): void {
@@ -674,7 +679,8 @@ function dockMap(side: MapDockSide | 'auto'): void {
     // No room either side: split the display between the two, the main window keeping about 62%.
     if (win.isMaximized()) win.unmaximize();
     const area = screen.getDisplayMatching(win.getBounds()).workArea;
-    const mapW = Math.max(MAP_MIN_WINDOW.width, Math.round(area.width * 0.38));
+    // A square map of the display's height, the main window keeping the rest (never below its own minimum).
+    const mapW = Math.min(Math.max(MAP_MIN_WINDOW.width, area.height), area.width - MIN_WINDOW.width);
     const mainW = area.width - mapW;
     got = prefer;
     if (got === 'left') {
