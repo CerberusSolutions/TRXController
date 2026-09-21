@@ -493,6 +493,19 @@ captured on 14 Sep 2026.
   broadcasts `app:update`; the top bar shows a "vX available" link and the help screen an
   Updates section with the installer link. Notification only, never an auto-install (the exe is
   unsigned). Failures are silent (null).
+- **Programming window (development builds only, deliberately undocumented):** `src/main/programming/` reads
+  the scanner's SD-card programming, EZ Scan's CDAT folder (the card mounts as a drive while the scanner is
+  off): `keystream.ts` is the 13,568-byte repeating XOR key every CDAT file is obfuscated with (recovered from a
+  near-empty index file, confirmed identical on a second card); `cdat.ts` is the pure parser, its header comment
+  the field map (126-byte object records: name at 49, Hz at 98, modulation 102, squelch 103/104, scanlist bitmap
+  at 12, LED 68-71, delay 66, skip 39, backlight 81, DMR flag 122; scanlists from PLDEF.DAT with membership from
+  the bitmaps, scan sets from PLSETS.DAT, welcome text and signal bars from ISCAN___.GLB, trunked systems from
+  TSnnnnnn._TS/_GD), worked out against two cards' EZ Scan CSV exports (every varying column matched on all
+  7,412 objects); `locate.ts` finds mounted CDAT folders and reads one. Main registers the `programming:*` IPC and
+  the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General / Scanlists
+  / Conventional / Trunked, read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top bar's Program
+  button. Nothing about it goes in the README, the website or the help screen, on the author's instruction;
+  writing to the card is not attempted (the object file's 17-byte header signature is not understood).
 - Testing aids stay out of the normal UI: `useUi.diagnostics` (Ctrl+Shift+D, persisted in
   localStorage, `DIAG` tag in the status bar) adds the **Debug** tab (`DebugPanel`: the display's raw bytes line by line with
   the text beside them, its icon flags spelled out, a copy button; the screen itself stays over the keypad) beside Log and Band; it disappears with the

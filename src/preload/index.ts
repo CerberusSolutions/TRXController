@@ -26,6 +26,7 @@ import {
   type RrukStatus,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
+import type { CdatCandidate, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
@@ -104,6 +105,11 @@ const api = {
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
+  /** Development only (no-ops in a packaged build): the scanner's SD-card programming. */
+  programmingOpen: (): Promise<void> => ipcRenderer.invoke(IPC.programmingOpen),
+  programmingLocate: (): Promise<CdatCandidate[]> => ipcRenderer.invoke(IPC.programmingLocate),
+  /** Read a CDAT folder; without `dir` a folder dialog asks for it. Null when cancelled. */
+  programmingLoad: (dir?: string): Promise<Programming | null> => ipcRenderer.invoke(IPC.programmingLoad, dir),
   /** Open (or refocus) the map window on the scanner's current frequency, on one log entry, or on one day of the log. */
   mapOpen: (target: MapTarget): Promise<void> => ipcRenderer.invoke(IPC.mapOpen, target),
   /** The map window's own feed: what to show, sent on open and each time the map button is pressed again. */

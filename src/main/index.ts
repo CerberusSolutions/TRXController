@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { isDayKey } from '../shared/dayMap';
+import { locateCdat, readCdat } from './programming/locate';
+import type { Programming } from '../shared/programming';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -229,6 +231,20 @@ function isLogCursor(v: unknown): v is LogCursor {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
+  // Development only: the scanner's SD-card programming. Not registered in a packaged build, so the
+  // renderer's calls resolve to nothing there and no window can be opened.
+  if (!app.isPackaged) {
+    ipcMain.handle(IPC.programmingOpen, () => openProgramming());
+    ipcMain.handle(IPC.programmingLocate, () => locateCdat());
+    ipcMain.handle(IPC.programmingLoad, async (_e, dir: unknown): Promise<Programming | null> => {
+      let folder = typeof dir === 'string' && dir ? dir : null;
+      if (!folder) {
+        const res = await dialog.showOpenDialog({ title: "Choose the scanner card's CDAT folder", properties: ['openDirectory'] });
+        folder = res.canceled ? null : (res.filePaths[0] ?? null);
+      }
+      return folder ? readCdat(folder) : null;
+    });
+  }
   ipcMain.handle(IPC.mapDock, (_e, side: unknown) => {
     if (side === 'off') undockMap();
     else dockMap(side === 'left' || side === 'right' ? side : 'auto');
@@ -257,7 +273,7 @@ function registerIpc(): void {
   });
   ipcMain.handle(
     IPC.appInfo,
-    (): AppInfo => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron ?? '' }),
+    (): AppInfo => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron ?? '', dev: !app.isPackaged }),
   );
   ipcMain.handle(IPC.updateCheck, () => latestUpdate);
   ipcMain.handle(IPC.sendKey, async (_e, code: unknown) => {
@@ -719,6 +735,27 @@ function followDock(): void {
   if (b) placeMap(b);
 }
 
+let progWin: BrowserWindow | null = null;
+
+/** The Programming window (development only): the renderer's `#programming` route, one at a time. */
+function openProgramming(): void {
+  if (progWin && !progWin.isDestroyed()) {
+    if (progWin.isMinimized()) progWin.restore();
+    progWin.focus();
+    return;
+  }
+  progWin = new BrowserWindow({ ...windowChrome(), width: 1180, height: 760, minWidth: 900, minHeight: 560, title: 'TRXController programming' });
+  progWin.on('ready-to-show', () => progWin?.show());
+  progWin.on('closed', () => {
+    progWin = null;
+  });
+  progWin.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  loadRenderer(progWin, 'programming');
+}
+
 function isMapTarget(v: unknown): v is MapTarget {
   if (!v || typeof v !== 'object') return false;
   const t = v as { kind?: unknown; row?: unknown; day?: unknown; filter?: unknown };
@@ -754,6 +791,7 @@ function createWindow(): void {
   win.on('closed', () => {
     win = null;
     if (mapWin && !mapWin.isDestroyed()) mapWin.close();
+    if (progWin && !progWin.isDestroyed()) progWin.close();
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
