@@ -111,6 +111,11 @@ describe('parseCdat', () => {
     glb.set([0x03, 0x06, 0x02], 588);
     glb.set([0x03, 0x0b, 0xff], 597);
     glb.set([0x03, 0x0a, 0x1e], 606);
+    for (const o of [615, 633, 651, 669]) {
+      glb[o] = 0x0a;
+      glb.fill(0xff, o + 1, o + 17);
+    }
+    glb[616] = 0xfc; // CB UK channels 1 and 2 off
     for (const [i, hz] of [450_500_000, 145_500_000].entries()) glb.set([hz & 0xff, (hz >> 8) & 0xff, (hz >> 16) & 0xff, (hz >>> 24) & 0xff], 694 + i * 4);
     enc('ISCAN___.GLB', glb);
     const ts = new Uint8Array(35 + 654 * 2);
@@ -154,8 +159,12 @@ describe('parseCdat', () => {
         uvhfAm: { attenuator: true, zeromatic: false, delay: false, groups: [false, true, false, false] },
         sweeper: { specialMode: true, groups: [false, false, true, false, false, true, false, true, true, false] },
         amateur: { groups: [true, true, true, true, true, true, true, true] },
+        channels: expect.objectContaining({ cbUk: expect.objectContaining({ delay: true, attenuator: false, enabled: [false, false, ...Array(38).fill(true)] }) }),
       },
     });
+    expect(p.globals.search!.channels.pmr446.enabled).toHaveLength(32);
+    expect(p.globals.search!.channels.vhfMarine.enabled).toHaveLength(97);
+    expect(p.globals.search!.channels.mosque.enabled).toHaveLength(23);
     expect(p.trunked).toHaveLength(1);
     expect(p.trunked[0]).toMatchObject({ number: 1, name: 'USAF Bases UK' });
     expect(p.trunked[0]!.sites.map((s) => [s.name, s.frequenciesHz])).toEqual([

@@ -1,3 +1,5 @@
+import type { ChannelSearch } from './searchChannels';
+
 /**
  * The scanner's programming as EZ Scan writes it to the SD card's CDAT folder (read by
  * `src/main/programming/cdat.ts`). Field names follow EZ Scan's own columns so the Programming window
@@ -101,6 +103,8 @@ export interface ProgSearch {
   /** The Sweeper's flags byte has its own layout; only Special Mode is decoded. */
   sweeper: { specialMode: boolean; groups: boolean[] };
   amateur: { groups: boolean[] };
+  /** The four channel-table searches: options plus one tick per row of the table in `searchChannels.ts`. */
+  channels: Record<ChannelSearch, SearchOptions & { enabled: boolean[] }>;
 }
 
 /** The search groups' ranges on the United Kingdom band plan, for labelling; the card holds only the ticks. */
@@ -126,6 +130,12 @@ export const GLB_AMATEUR_GROUPS = 599;
 export const GLB_PS_FLAGS = 607;
 export const GLB_PS_GROUPS = 608;
 export const GLB_SEARCH_END = 613;
+/**
+ * The channel-table blocks: a flags byte then 128 channel bits (row n = bit n). CB UK's is proven (EZ
+ * Scan's save moved bits 0-1 of 616 for channels 1-2); the other three are assumed in WX-code order.
+ */
+export const GLB_CHANNEL_BLOCKS: Readonly<Record<ChannelSearch, number>> = { cbUk: 615, mosque: 633, vhfMarine: 651, pmr446: 669 };
+export const GLB_CHANNELS_END = 669 + 17;
 
 /** WX button operations by code: EZ Scan's dropdown order (Amateur = 3 seen on a card). */
 export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 1: 'U/VHF AM', 2: 'Mosque', 3: 'Amateur', 4: 'CB UK', 5: 'VHF Mar', 6: 'PMR446' };
