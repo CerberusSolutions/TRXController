@@ -121,6 +121,11 @@ follows the log as new entries arrive. **Live** (or L again) goes back to follow
 entries with a position are pinned (rows and candidates have stored one since 0.2.11); the bar counts the
 rest.
 
+The amber screen above the keypad is the scanner's own six-line display, drawn as the scanner draws it,
+icon strip included, so the app looks like the radio it is driving; it goes dark when nothing is
+connected or the scanner is switched off. Ctrl+Shift+D (Cmd on a Mac) adds a **Debug** tab beside Log
+and Band with the display's raw bytes to copy into a report.
+
 Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
 number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
 Searches and Tune Mode are never nudged.

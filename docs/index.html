@@ -190,14 +190,14 @@
       <p class="lead">The scanner plugs in over USB. TRXController drives it exactly as you would from the front panel, and adds the things a computer is good at: a display you can read from across the room, a log of every transmission, and identification.</p>
       <div class="grid">
         <div class="card"><div class="ico">◉</div><h3>Live display</h3><p>Frequency, mode, signal strength, channel name, system or scanlist, talkgroup, radio ID, tone or colour code, slot and site, updated several times a second. The scanner's own LCD is there too.</p></div>
-        <div class="card"><div class="ico">⌨</div><h3>Keypad and keyboard</h3><p>Every front-panel key, the knob included, on screen and on the keyboard. Arrows, Enter for SEL, Esc for MENU, the digits and the decimal point.</p></div>
+        <div class="card"><div class="ico">⌨</div><h3>Keypad and keyboard</h3><p>The scanner's own amber display over every front-panel key, the knob included, on screen and on the keyboard. Arrows, Enter for SEL, Esc for MENU, the digits and the decimal point.</p></div>
         <div class="card"><div class="ico">⤳</div><h3>Click to tune</h3><p>Type a frequency, click one in the log, or click a bar on the Band tab: the app walks the scanner's own menus into Tune Mode. One button takes it back to scanning.</p></div>
         <div class="card"><div class="ico">☰</div><h3>The log</h3><p>One entry per conversation: time, duration, frequency, mode, name, system, talkgroup, radio ID, tone, RSSI and hit count, with a filter and a CSV export that EZ Scan imports straight into the scanner. Kept between sessions.</p></div>
         <div class="card"><div class="ico">⌖</div><h3>Identification</h3><p>Unnamed frequencies are named from the Ofcom Wireless Telegraphy Register, RadioReference UK, RadioReference and the RSGB repeater list, nearest first, with distance and bearing from you.</p></div>
         <div class="card"><div class="ico">✓</div><h3>Confirmations</h3><p>When you know who a channel is, say so once. The confirmation is keyed to the frequency and its tone or colour code, and outranks everything from then on.</p></div>
         <div class="card"><div class="ico">◎</div><h3>Map</h3><p>A second window with you and every candidate for a frequency pinned on OpenStreetMap, a line to the one the log chose with its distance and bearing, following the scanner or pinned to one log entry. Or a whole day of the log: one pin per placement with its entry count, filtered as the log is.</p></div>
         <div class="card"><div class="ico">▥</div><h3>Band occupancy</h3><p>A histogram of every frequency the scanner has visited this session, brighter where a signal was heard, so a busy band is obvious at a glance.</p></div>
-        <div class="card"><div class="ico">◐</div><h3>Light and dark</h3><p>Follows the system theme or your choice. The scanner display panel stays dark in both, because it is a display.</p></div>
+        <div class="card"><div class="ico">◐</div><h3>Light and dark</h3><p>Follows the system theme or your choice. The scanner's display stays amber in both, because it is the scanner's display.</p></div>
         <div class="card"><div class="ico">⇪</div><h3>Update notices</h3><p>The app checks GitHub for a newer release and shows a link in the top bar. It never installs anything by itself.</p></div>
       </div>
     </div>
@@ -315,7 +315,7 @@
     <div class="wrap">
       <div class="eyebrow">Using it</div>
       <h2>The screen</h2>
-      <p class="lead">The frequency is the hero. Beneath it, the channel and the details the scanner reports; under that, a panel with three tabs; on the right, the keypad and the Tune box.</p>
+      <p class="lead">The frequency is the hero. Beneath it, the channel and the details the scanner reports; under that, a panel with the log and the band view; on the right, the radio: the scanner's own display over its keypad, and the Tune box.</p>
 
       <h3>The hero</h3>
       <p>The frequency in large amber digits with the mode, the signal type and the scanlist flags beside it. The signal meter follows the scanner's RSSI, with the raw value at the end. Then the channel name in large text with its system or scanlist beneath, and a parameter row: type, talkgroup, radio ID (resolved to a callsign and name when the DMR user database is imported), slot and colour code, squelch tone or NAC, site, and when the transmission started.</p>
@@ -334,8 +334,8 @@
       </ul>
       <p><b>Scan</b> beside the Tune box takes the scanner back to scanning (Main Menu › Scan). While it loads its scanlists the scanner stops talking to the port for a few seconds; the top bar shows "Loading scanlists" and the keypad is held until it wakes, so nothing is queued into it. That is normal.</p>
       <figure>
-        <img src="img/tune.png" alt="Tune Mode on a DMR signal: the radio ID resolved to a callsign and town, slot and colour code, with the Scanner display tab showing the LCD" width="1980" height="1170" loading="lazy">
-        <figcaption>Tune Mode on a DMR signal. The radio ID, slot and colour code come off the scanner's display; the <b>Scanner display</b> tab shows the LCD itself.</figcaption>
+        <img src="img/tune.png" alt="Tune Mode on a DMR signal: the radio ID resolved to a callsign and town, slot and colour code, the scanner's amber display over the keypad showing the same" width="1980" height="1170" loading="lazy">
+        <figcaption>Tune Mode on a DMR signal. The radio ID, slot and colour code come off the scanner's display, which sits over the keypad on the right, drawn as the scanner draws it.</figcaption>
       </figure>
 
       <h3>The log</h3>
@@ -364,14 +364,14 @@
       <h3>Band tab</h3>
       <p>One bar per frequency the scanner has visited in Scan, Search, Sweeper or Monitor mode. Height is the peak RSSI, cyan fading with age, amber where the squelch ever opened, a dashed marker at the current frequency, and a tooltip on hover. It is a visual aid, not a measurement: the scanner's RSSI is uncalibrated. <b>Reset</b> starts again; nothing here is saved.</p>
 
-      <h3>Scanner display tab</h3>
-      <p>The scanner's own six-line LCD and icons, as it draws them. It is what the app reads to follow the menus, so it is also the place to look when something seems stuck. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> (<kbd>Cmd</kbd> on a Mac) adds a raw-bytes dump for reporting problems.</p>
+      <h3>The scanner's display</h3>
+      <p>The amber screen over the keypad is the scanner's own six-line display with its icon strip, drawn as the scanner draws it, so the app looks like the radio it is driving. It is what the app reads to follow the menus, so it is also the place to look when something seems stuck. It goes dark when no scanner is connected or the scanner is switched off. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd> (<kbd>Cmd</kbd> on a Mac) adds a <b>Debug</b> tab beside Log and Band with the display's raw bytes to copy into a report.</p>
 
       <h3>Theme</h3>
       <p>The sun, moon and monitor buttons in the top bar pick light, dark or the system theme. The window chrome follows.</p>
       <figure>
         <img src="img/light.png" alt="The same reception in the light theme" width="1980" height="1170" loading="lazy">
-        <figcaption>The light theme. The scanner display panel keeps its dark colours in both.</figcaption>
+        <figcaption>The light theme. The scanner's display stays amber in both.</figcaption>
       </figure>
     </div>
   </section>

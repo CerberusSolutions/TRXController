@@ -177,7 +177,8 @@ export default function HelpDialog() {
               <p>
                 The keypad follows the keyboard while the scanner is connected: arrow keys, <kbd className="font-mono text-ink">Enter</kbd> for SEL,{' '}
                 <kbd className="font-mono text-ink">Esc</kbd> for MENU, <kbd className="font-mono text-ink">0-9</kbd> and{' '}
-                <kbd className="font-mono text-ink">.</kbd>. Hover a key for its shortcut.
+                <kbd className="font-mono text-ink">.</kbd>. Hover a key for its shortcut. The amber screen above the keys is the scanner's own display, drawn as
+                it draws it; it goes dark when no scanner is connected or the scanner is off.
               </p>
               <p className="mt-2">
                 Click a bar on the Band tab, a frequency in the log, or type one into the Tune box under the keypad, and the app walks the
@@ -283,7 +284,7 @@ export default function HelpDialog() {
 
         <p className="mt-4 border-t border-edge pt-3 text-[11px] text-ink-3">
           Log and imported data live in {DATA_DIR}. Open this screen again any time with the ? button in the top bar.
-          {MOD_KEY}+Shift+D shows diagnostics (the raw display bytes on the Scanner display tab).
+          {MOD_KEY}+Shift+D shows diagnostics: a Debug tab beside Log and Band with the display's raw bytes to copy into a report.
         </p>
       </div>
     </div>
