@@ -81,6 +81,9 @@ export interface LogCursor {
   id: number;
 }
 
+/** What the map window shows: the scanner's current frequency as it moves, or one log entry, pinned. */
+export type MapTarget = { kind: 'follow' } | { kind: 'row'; row: ReceptionRow };
+
 /** The serial ports the OS lists, or why it could not list them (shown in the top bar). */
 export interface PortsResult {
   ports: PortInfo[];
@@ -131,6 +134,9 @@ export interface ReceptionRow {
    */
   distanceKm: number | null;
   bearingDeg: number | null;
+  /** The placed identity's own position (the licence, repeater, site or county centre); null when unplaced, or on rows from before it was stored. */
+  lat: number | null;
+  lon: number | null;
   /** Everything the lookups offered for the frequency at the time, ranked as the hero listed them. */
   candidates: Candidate[];
   rssiPeak: number;
@@ -264,6 +270,9 @@ export interface RrConventional {
   /** Distance and bearing from the user's location to that county's centre, when both are known. */
   distanceKm: number | null;
   bearingDeg: number | null;
+  /** The county's centre, when RadioReference gives one. */
+  lat: number | null;
+  lon: number | null;
 }
 
 /** A trunked system RadioReference lists as using the frequency, with the site and talkgroup resolved for the current reception. */
@@ -276,6 +285,9 @@ export interface RrSystemInfo {
   /** Distance and bearing from the user's location to that site, when both are known. */
   distanceKm: number | null;
   bearingDeg: number | null;
+  /** The site's position, else the system's own centre; null when RadioReference has neither. */
+  lat: number | null;
+  lon: number | null;
   /** The talkgroup the scanner reported, if the system's list has it. */
   talkgroup: { tgDec: number; alpha: string; descr: string; mode: string; enc: number; category: string } | null;
 }
@@ -454,6 +466,8 @@ export interface ImportResult {
 }
 
 export const IPC = {
+  mapOpen: 'map:open',
+  mapTarget: 'map:target',
   listPorts: 'scanner:list-ports',
   connect: 'scanner:connect',
   disconnect: 'scanner:disconnect',

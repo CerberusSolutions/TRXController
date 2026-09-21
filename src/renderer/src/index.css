@@ -134,3 +134,38 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--t-scroll-hover); }
 ::-webkit-scrollbar-corner { background: transparent; }
+
+/* Map window: pins coloured like the source pills, the user's dot, the line to the chosen pin, the card. */
+.map-host { background: var(--t-bg); outline: none; }
+.map-host .leaflet-container { background: var(--t-bg); font-family: inherit; }
+.map-pin {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid var(--t-panel); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  background: var(--t-ink-3); color: var(--t-bg);
+}
+.map-pin-label { font: 700 8px/1 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.04em; }
+.map-pin-wtr { background: var(--t-amber); }
+.map-pin-rruk { background: var(--t-rruk); }
+.map-pin-rrdb { background: var(--t-cyan); }
+.map-pin-ukr { background: var(--t-green); }
+.map-pin-conf { background: var(--t-green); }
+.map-pin-chosen { width: 36px; height: 36px; border-width: 3px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-amber) 45%, transparent), 0 1px 6px rgba(0, 0, 0, 0.6); }
+.map-home {
+  display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: #3b82f6; border: 3px solid #fff; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.35);
+}
+.map-line { stroke: var(--t-amber); }
+.map-line-label { background: var(--t-panel); color: var(--t-ink); border: 1px solid var(--t-edge); box-shadow: none; font: 600 12px ui-monospace, monospace; padding: 2px 6px; }
+.map-line-label::before { display: none; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--t-panel); color: var(--t-ink); box-shadow: 0 3px 14px rgba(0, 0, 0, 0.4); }
+.leaflet-popup-content { margin: 10px 14px; font-size: 12.5px; line-height: 1.35; }
+.map-card-name { font-weight: 600; font-size: 14px; }
+.map-card-detail { color: var(--t-ink-2); margin-top: 2px; }
+.map-card-src { color: var(--t-ink-2); margin-top: 4px; }
+.map-card-note { color: var(--t-ink-3); margin-top: 6px; font-size: 11.5px; }
+.leaflet-container a.leaflet-popup-close-button { color: var(--t-ink-3); }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--t-panel) 85%, transparent); color: var(--t-ink-3); font-size: 10px; }
+.leaflet-control-attribution a { color: var(--t-ink-2); }
+.leaflet-bar a { background: var(--t-panel); color: var(--t-ink); border-bottom-color: var(--t-edge); }
+.leaflet-bar a:hover { background: var(--t-panel-2); }

@@ -166,6 +166,11 @@ export class LogDb {
     if (!cols.includes('distance_km')) this.db.exec('ALTER TABLE receptions ADD COLUMN distance_km REAL');
     if (!cols.includes('bearing_deg')) this.db.exec('ALTER TABLE receptions ADD COLUMN bearing_deg INTEGER');
     if (!cols.includes('candidates')) this.db.exec("ALTER TABLE receptions ADD COLUMN candidates TEXT NOT NULL DEFAULT '[]'");
+    if (!cols.includes('lat')) this.db.exec('ALTER TABLE receptions ADD COLUMN lat REAL');
+    if (!cols.includes('lon')) this.db.exec('ALTER TABLE receptions ADD COLUMN lon REAL');
+    const ccols = (this.db.prepare('PRAGMA table_info(confirmations)').all() as { name: string }[]).map((c) => c.name);
+    if (!ccols.includes('lat')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lat REAL');
+    if (!ccols.includes('lon')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lon REAL');
   }
 
   insert(r: NewReception): ReceptionRow {
@@ -173,14 +178,14 @@ export class LogDb {
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
            object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rruk,
-           distance_km, bearing_deg, candidates, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           distance_km, bearing_deg, lat, lon, candidates, rssi_peak, calls)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
         r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
         r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '',
-        r.distanceKm ?? null, r.bearingDeg ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1,
+        r.distanceKm ?? null, r.bearingDeg ?? null, r.lat ?? null, r.lon ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -193,7 +198,7 @@ export class LogDb {
       signalType: 'signal_type', name: 'name', system: 'system', scanlist: 'scanlist', objectType: 'object_type',
       tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source',
       scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt', rruk: 'rruk',
-      distanceKm: 'distance_km', bearingDeg: 'bearing_deg', candidates: 'candidates', rssiPeak: 'rssi_peak', calls: 'calls',
+      distanceKm: 'distance_km', bearingDeg: 'bearing_deg', lat: 'lat', lon: 'lon', candidates: 'candidates', rssiPeak: 'rssi_peak', calls: 'calls',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -237,10 +242,10 @@ export class LogDb {
       this.db.prepare('DELETE FROM confirmations WHERE frequency_hz = ? AND tone = ? AND tgid IS ?').run(c.frequencyHz, c.tone, c.tgid);
       const res = this.db
         .prepare(
-          `INSERT INTO confirmations (frequency_hz, tone, tgid, name, system, source, detail, distance_km, bearing_deg, confirmed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO confirmations (frequency_hz, tone, tgid, name, system, source, detail, distance_km, bearing_deg, lat, lon, confirmed_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
-        .run(c.frequencyHz, c.tone, c.tgid, c.name, c.system, c.source, c.detail, c.distanceKm, c.bearingDeg, now);
+        .run(c.frequencyHz, c.tone, c.tgid, c.name, c.system, c.source, c.detail, c.distanceKm, c.bearingDeg, c.lat ?? null, c.lon ?? null, now);
       const saved = this.confirmation(Number(res.lastInsertRowid))!;
       this.applyConfirmations(c.frequencyHz);
       this.db.exec('COMMIT');
@@ -295,8 +300,8 @@ export class LogDb {
       const next = c ? confirmed(r, c) : r.source === 'CONF' ? unconfirmed(r) : null;
       if (!next) continue;
       this.db
-        .prepare('UPDATE receptions SET name = ?, system = ?, source = ?, distance_km = ?, bearing_deg = ? WHERE id = ?')
-        .run(next.name, next.system, next.source, next.distance_km, next.bearing_deg, r.id);
+        .prepare('UPDATE receptions SET name = ?, system = ?, source = ?, distance_km = ?, bearing_deg = ?, lat = ?, lon = ? WHERE id = ?')
+        .run(next.name, next.system, next.source, next.distance_km, next.bearing_deg, next.lat, next.lon, r.id);
       changed.push(Number(r.id));
     }
     return changed;
@@ -632,6 +637,8 @@ interface RawConfirmation {
   detail: string;
   distance_km: number | null;
   bearing_deg: number | null;
+  lat: number | null;
+  lon: number | null;
   confirmed_at: number;
 }
 
@@ -647,16 +654,28 @@ function toConfirmation(r: RawConfirmation): Confirmation {
     detail: r.detail,
     distanceKm: r.distance_km === null ? null : Number(r.distance_km),
     bearingDeg: r.bearing_deg === null ? null : Number(r.bearing_deg),
+    lat: r.lat === null || r.lat === undefined ? null : Number(r.lat),
+    lon: r.lon === null || r.lon === undefined ? null : Number(r.lon),
     confirmedAt: Number(r.confirmed_at),
   };
 }
 
-type Renamed = Pick<Raw, 'name' | 'system' | 'source' | 'distance_km' | 'bearing_deg'>;
+type Renamed = Pick<Raw, 'name' | 'system' | 'source' | 'distance_km' | 'bearing_deg' | 'lat' | 'lon'>;
 
 /** A row as the confirmation says it is; null when it already is. */
 function confirmed(r: Raw, c: Confirmation): Renamed | null {
-  const next: Renamed = { name: c.name, system: c.system || r.system, source: 'CONF', distance_km: c.distanceKm ?? r.distance_km, bearing_deg: c.bearingDeg ?? r.bearing_deg };
-  return next.name === r.name && next.system === r.system && r.source === 'CONF' && next.distance_km === r.distance_km && next.bearing_deg === r.bearing_deg ? null : next;
+  const next: Renamed = {
+    name: c.name,
+    system: c.system || r.system,
+    source: 'CONF',
+    distance_km: c.distanceKm ?? r.distance_km,
+    bearing_deg: c.bearingDeg ?? r.bearing_deg,
+    lat: c.lat ?? r.lat,
+    lon: c.lon ?? r.lon,
+  };
+  return next.name === r.name && next.system === r.system && r.source === 'CONF' && next.distance_km === r.distance_km && next.bearing_deg === r.bearing_deg && next.lat === r.lat && next.lon === r.lon
+    ? null
+    : next;
 }
 
 /** A row with its confirmation withdrawn: the scanner's own name if it showed one, else unnamed with the licensee credited. */
@@ -668,6 +687,8 @@ function unconfirmed(r: Raw): Renamed {
     source: r.scanner_name ? '' : r.licensee ? licSrc : '',
     distance_km: r.distance_km,
     bearing_deg: r.bearing_deg,
+    lat: r.lat,
+    lon: r.lon,
   };
 }
 
@@ -766,6 +787,8 @@ interface Raw {
   rruk: string;
   distance_km: number | null;
   bearing_deg: number | null;
+  lat: number | null;
+  lon: number | null;
   candidates: string;
   rssi_peak: number;
   calls: number;
@@ -810,6 +833,8 @@ function toRow(r: Raw): ReceptionRow {
     rruk: r.rruk ?? '',
     distanceKm: r.distance_km === null || r.distance_km === undefined ? null : Number(r.distance_km),
     bearingDeg: r.bearing_deg === null || r.bearing_deg === undefined ? null : Number(r.bearing_deg),
+    lat: r.lat === null || r.lat === undefined ? null : Number(r.lat),
+    lon: r.lon === null || r.lon === undefined ? null : Number(r.lon),
     candidates: parseCandidates(r.candidates),
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),

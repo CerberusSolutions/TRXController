@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type LogCursor, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, type AppInfo, type ImportResult, type LogCursor, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -20,6 +20,7 @@ import { ScanTimeout } from './scanner/scanTimeout';
 import { listPorts, preferredPath, serialTransportFactory } from './scanner/serialTransport';
 
 let win: BrowserWindow | null = null;
+let mapWin: BrowserWindow | null = null;
 
 /** Window chrome colours per theme, matching the renderer's tokens. */
 const CHROME = {
@@ -125,6 +126,8 @@ function sanitizeConfirmation(v: unknown): NewConfirmation {
     detail: text(o['detail']),
     distanceKm: num(o['distanceKm']),
     bearingDeg: num(o['bearingDeg']),
+    lat: num(o['lat']),
+    lon: num(o['lon']),
   };
 }
 
@@ -220,6 +223,7 @@ function isLogCursor(v: unknown): v is LogCursor {
 }
 
 function registerIpc(): void {
+  ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
   ipcMain.handle(IPC.listPorts, async (): Promise<PortsResult> => {
     // A system that cannot enumerate ports (no udev on a minimal Linux, say) gets an empty list with the
     // reason attached, which the top bar shows, rather than a bare "No serial ports".
@@ -516,20 +520,17 @@ function rememberBounds(w: BrowserWindow): void {
   }, 400);
 }
 
-function createWindow(): void {
-  const saved = savedBounds();
-  win = new BrowserWindow({
-    ...(saved ?? DEFAULT_WINDOW),
-    minWidth: MIN_WINDOW.width,
-    minHeight: MIN_WINDOW.height,
+/**
+ * The window chrome every app window shares: frameless, with the native window controls drawn over
+ * our own top bar. Windows puts minimise / maximise / close at the top right (the overlay), macOS its
+ * traffic lights at the top left, vertically centred in the 46 px bar. Linux has no overlay, so it
+ * keeps the window manager's own frame.
+ */
+function windowChrome(): Electron.BrowserWindowConstructorOptions {
+  return {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: nativeTheme.shouldUseDarkColors ? CHROME.dark.background : CHROME.light.background,
-    title: 'TRXController',
-    // Frameless with the native window controls drawn over our own top bar:
-    // Windows puts minimise / maximise / close at the top right (the overlay),
-    // macOS its traffic lights at the top left, vertically centred in the 46 px bar.
-    // Linux has no overlay, so it keeps the window manager's own frame.
     ...(IS_MAC
       ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 15 } }
       : IS_LINUX
@@ -546,6 +547,54 @@ function createWindow(): void {
       contextIsolation: true,
       nodeIntegration: false,
     },
+  };
+}
+
+function loadRenderer(w: BrowserWindow, hash?: string): void {
+  if (process.env['ELECTRON_RENDERER_URL']) void w.loadURL(`${process.env['ELECTRON_RENDERER_URL']}${hash ? `#${hash}` : ''}`);
+  else void w.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined);
+}
+
+/**
+ * The map window: the same renderer bundle opened on its `#map` route, one at a time. It shows the
+ * user's location and every candidate pinned, following the scanner or pinned to one log entry.
+ * OpenStreetMap's tile servers ask that apps identify themselves, hence the user agent.
+ */
+function openMap(target: MapTarget): void {
+  if (mapWin && !mapWin.isDestroyed()) {
+    mapWin.webContents.send(IPC.mapTarget, target);
+    if (mapWin.isMinimized()) mapWin.restore();
+    mapWin.focus();
+    return;
+  }
+  mapWin = new BrowserWindow({ ...windowChrome(), width: 960, height: 720, minWidth: 480, minHeight: 360, title: 'TRXController map' });
+  mapWin.webContents.setUserAgent(`TRXController/${app.getVersion()} (+https://cerberussolutions.github.io/TRXController/)`);
+  mapWin.on('ready-to-show', () => mapWin?.show());
+  mapWin.on('closed', () => {
+    mapWin = null;
+  });
+  mapWin.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  mapWin.webContents.once('did-finish-load', () => mapWin?.webContents.send(IPC.mapTarget, target));
+  loadRenderer(mapWin, 'map');
+}
+
+function isMapTarget(v: unknown): v is MapTarget {
+  if (!v || typeof v !== 'object') return false;
+  const t = v as { kind?: unknown; row?: unknown };
+  return t.kind === 'follow' || (t.kind === 'row' && !!t.row && typeof t.row === 'object');
+}
+
+function createWindow(): void {
+  const saved = savedBounds();
+  win = new BrowserWindow({
+    ...windowChrome(),
+    ...(saved ?? DEFAULT_WINDOW),
+    minWidth: MIN_WINDOW.width,
+    minHeight: MIN_WINDOW.height,
+    title: 'TRXController',
   });
 
   if (settings?.get().window?.maximized) win.maximize();
@@ -559,6 +608,7 @@ function createWindow(): void {
   win.on('unmaximize', remember);
   win.on('closed', () => {
     win = null;
+    if (mapWin && !mapWin.isDestroyed()) mapWin.close();
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -566,11 +616,7 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
-  if (process.env['ELECTRON_RENDERER_URL']) {
-    void win.loadURL(process.env['ELECTRON_RENDERER_URL']);
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'));
-  }
+  loadRenderer(win);
 }
 
 app.whenReady().then(() => {

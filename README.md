@@ -102,6 +102,16 @@ differs sinks. The unfolded row also shows the traffic heard on that frequency b
 entries, first and last heard, which radio IDs and which names, so the users sharing a channel
 can be told apart and confirmed one code at a time.
 
+The **map** button beside the hero's Listed block, or beside a log entry's candidates, opens a second
+window with you (your Data-dialog location) and every candidate for the frequency pinned on
+OpenStreetMap, coloured by source, with a dashed line to the one the log chose carrying its distance
+and bearing. It follows the scanner, or stays pinned to the log entry it was opened from (Follow, or
+F, lets go). Keys: + and - zoom, arrows pan, A fits everything in, Z centres on you. A WTR pin marks
+the Ofcom licence holder, which is often a reseller's address rather than the transmitter; RRUK and
+RadioReference pins are the sites those databases list; a UKR pin is the repeater. The card under a
+pin says which. Tiles need an internet connection; the pins do not. Rows and candidates store their
+position from now on, for a later "everything heard today" map.
+
 Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
 number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
 Searches and Tune Mode are never nudged.

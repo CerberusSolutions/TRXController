@@ -207,8 +207,16 @@ export default function FrequencyHero() {
       <div className="mt-3 h-[4.6rem] overflow-hidden border-t border-edge pt-2">
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
-            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference UK, RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
+            <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference UK, RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
               Listed
+              <button
+                type="button"
+                className="rounded border border-edge px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider text-ink-3 hover:text-ink"
+                title="Open the map window: you and every listing pinned, following the scanner"
+                onClick={() => void window.trx.mapOpen?.({ kind: 'follow' })}
+              >
+                map
+              </button>
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[13.5px] leading-tight">
               {listed.slice(0, 3).map((row, i) => (

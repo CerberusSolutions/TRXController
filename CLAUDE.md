@@ -347,6 +347,27 @@ captured on 14 Sep 2026.
   key (it is loading scanlists), via `MacroHost.stalled`; tune / scan failure messages clear
   themselves after 8 s.
 
+## Map window
+
+- `openMap` in `src/main/index.ts` opens one extra `BrowserWindow` (same `windowChrome()` as the main window,
+  closed with it) on the renderer's `#map` route (`main.tsx` renders `components/MapApp.tsx` instead of `App`),
+  with a user agent naming the app, as OpenStreetMap's tile policy asks; `map:open` (IPC, `MapTarget`:
+  `follow` or one `row`) creates or refocuses it and `map:target` feeds it. The renderer's CSP allows
+  `tile.openstreetmap.org` images. `MapApp` attaches the scanner, log, identities and theme stores like `App`
+  does; in follow mode the entry on show is the log's newest row on the scanner's frequency (the log is what
+  knows which candidate won), else the live `candidatesFor` list; pinned mode is the row it was opened from.
+  `MapView.tsx` is imperative Leaflet (`leaflet`, devDependency, bundled; `divIcon` pins styled by the
+  `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
+  position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
+  source's pin marks (a WTR pin is the licence holder, not necessarily the transmitter), fit-to-bounds once
+  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (follow) in
+  `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
+- Positions: `Candidate`, `ReceptionRow` (`lat` / `lon` columns, migrated) and `Confirmation` carry the
+  point the distance was measured to (licence, repeater, RRUK entry, RadioReference site or system centre,
+  county centre: `RrConventional` / `RrSystemInfo` got `lat` / `lon` in `rrService`); the tracker moves it
+  with the placement (`placementAfter`), `LogDb.confirm` carries it onto renamed rows. Rows from before
+  20 Sep 2026 have null and can be reconstructed from the user's position plus bearing and distance.
+
 ## Scan timeout
 
 - `settings.scanTimeoutS` (Data dialog "Scan timeout": Off / 10 / 20 / 30 s / 1 / 2 min) is how long
