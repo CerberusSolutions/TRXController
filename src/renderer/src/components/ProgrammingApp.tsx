@@ -3,6 +3,7 @@ import type { CdatCandidate, ProgObject, ProgSaveResult, ProgSaveTarget, ProgSca
 import { attachLogEvents } from '../store/log';
 import { initTheme } from '../store/theme';
 import ProgLogImport from './ProgLogImport';
+import ProgNameFromLookups from './ProgNameFromLookups';
 import ProgGrid, { NAME_MAX, Popover, ScanlistPicker, TextCell, mhz, squelchText, type ObjectPatch } from './ProgGrid';
 
 type Tab = 'general' | 'scanlists' | 'objects' | 'trunked';
@@ -68,6 +69,7 @@ export default function ProgrammingApp() {
   const [focus, setFocus] = useState<number | null>(null);
   const [saveAs, setSaveAs] = useState<string | null>(null);
   const [fromLog, setFromLog] = useState(false);
+  const [naming, setNaming] = useState(false);
   const anchorRef = useRef<number | null>(null);
   const prog = hist.present;
   const dirty = hist.past.length > 0;
@@ -397,6 +399,9 @@ export default function ProgrammingApp() {
               <span className="text-ink-3">Change any field in a selected row to change them all.</span>
               <span className="ml-auto flex items-center gap-2">
                 <BulkLists prog={prog} selected={selected} onEdit={(lists) => commit({ ...prog, objects: prog.objects.map((o) => (selected.has(o.index) ? { ...o, scanlists: lists(o.scanlists) } : o)) })} />
+                <button type="button" className={btn} onClick={() => setNaming(true)} title="Ask the lookups about every selected frequency and take their names as the alpha tags">
+                  Name from lookups…
+                </button>
                 <button type="button" className={btn} onClick={duplicate} title="Copy the selected objects as new ones">
                   Duplicate
                 </button>
@@ -410,7 +415,16 @@ export default function ProgrammingApp() {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            {fromLog && (tab === 'objects' || tab === 'scanlists') ? (
+            {naming && (tab === 'objects' || tab === 'scanlists') ? (
+              <ProgNameFromLookups
+                objects={visible.filter((o) => selected.has(o.index))}
+                onApply={(patches) => {
+                  commit({ ...prog, objects: prog.objects.map((o) => (patches.has(o.index) ? { ...o, ...patches.get(o.index)! } : o)) });
+                  setNaming(false);
+                }}
+                onClose={() => setNaming(false)}
+              />
+            ) : fromLog && (tab === 'objects' || tab === 'scanlists') ? (
               <ProgLogImport
                 scanlists={prog.scanlists}
                 existing={prog.objects}
@@ -426,8 +440,8 @@ export default function ProgrammingApp() {
                 onClose={() => setFromLog(false)}
               />
             ) : null}
-            {!fromLog && tab === 'objects' && <ProgGrid rows={shown} first="Rec#" newFrom={base?.objects.length ?? 0} scanlists={prog.scanlists} selected={selected} onSelect={select} onEdit={edit} focus={focus} />}
-            {!fromLog && tab === 'scanlists' && (
+            {!fromLog && !naming && tab === 'objects' && <ProgGrid rows={shown} first="Rec#" newFrom={base?.objects.length ?? 0} scanlists={prog.scanlists} selected={selected} onSelect={select} onEdit={edit} focus={focus} />}
+            {!fromLog && !naming && tab === 'scanlists' && (
               <div className="grid h-full grid-cols-[21rem_minmax(0,1fr)]">
                 <div className="overflow-y-auto border-r border-edge">
                   {prog.scanlists

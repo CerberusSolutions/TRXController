@@ -525,7 +525,7 @@ captured on 14 Sep 2026.
   edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK
   (`rruk:lookup` IPC), RadioReference and the repeater list, and a pick names the channel with the tone and mode
   it carries), with undo / redo (a snapshot per edit), Add channel, Duplicate, Delete, Add to / Remove from lists
-  for a selection, and **From log** (`ProgLogImport.tsx`): the log's entries folded into channels exactly as the
+  for a selection, **Name from lookups** (`ProgNameFromLookups.tsx`: every selected frequency through the registers and RadioReference / RRUK's caches only, `LookupMode` 'cache' on `rr:lookup` / `rruk:lookup`, since a card holds thousands of frequencies; the top candidate proposes the tag, each row can take another or be edited, one undo step), and **From log** (`ProgLogImport.tsx`): the log's entries folded into channels exactly as the
   CSV export folds them (`ezObjects`, `alphaTag`, `ezToneOf`, `ezModeOf`), those already on the card unticked,
   into one scanlist. Save is refused while an object has no alpha tag or a frequency outside 25-1300 MHz. Nothing
   about it goes in the README, the website or the help screen, on the author's instruction. `CONFIG__.BIN`

@@ -360,7 +360,7 @@ function Lookup({ o, onPick }: { o: ProgObject; onPick: (c: ListedCandidate) => 
       api.wtrLookup?.(hz).catch(() => []) ?? [],
       api.repeatersLookup?.(hz).catch(() => []) ?? [],
       api.rrukLookup?.(hz).catch(() => null) ?? null,
-      api.rrLookup?.(hz, false).catch(() => null) ?? null,
+      api.rrLookup?.(hz, 'ask').catch(() => null) ?? null,
     ]);
     const tone = o.tone.type === 'CTCSS' ? `CTCSS ${o.tone.value}` : null;
     setCands(candidatesFor({ rr, rruk, licences, repeaters, detectedTone: tone }, normaliseLookups(settings?.lookups)));

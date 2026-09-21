@@ -25,6 +25,7 @@ import {
   type RrStatus,
   type RrukStatus,
   type RrukInfo,
+  type LookupMode,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
@@ -99,15 +100,15 @@ const api = {
   rrStates: (coid: number): Promise<RrRegion[]> => ipcRenderer.invoke(IPC.rrStates, coid),
   rrRegionSet: (region: { coid: number; stid: number; countryName: string; stateName: string }): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrRegionSet, region),
   rrClearCache: (): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrClearCache),
-  /** What RadioReference knows about a frequency, asking it afresh unless `force` is false (then only if uncached). */
-  rrLookup: (hz: number, force = true): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz, force),
+  /** What RadioReference knows about a frequency: asked afresh ('force', the default), only when uncached ('ask'), or never ('cache'). */
+  rrLookup: (hz: number, mode: LookupMode = 'force'): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz, mode),
   /** RadioReference UK: the user's own API key (stored encrypted; an empty key clears it), a test call, the cache. */
   rrukStatus: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukStatus),
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
-  /** What RadioReference UK knows about a frequency (the cache, `pending` while it is being asked); `force` re-asks. */
-  rrukLookup: (hz: number, force = false): Promise<RrukInfo | null> => ipcRenderer.invoke(IPC.rrukLookup, hz, force),
+  /** What RadioReference UK knows about a frequency (the cache, `pending` while it is being asked): 'ask' (default) asks when uncached, 'force' re-asks, 'cache' never asks. */
+  rrukLookup: (hz: number, mode: LookupMode = 'ask'): Promise<RrukInfo | null> => ipcRenderer.invoke(IPC.rrukLookup, hz, mode),
   /** Development only (no-ops in a packaged build): the scanner's SD-card programming. */
   programmingOpen: (): Promise<void> => ipcRenderer.invoke(IPC.programmingOpen),
   /** The CDAT and V-Scanner folders on mounted cards; with `near`, those beside that folder first. */
