@@ -198,11 +198,11 @@ describe('hex helpers', () => {
   });
 });
 
-describe("unsolicited 'p'", () => {
-  it('is delimited by its one-byte length like the P reply', () => {
+describe("unsolicited 'P'", () => {
+  it('is delimited by its one-byte length whether or not it was asked for', () => {
     const d = new FrameDecoder();
-    const events = d.push(encodeFrame('p', [0]));
+    const events = d.push(encodeFrame('P', [0]));
     expect(events).toHaveLength(1);
-    expect(events[0]).toMatchObject({ type: 'frame', frame: { codeChar: 'p' } });
+    expect(events[0]).toMatchObject({ type: 'frame', frame: { codeChar: 'P', data: new Uint8Array([0]) } });
   });
 });

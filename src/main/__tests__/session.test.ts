@@ -161,12 +161,12 @@ describe('ScannerSession', () => {
     expect(s.getSnapshot().link.error).toBe('Access denied');
   });
 
-  it("marks the scanner off on its unsolicited 'p', and on again at the next reply", async () => {
+  it("marks the scanner off on its unsolicited 'P', and on again at the next reply", async () => {
     const t = new FakeTransport();
     const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 5 });
     await s.connect('COM7');
     expect(s.getSnapshot().power).toBeNull();
-    t.inject(encodeFrame('p', [0]));
+    t.inject(encodeFrame('P', [0]));
     await waitFor(() => s.getSnapshot().power?.on === false);
     // Polling carries on; the next answer means it is back.
     await waitFor(() => s.getSnapshot().power?.on === true);
