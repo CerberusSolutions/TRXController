@@ -13,8 +13,8 @@ const rpt = (id: number, callsign: string, ctcss: number | null, distanceKm: num
 });
 const rr: RrInfo = {
   frequencyHz: 453_062_500, fetchedAt: 1, pending: false, error: null,
-  systems: [{ sid: 9, name: 'Cambs DMR', city: 'Cambridge', site: { descr: 'Addenbrookes', location: 'Cambridge', nac: '' }, distanceKm: 60, bearingDeg: 60, talkgroup: { tgDec: 19, alpha: 'ADD', descr: 'Porters', mode: 'D', enc: 0, category: 'Hospital' } }],
-  conventional: [{ descr: 'University of Buckingham', alpha: 'UOB', tone: 'CC 13', mode: 'DMR', callsign: '', tags: ['Education'], county: 'Bucks', distanceKm: 3.2, bearingDeg: 47 }],
+  systems: [{ sid: 9, name: 'Cambs DMR', city: 'Cambridge', site: { descr: 'Addenbrookes', location: 'Cambridge', nac: '' }, distanceKm: 60, bearingDeg: 60, lat: 52.17, lon: 0.14, talkgroup: { tgDec: 19, alpha: 'ADD', descr: 'Porters', mode: 'D', enc: 0, category: 'Hospital' } }],
+  conventional: [{ descr: 'University of Buckingham', alpha: 'UOB', tone: 'CC 13', mode: 'DMR', callsign: '', tags: ['Education'], county: 'Bucks', distanceKm: 3.2, bearingDeg: 47, lat: 51.87, lon: -0.85 }],
 };
 
 describe('candidatesFor', () => {
@@ -107,7 +107,7 @@ describe('candidatesFor', () => {
     expect(normaliseCandidates(JSON.parse(JSON.stringify(stored)))).toEqual(stored);
     expect(normaliseCandidates('junk')).toEqual([]);
     expect(normaliseCandidates([{ source: 'XYZ', name: 'no' }, { source: 'WTR', name: 'ok', distanceKm: 'far' }])).toEqual([
-      { source: 'WTR', name: 'ok', detail: '', distanceKm: null, bearingDeg: null },
+      { source: 'WTR', name: 'ok', detail: '', distanceKm: null, bearingDeg: null, lat: null, lon: null },
     ]);
   });
 });

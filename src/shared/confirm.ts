@@ -19,6 +19,9 @@ export interface Confirmation {
   detail: string;
   distanceKm: number | null;
   bearingDeg: number | null;
+  /** The confirmed identity's position, from the candidate it was picked from; null for a typed name. */
+  lat: number | null;
+  lon: number | null;
   /** ms since epoch */
   confirmedAt: number;
 }

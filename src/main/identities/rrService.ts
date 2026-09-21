@@ -161,7 +161,7 @@ export class RrService {
       const place = placeFrom(here, county?.lat, county?.lon);
       // A county entry is local if its centre is within the radius plus the county's own coverage range.
       if (far(place.distanceKm, county?.rangeKm ?? 0)) continue;
-      conventional.push({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags, county: county?.name ?? '', ...place });
+      conventional.push({ descr: h.descr, alpha: h.alpha, tone: h.tone, mode: h.mode, callsign: h.callsign, tags: h.tags, county: county?.name ?? '', ...place, lat: county?.lat ?? null, lon: county?.lon ?? null });
     }
     conventional.sort((a, b) => (a.distanceKm ?? 1e9) - (b.distanceKm ?? 1e9));
 
@@ -173,7 +173,7 @@ export class RrService {
       const sys = this.db.rrGetSystem(h.sid);
       if (!sys) {
         // Details not fetched (yet): with a location set there is nothing to place it by, so it waits.
-        if (!here) systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, bearingDeg: null, talkgroup: null });
+        if (!here) systems.push({ sid: h.sid, name: h.descr || h.alpha || `System ${h.sid}`, city: '', site: null, distanceKm: null, bearingDeg: null, lat: null, lon: null, talkgroup: null });
         continue;
       }
       const site = pickSite(sys.sites, hz, ctx.nac ?? null, here);
@@ -196,6 +196,8 @@ export class RrService {
         city: sys.system.city,
         site: site ? { descr: site.descr, location: site.location, nac: site.nac } : null,
         ...place,
+        // The point the distance was measured to: the site when it has one, else the system's centre.
+        ...(site && site.lat !== null && site.lon !== null ? { lat: site.lat, lon: site.lon } : { lat: sys.system.lat, lon: sys.system.lon }),
         talkgroup: tg ? { tgDec: tg.tgDec, alpha: tg.alpha, descr: tg.descr, mode: tg.mode, enc: tg.enc, category: tg.category } : null,
       });
     }

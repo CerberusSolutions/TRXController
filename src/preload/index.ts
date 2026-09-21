@@ -11,6 +11,7 @@ import {
   type Settings,
   type ThemeMode,
   type LogCursor,
+  type MapTarget,
   type PortsResult,
   type TrafficGroup,
   type UpdateInfo,
@@ -91,6 +92,14 @@ const api = {
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
+  /** Open (or refocus) the map window on the scanner's current frequency, or on one log entry. */
+  mapOpen: (target: MapTarget): Promise<void> => ipcRenderer.invoke(IPC.mapOpen, target),
+  /** The map window's own feed: what to show, sent on open and each time the map button is pressed again. */
+  onMapTarget: (cb: (t: MapTarget) => void): (() => void) => {
+    const listener = (_e: unknown, t: MapTarget): void => cb(t);
+    ipcRenderer.on(IPC.mapTarget, listener);
+    return () => ipcRenderer.removeListener(IPC.mapTarget, listener);
+  },
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
   appInfo: (): Promise<AppInfo> => ipcRenderer.invoke(IPC.appInfo),

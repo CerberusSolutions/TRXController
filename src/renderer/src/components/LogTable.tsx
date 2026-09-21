@@ -490,6 +490,19 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           {withdraw}
         </li>
       )}
+      {(r.candidates.length > 0 || r.lat !== null) && (
+        <li className="flex items-center gap-2 py-px">
+          <span className="w-9 shrink-0" />
+          <button
+            type="button"
+            className={btn}
+            title="Open the map window with this entry's candidates pinned around you"
+            onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r })}
+          >
+            map
+          </button>
+        </li>
+      )}
       {r.candidates.map((c, i) => {
         const mine = isCurrent(c.source, c.name);
         return (
@@ -515,7 +528,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
                 className={btn}
                 disabled={busy}
                 title={`This is the one. ${keyHint}`}
-                onClick={() => void run(confirm({ ...key, name: c.name, system: c.source === "RRDB" && r.rrSystem ? r.rrSystem : "", source: c.source, detail: c.detail, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg }))}
+                onClick={() => void run(confirm({ ...key, name: c.name, system: c.source === "RRDB" && r.rrSystem ? r.rrSystem : "", source: c.source, detail: c.detail, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg, lat: c.lat ?? null, lon: c.lon ?? null }))}
               >
                 confirm
               </button>
@@ -532,7 +545,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           disabled={busy}
           onChange={(e) => setOther(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && other.trim()) void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null })).then(() => setOther(""));
+            if (e.key === "Enter" && other.trim()) void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null, lat: null, lon: null })).then(() => setOther(""));
           }}
         />
         <button
@@ -540,7 +553,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           className={btn}
           disabled={busy || !other.trim()}
           title={`Confirm a name none of the lookups offer. ${keyHint}`}
-          onClick={() => void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null })).then(() => setOther(""))}
+          onClick={() => void run(confirm({ ...key, name: other.trim(), system: "", source: "USER", detail: "", distanceKm: null, bearingDeg: null, lat: null, lon: null })).then(() => setOther(""))}
         >
           confirm
         </button>

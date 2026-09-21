@@ -48,15 +48,18 @@ export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequenc
  * `sourceAfter`), and the placement (`distanceKm`, `bearingDeg`) with the licensee and name too,
  * so a row is never placed by one identity and named by another.
  */
-const FIELDS: Exclude<keyof Description, 'source' | 'distanceKm' | 'bearingDeg' | 'candidates'>[] = [
+const FIELDS: Exclude<keyof Description, 'source' | 'distanceKm' | 'bearingDeg' | 'lat' | 'lon' | 'candidates'>[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee',
   'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rruk', 'rssiPeak',
 ];
 
 /** The placement travels with the identity exactly as `sourceAfter` moves the source; an unplaced row takes any placement offered. */
-function placementAfter(base: Description, fresh: Description): { distanceKm: number | null; bearingDeg: number | null } {
+type Placement = { distanceKm: number | null; bearingDeg: number | null; lat: number | null; lon: number | null };
+const placementOf = (d: Placement): Placement => ({ distanceKm: d.distanceKm, bearingDeg: d.bearingDeg, lat: d.lat, lon: d.lon });
+
+function placementAfter(base: Description, fresh: Description): Placement {
   const takeFresh = fresh.name !== '' || fresh.system !== '' || (fresh.licensee !== '' && base.name === '' && base.system === '') || base.distanceKm === null;
-  return takeFresh && fresh.distanceKm !== null ? { distanceKm: fresh.distanceKm, bearingDeg: fresh.bearingDeg } : { distanceKm: base.distanceKm, bearingDeg: base.bearingDeg };
+  return takeFresh && fresh.distanceKm !== null ? placementOf(fresh) : placementOf(base);
 }
 
 /** The candidate list grows as lookups answer (RadioReference lands a while after the squelch opens); a shorter fresh list never replaces a longer one. */
@@ -164,9 +167,11 @@ export class ReceptionTracker {
       changed = true;
     }
     const place = placementAfter(cur, fresh);
-    if (place.distanceKm !== cur.distanceKm || place.bearingDeg !== cur.bearingDeg) {
+    if (place.distanceKm !== cur.distanceKm || place.bearingDeg !== cur.bearingDeg || place.lat !== cur.lat || place.lon !== cur.lon) {
       cur.distanceKm = place.distanceKm;
       cur.bearingDeg = place.bearingDeg;
+      cur.lat = place.lat;
+      cur.lon = place.lon;
       changed = true;
     }
     const candidates = candidatesAfter(cur, fresh);
@@ -256,7 +261,7 @@ export function describe(s: ScannerSnapshot): Description {
   const rruk = rrukBest ? rrukName(rrukBest) : '';
   // The channel description in play: RadioReference's or RRUK's, whichever matches the detected code,
   // else is placed, else ranks higher in the lookup order.
-  interface Desc { src: 'RRDB' | 'RRUK'; name: string; place: { distanceKm: number | null; bearingDeg: number | null }; placed: boolean; match: boolean | null }
+  interface Desc { src: 'RRDB' | 'RRUK'; name: string; place: Placement; placed: boolean; match: boolean | null }
   const descs: Desc[] = [];
   if (rrConv && rrChannel) descs.push({ src: 'RRDB', name: rrChannel, place: rrConv, placed: isPlaced(rrConv), match: rrToneMatches(rrConv.tone, detected) });
   if (rrukBest && rruk) descs.push({ src: 'RRUK', name: rruk, place: rrukBest, placed: isPlaced(rrukBest), match: rrukBest.code ? rrToneMatches(rrukBest.code, detected) : null });
@@ -329,6 +334,8 @@ export function describe(s: ScannerSnapshot): Description {
     rruk,
     distanceKm: placedBy?.distanceKm ?? null,
     bearingDeg: placedBy?.bearingDeg ?? null,
+    lat: placedBy?.lat ?? null,
+    lon: placedBy?.lon ?? null,
     candidates,
     rssiPeak: status.rssi,
   };
