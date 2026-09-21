@@ -127,8 +127,8 @@ export const GLB_PS_FLAGS = 607;
 export const GLB_PS_GROUPS = 608;
 export const GLB_SEARCH_END = 613;
 
-/** WX button operations by code, as far as seen (EZ Scan's list has more; unknown codes are shown as "Mode N"). */
-export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 3: 'Amateur' };
+/** WX button operations by code: EZ Scan's dropdown order (Amateur = 3 seen on a card). */
+export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 1: 'U/VHF AM', 2: 'Mosque', 3: 'Amateur', 4: 'CB UK', 5: 'VHF Mar', 6: 'PMR446' };
 /** How many lockouts ISCAN___.GLB holds: its table runs from `GLB_LOCKOUTS` to the end of the 1,706-byte file. */
 export const GLB_LOCKOUTS = 694;
 export const GLB_SEARCH_DELAY = 512;
