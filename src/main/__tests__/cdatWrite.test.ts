@@ -143,10 +143,10 @@ describe('patchPldef / patchGlb', () => {
   });
 
   it('writes the description on one line, or two when a word does not fit', () => {
-    expect(new TextDecoder().decode(buildDescript('UK Starter'))).toBe('UK Starter      ');
-    expect(new TextDecoder().decode(buildDescript('TRXC Import Tests'))).toBe('TRXC Import     Tests           ');
-    expect(buildDescript('a'.repeat(40)).length).toBe(16);
-    expect(buildDescript('one two three four five six seven eight nine ten eleven twelve thirteen').length).toBe(64);
+    expect(new TextDecoder().decode(buildDescript('UK Starter'))).toBe('UK Starter      ' + ' '.repeat(48));
+    expect(new TextDecoder().decode(buildDescript('TRXC Import Tests'))).toBe('TRXC Import     Tests           ' + ' '.repeat(32));
+    expect(new TextDecoder().decode(buildDescript('a'.repeat(40)).subarray(0, 16))).toBe('a'.repeat(16));
+    expect(new TextDecoder().decode(buildDescript('one two three four five six seven eight nine ten eleven twelve thirteen'))).toBe('one two three   four five six   seven eight nineten eleven      ');
   });
 });
 
@@ -228,7 +228,8 @@ describe('buildCdat', () => {
     expect(after.scanlists[0]).toMatchObject({ name: 'AIRBAND', enabled: false, objects: [1] });
     expect(decode(out.get('PLDEF.DAT')!)[17]).toBe(0x80);
     expect(after.globals.welcome).toEqual(['HELLO', '', '', '', '']);
-    expect(new TextDecoder().decode(out.get('DESCRIPT.TXT')!)).toBe('UK Starter v2   ');
+    expect(new TextDecoder().decode(out.get('DESCRIPT.TXT')!.subarray(0, 16))).toBe('UK Starter v2   ');
+    expect(out.get('DESCRIPT.TXT')!.length).toBe(64);
     // The globals file's check is right after the welcome text changed.
     const glbOut = decode(out.get('ISCAN___.GLB')!);
     expect(glbOut[2]! | (glbOut[3]! << 8)).toBe(glbChecksum(glbOut));
@@ -242,7 +243,7 @@ describe('buildCdat', () => {
     const out = buildCdat(files, prog);
     expect(out.get('CG000000._CG')).toEqual(files.get('CG000000._CG'));
     expect(out.get('PLDEF.DAT')).toEqual(files.get('PLDEF.DAT'));
-    expect(out.get('DESCRIPT.TXT')).toEqual(files.get('DESCRIPT.TXT'));
+    expect(out.get('DESCRIPT.TXT')!.subarray(0, 16)).toEqual(files.get('DESCRIPT.TXT'));
     // The list files are canonical: the garbage tenth byte goes, nothing else moves.
     expect(decode(out.get(plName(2))!).subarray(0, 9)).toEqual(decode(files.get(plName(2))!).subarray(0, 9));
   });

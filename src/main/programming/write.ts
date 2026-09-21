@@ -185,8 +185,8 @@ export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome'>
 
 /**
  * DESCRIPT.TXT: plain text, up to four lines of 16 characters, space padded (EZ Scan's "Set V-Scanner Folder
- * Description" shows the first four lines in its folder picker); as many lines as the words need, wrapped at a
- * word ("TRXC Import" / "Tests").
+ * Description" shows the first four lines in its folder picker), always all four (64 bytes, as EZ Scan writes it),
+ * the words wrapped at a word ("TRXC Import" / "Tests").
  */
 export function buildDescript(description: string): Uint8Array {
   const words = description.trim().split(/\s+/).filter(Boolean);
@@ -198,7 +198,8 @@ export function buildDescript(description: string): Uint8Array {
     else if (lines.length < DESCRIPT_LINES) lines.push(w.slice(0, NAME_LENGTH));
     else break;
   }
-  const out = new Uint8Array(NAME_LENGTH * lines.length);
+  while (lines.length < DESCRIPT_LINES) lines.push('');
+  const out = new Uint8Array(NAME_LENGTH * DESCRIPT_LINES);
   lines.forEach((l, i) => putText(out, i * NAME_LENGTH, NAME_LENGTH, l));
   return out;
 }
