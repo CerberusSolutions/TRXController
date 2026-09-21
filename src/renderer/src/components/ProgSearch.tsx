@@ -70,7 +70,9 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
                 <Flag label="Special Mode" on={s.sweeper.specialMode} onChange={(v) => setSearch({ sweeper: { ...s.sweeper, specialMode: v } })} title="Skips a 1 MHz block once five or more of its frequencies have been skipped: for when many high-power transmitters sit close together in frequency (Whistler's manual)" />
               </div>
             </Groups>
-            <Groups title="Amateur" labels={SEARCH_GROUPS.amateur} on={s.amateur.groups} onChange={(groups) => setSearch({ amateur: { groups } })} />
+            <Groups title="Amateur" labels={SEARCH_GROUPS.amateur} on={s.amateur.groups} onChange={(groups) => setSearch({ amateur: { ...s.amateur, groups } })}>
+              <Options o={s.amateur} onChange={(o) => setSearch({ amateur: { ...s.amateur, ...o } })} />
+            </Groups>
             {CHANNEL_SEARCHES.map((t) => (
               <Channels key={t.id} title={t.name} table={t.channels} state={s.channels[t.id]} onChange={(c) => setSearch({ channels: { ...s.channels, [t.id]: c } })} />
             ))}

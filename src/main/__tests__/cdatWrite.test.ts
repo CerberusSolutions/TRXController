@@ -134,6 +134,7 @@ describe('patchPldef / patchGlb', () => {
     glb[573] = 0x16;
     glb[575] = 0x0b;
     glb[589] = 0x06;
+    glb[598] = 0x0b;
     glb[607] = 0x0b;
     for (const o of [615, 633, 651, 669]) {
       glb[o] = 0x0a;
@@ -149,7 +150,7 @@ describe('patchPldef / patchGlb', () => {
         limit: { attenuator: true, zeromatic: false, delay: false, lowHz: 25_000_000, highHz: 1_300_000_000 },
         uvhfAm: { attenuator: false, zeromatic: true, delay: true, groups: [true, true, false, false] },
         sweeper: { specialMode: true, groups: [false, false, true, false, false, true, false, true, true, false] },
-        amateur: { groups: [true, true, true, true, true, true, true, true] },
+        amateur: { attenuator: true, zeromatic: false, delay: false, groups: [true, true, true, true, true, true, true, true] },
         channels: {
           cbUk: { attenuator: false, zeromatic: false, delay: true, enabled: [false, false, ...Array(38).fill(true)] },
           mosque: { attenuator: true, zeromatic: false, delay: false, enabled: Array(23).fill(true) },
@@ -164,7 +165,7 @@ describe('patchPldef / patchGlb', () => {
     expect(out[512]).toBe(25);
     expect(out[566]).toBe(3);
     // Search blocks: only the decoded bits move, the others in each flags byte stay.
-    expect([out[571], out[572], out[573], out[575], out[589], out[590], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0xff, 0x0a, 0x1e]);
+    expect([out[571], out[572], out[573], out[575], out[589], out[590], out[598], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0x06, 0xff, 0x0a, 0x1e]);
     expect([out[615], out[616], out[617], out[633], out[651], out[652], out[669]]).toEqual([0x0a, 0xfc, 0xff, 0x06, 0x0a, 0xfd, 0x0a]);
     expect(out[616 + 5]).toBe(0xff); // CB has 40 rows: bits past them stay as read
     expect(new DataView(out.buffer).getUint32(576, true)).toBe(25_000_000);

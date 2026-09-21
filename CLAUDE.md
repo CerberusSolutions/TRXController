@@ -517,7 +517,7 @@ captured on 14 Sep 2026.
   lockout table runs from 694 to the end as uint32 Hz, lowest first (all found by EZ Scan's one-change saves, 21 Sep
   2026); the Search tab (`ProgSearch.tsx`) edits those, plus the search blocks: Sweeper groups as bits at 571-572 with
   Special Mode bit 5 of 573 (the Sweeper's other option bits have their own layout, kept), Limit flags at 575 with its
-  range as uint32 Hz at 576 / 580, U/VHF AM flags at 589 and four group bits at 590, Amateur groups at 599, Public
+  range as uint32 Hz at 576 / 580, U/VHF AM flags at 589 and four group bits at 590, Amateur flags at 598 and groups at 599, Public
   Safety flags at 607 and five group bits at 608; in a flags byte bit 0 is Zeromatic, bit 2 Attenuator, bit 3 Delay
   (`FLAG_*`). The four channel-table searches (a flags byte then 128 channel bits, row n = bit n: CB UK at 615, proven
   by EZ Scan's save moving bits 0-1 for channels 1-2; Mosque 633, VHF Marine 651, PMR446 669 assumed in WX-code

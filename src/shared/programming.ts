@@ -102,7 +102,7 @@ export interface ProgSearch {
   uvhfAm: SearchOptions & { groups: boolean[] };
   /** The Sweeper's flags byte has its own layout; only Special Mode is decoded. */
   sweeper: { specialMode: boolean; groups: boolean[] };
-  amateur: { groups: boolean[] };
+  amateur: SearchOptions & { groups: boolean[] };
   /** The four channel-table searches: options plus one tick per row of the table in `searchChannels.ts`. */
   channels: Record<ChannelSearch, SearchOptions & { enabled: boolean[] }>;
 }
@@ -126,6 +126,7 @@ export const FLAG_ATTENUATOR = 0x04;
 export const FLAG_DELAY = 0x08;
 export const GLB_LIMIT_LOW = 576;
 export const GLB_LIMIT_HIGH = 580;
+export const GLB_AMATEUR_FLAGS = 598;
 export const GLB_AMATEUR_GROUPS = 599;
 export const GLB_PS_FLAGS = 607;
 export const GLB_PS_GROUPS = 608;

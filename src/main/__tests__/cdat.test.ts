@@ -158,7 +158,7 @@ describe('parseCdat', () => {
         limit: { attenuator: false, zeromatic: true, delay: true, lowHz: 25_000_000, highHz: 1_300_000_000 },
         uvhfAm: { attenuator: true, zeromatic: false, delay: false, groups: [false, true, false, false] },
         sweeper: { specialMode: true, groups: [false, false, true, false, false, true, false, true, true, false] },
-        amateur: { groups: [true, true, true, true, true, true, true, true] },
+        amateur: { attenuator: false, zeromatic: true, delay: true, groups: [true, true, true, true, true, true, true, true] },
         channels: expect.objectContaining({ cbUk: expect.objectContaining({ delay: true, attenuator: false, enabled: [false, false, ...Array(38).fill(true)] }) }),
       },
     });
