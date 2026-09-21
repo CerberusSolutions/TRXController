@@ -426,7 +426,8 @@ captured on 14 Sep 2026.
   backlit LCD is; UAT testers asked for it to look like the radio and be always visible. The icon strip along
   its top (`iconStrip`: RSSI bars, S, BATT, EXT, Fn, G, A, T, ▶, ❚❚, the signal type, IF, TRUNK2, PRI, TRUNKS)
   follows the TRX's own order. Unlit (`--t-lcd-off`, nothing drawn) while no scanner is connected or the
-  scanner is off; the "Scanner off" / "Scanner busy" badge sits on the screen. Sized at 13px so the whole
+  scanner is off; the "Scanner off" / "Scanner busy" badge sits on the screen. Sized at 14px bold (the closest a
+  text face gets to the LCD's pixel font) so the whole
   right column (screen, keys at 2.5rem, Tune box) fits the 1320 x 780 default without scrolling: check
   that whenever the column changes.
 - `ThemeToggle` (sun / moon / monitor) in the top bar sets `trx.theme` in localStorage
