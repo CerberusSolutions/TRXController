@@ -187,7 +187,7 @@ export default function HelpDialog() {
 
             <Section title="Map">
               <p>
-                The <b className="text-ink">map</b> button beside Listed, or beside a log entry's candidates, opens a second window: you (your
+                The <b className="text-ink">map</b> button beside Listed, or beside any placed candidate in a log entry, opens a second window: you (your
                 location from the Data dialog) and every candidate pinned on OpenStreetMap, with a line to the one the log chose and its
                 distance and bearing. It follows the scanner, or stays on the entry it was opened from (Follow, or F, lets go). Keys: + and −
                 zoom, arrows pan, A fits everything in, Z centres on you. A WTR pin is the Ofcom licence holder, often a reseller's address

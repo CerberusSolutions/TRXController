@@ -352,7 +352,8 @@ captured on 14 Sep 2026.
 - `openMap` in `src/main/index.ts` opens one extra `BrowserWindow` (same `windowChrome()` as the main window,
   closed with it) on the renderer's `#map` route (`main.tsx` renders `components/MapApp.tsx` instead of `App`),
   with a user agent naming the app, as OpenStreetMap's tile policy asks; `map:open` (IPC, `MapTarget`:
-  `follow` or one `row`) creates or refocuses it and `map:target` feeds it. The renderer's CSP allows
+  `follow`, or one `row` with an optional `pick` index into its candidates, from the map button beside each
+  placed candidate) creates or refocuses it and `map:target` feeds it. The renderer's CSP allows
   `tile.openstreetmap.org` images. `MapApp` attaches the scanner, log, identities and theme stores like `App`
   does; in follow mode the entry on show is the log's newest row on the scanner's frequency (the log is what
   knows which candidate won), else the live `candidatesFor` list; pinned mode is the row it was opened from.

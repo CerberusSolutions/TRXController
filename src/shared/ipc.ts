@@ -82,7 +82,7 @@ export interface LogCursor {
 }
 
 /** What the map window shows: the scanner's current frequency as it moves, or one log entry, pinned. */
-export type MapTarget = { kind: 'follow' } | { kind: 'row'; row: ReceptionRow };
+export type MapTarget = { kind: 'follow' } | { kind: 'row'; row: ReceptionRow; /** Index into `row.candidates` of the pin to draw the line to; the log's own choice when absent. */ pick?: number };
 
 /** The serial ports the OS lists, or why it could not list them (shown in the top bar). */
 export interface PortsResult {
