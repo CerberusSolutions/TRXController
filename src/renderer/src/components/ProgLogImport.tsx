@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { CTCSS_TONES, type ProgObject, type ProgScanlist } from '../../../shared/programming';
+import { defaultModulation } from '../../../shared/bandDefaults';
 import { alphaTag, ezModeOf, ezObjects, ezToneOf, type EzObject } from '../lib/csv';
 import { rowMatches, useLog } from '../store/log';
 import { mhz } from './ProgGrid';
@@ -13,7 +14,8 @@ export function objectFromLog(o: EzObject, index: number, scanlist: number): Pro
     index,
     name: alphaTag(o),
     frequencyHz: o.frequencyHz,
-    modulation: mod === 'DMR' || mod === 'NXDN' ? mod : mod === 'P25' ? 'NFM' : mod,
+    // The mode the scanner was using when it heard the entry; from the band when the scanner never said.
+    modulation: mod === 'DMR' || mod === 'NXDN' ? mod : mod === 'P25' ? 'NFM' : mod === 'AUTO' ? defaultModulation(o.frequencyHz) : mod,
     dmode: dmode === 'Digital' ? 'Digital' : 'Auto',
     // DCS and NAC squelch are not written yet (never seen on a card), so those become Search: the scanner finds the code.
     tone: ctcss ? { type: 'CTCSS', value: ctcss } : toneType === 'None' ? { type: 'None', value: '' } : { type: 'Search', value: '' },

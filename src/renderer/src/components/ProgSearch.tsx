@@ -50,7 +50,7 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
         </label>
         <span className="text-[11px] text-ink-3">The Sweeper's own options and its mode are kept as read.</span>
       </div>
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(17rem, 1fr))' }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 20rem), 1fr))' }}>
         <Lockouts hz={g.lockoutsHz} onChange={(lockoutsHz) => set({ lockoutsHz })} />
         {s && (
           <>
@@ -208,7 +208,7 @@ function Channels({ title, table, state, onChange }: { title: string; table: rea
         <Flag label="Attenuator" on={state.attenuator} onChange={(v) => onChange({ ...state, attenuator: v })} />
         <Flag label="Delay" on={state.delay} onChange={(v) => onChange({ ...state, delay: v })} />
       </div>
-      <div className="grid max-h-64 grid-cols-2 gap-x-4 gap-y-0.5 overflow-y-auto text-[12px]">
+      <div className="grid max-h-64 grid-cols-2 gap-x-3 gap-y-0.5 overflow-y-auto overflow-x-hidden text-[12px]">
         {table.map((c, i) => (
           <label key={`${c.label}-${c.hz}`} className="flex items-center gap-2">
             <input type="checkbox" className="h-3.5 w-3.5 accent-cyan" checked={state.enabled[i] ?? false} onChange={(e) => onChange({ ...state, enabled: state.enabled.map((v, j) => (j === i ? e.target.checked : v)) })} />
