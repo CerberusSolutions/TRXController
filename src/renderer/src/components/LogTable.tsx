@@ -486,21 +486,13 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           </span>
           <span className="shrink-0 truncate font-sans text-[12.5px] text-ink">{current.name}</span>
           <span className="min-w-0 flex-1 truncate text-ink-3">{current.detail || "typed in by you"}</span>
+          {r.lat !== null && r.lon !== null && (
+            <button type="button" className={btn} title="Show this entry on the map" onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r })}>
+              map
+            </button>
+          )}
           {confirmedMark}
           {withdraw}
-        </li>
-      )}
-      {(r.candidates.length > 0 || r.lat !== null) && (
-        <li className="flex items-center gap-2 py-px">
-          <span className="w-9 shrink-0" />
-          <button
-            type="button"
-            className={btn}
-            title="Open the map window with this entry's candidates pinned around you"
-            onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r })}
-          >
-            map
-          </button>
         </li>
       )}
       {r.candidates.map((c, i) => {
@@ -517,6 +509,16 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
               {c.match === true && !c.detail.includes("✓") ? " ✓" : ""}
             </span>
             <span className="shrink-0 text-ink-2">{formatPlace(c, units) || <span className="text-ink-3">not placed</span>}</span>
+            {c.lat !== null && c.lat !== undefined && c.lon !== null && c.lon !== undefined && (
+              <button
+                type="button"
+                className={btn}
+                title="Open the map window with every candidate pinned and the line drawn to this one"
+                onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r, pick: i })}
+              >
+                map
+              </button>
+            )}
             {mine ? (
               <>
                 {confirmedMark}

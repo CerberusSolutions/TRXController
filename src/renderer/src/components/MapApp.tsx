@@ -32,7 +32,7 @@ export default function MapApp() {
     const offTarget = window.trx?.onMapTarget
       ? window.trx.onMapTarget((t) => {
           setTarget(t);
-          setPicked(null);
+          setPicked(t.kind === 'row' && t.pick !== undefined ? `c${t.pick}` : null);
         })
       : () => undefined;
     return () => {
