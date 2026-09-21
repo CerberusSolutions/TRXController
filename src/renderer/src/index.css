@@ -121,7 +121,7 @@ body {
 .lcd-line { white-space: pre; }
 /* The screen in the radio panel: a fixed 13px so the column fits a 780px window. */
 .lcd-screen { padding: 0.5em 0.7em 0.55em; }
-.lcd-radio { font-size: 13px; }
+.lcd-radio { font-size: 14px; font-weight: 700; line-height: 1.28; }
 .lcd-icons { display: flex; flex-wrap: nowrap; gap: 0.55em; overflow: hidden; font-size: 0.72em; letter-spacing: 0.06em; line-height: 1.5; margin-bottom: 0.15em; font-weight: 700; }
 .lcd-icons span { white-space: nowrap; }
 .lcd-cursor { background: rgba(28, 20, 7, 0.16); }
