@@ -10,7 +10,15 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 
 - Electron + Vite (via `electron-vite`) + React + TypeScript. Windows is the primary target; a
   macOS Apple-silicon build (unsigned, not notarised) and Linux packages (AppImage + .deb, x64 and
-  arm64) are packaged too. Platform differences are confined to: window chrome in
+  arm64) are packaged too. **macOS cannot see the TRX over USB**: the scanner declares a mass-storage
+  interface (the SD card) and a CDC ACM *control* interface only, with no CDC data interface (TRX-1E,
+  VID 2A59 PID 0012, `ioreg` on 21 Sep 2026, identical scanner on or off). Windows binds usbser via
+  Whistler's INF and Linux's cdc_acm has a single-interface case, but Apple's `AppleUSBACMControl`
+  binds the control half and makes no `/dev/cu.usbmodem` port; the interface is then claimed, so libusb
+  cannot take it, and a kext / DriverKit driver needs Apple signing. Only a Whistler firmware change
+  (declaring the data interface) fixes it; the documented route is a Linux VM (UTM) with USB
+  passthrough running the arm64 AppImage. The Mac build stays published with that caveat on the
+  website's download card, install steps and FAQ (`#faq-mac-port`), the README and the help screen. Platform differences are confined to: window chrome in
   `src/main/index.ts` (`hiddenInset` + traffic lights on macOS, the title-bar overlay on Windows,
   the window manager's own frame on Linux, which has no overlay), the top bar's padding
   (`window.trx.platform`), the help / status text (data folder, Cmd vs Ctrl, serial port names and

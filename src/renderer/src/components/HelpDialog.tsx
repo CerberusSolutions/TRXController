@@ -129,6 +129,15 @@ export default function HelpDialog() {
                 <li>
                   Pick its serial port in the top bar. The Whistler port is chosen automatically when it can be told apart; use ⟳ to rescan after plugging
                   in.
+                  {IS_MAC && (
+                    <>
+                      {' '}
+                      <b className="text-amber">On a Mac no port will appear.</b> The TRX presents its serial interface in a single-interface form that
+                      Windows and Linux drivers accept and Apple's does not, so macOS never creates a <span className="font-mono text-ink">/dev/cu.usbmodem</span>{' '}
+                      port and this app has nothing to open; no lead, setting or driver changes that. The working route on a Mac is a Linux virtual
+                      machine (UTM) with the scanner's USB device passed through, running the Linux arm64 AppImage. Details on the website's FAQ.
+                    </>
+                  )}
                   {IS_LINUX && (
                     <>
                       {' '}

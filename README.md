@@ -1,6 +1,6 @@
 # TRXController
 
-A modern remote-control and logging app (Windows, macOS on Apple silicon, and Linux) for the Whistler TRX-1 / TRX-1E / TRX-2
+A modern remote-control and logging app (Windows and Linux; a macOS build exists but macOS cannot see the TRX over USB, see below) for the Whistler TRX-1 / TRX-1E / TRX-2
 digital scanners, replacing Whistler's own remote control software.
 
 **Website, downloads and user guide:** <https://cerberussolutions.github.io/TRXController/>
@@ -237,13 +237,18 @@ that is needed:
    then launch it normally. On macOS 15 (Sequoia) and later you may instead see the app blocked
    with a note in **System Settings › Privacy & Security**; scroll to the bottom of that page and
    choose **Open Anyway**.
-5. Plug the scanner in over USB and switch it on. No driver is needed; it appears in the port
-   selector in the top bar as `/dev/cu.usbmodem…` (the Mac's own debug-console, wlan-debug and
-   Bluetooth ports are never a scanner, so the app leaves them out). Press **Connect**. If the box
-   stays empty with the scanner on, run `ls /dev/cu.*` in Terminal: a `usbmodem` entry means macOS
-   sees the scanner and the fault is ours, so please report it; none means macOS has not created a
-   port for it, so check the lead, any hub or dock in the way, and System Information › USB.
-   The port is remembered for next time.
+5. Plug the scanner in over USB and switch it on, and here macOS stops. **macOS never creates a
+   serial port for the TRX**, so the port selector stays empty however it is connected. The scanner
+   presents its serial interface in a single-interface form (a CDC control interface with no data
+   interface, checked on a TRX-1E with `ioreg` on 21 Sep 2026, scanner on or off) that the Windows
+   and Linux drivers accept and Apple's does not: it binds the control half, finds no data interface
+   and makes no port. No lead, hub, setting or third-party driver changes that, and the app cannot
+   go round it (macOS holds the interface; a kernel or DriverKit driver needs Apple signing this
+   project does not have). A firmware update from Whistler declaring the data interface would fix it.
+
+   What does work on a Mac: a Linux virtual machine (UTM is free on Apple silicon) with the
+   scanner's USB device passed through to it, running the Linux arm64 AppImage; Linux's driver
+   handles the layout. The macOS build is kept for the day the firmware or macOS changes.
 
 Everything else is the same as on Windows, with Cmd in place of Ctrl (Cmd+Shift+D for
 diagnostics). The log, settings and imported data live in
