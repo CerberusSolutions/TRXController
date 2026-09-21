@@ -78,7 +78,20 @@ export interface ProgGlobals {
   signalBars: number[];
   /** The last Tune Mode frequency the scanner saved, if any. */
   lastTuneHz: number | null;
+  /** EZ Scan's Search Delay Time, seconds; null when the file is too short to hold it. */
+  searchDelayS: number | null;
+  /** The search the WX button starts, as the scanner's code (`WX_BUTTON` names the known ones). */
+  wxButton: number | null;
+  /** Search lockouts, Hz, lowest first. */
+  lockoutsHz: number[];
 }
+
+/** WX button operations by code, as far as seen (EZ Scan's list has more; unknown codes are shown as "Mode N"). */
+export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 3: 'Amateur' };
+/** How many lockouts ISCAN___.GLB holds: its table runs from `GLB_LOCKOUTS` to the end of the 1,706-byte file. */
+export const GLB_LOCKOUTS = 694;
+export const GLB_SEARCH_DELAY = 512;
+export const GLB_WX_BUTTON = 566;
 
 /** Everything read from one CDAT folder. */
 export interface Programming {

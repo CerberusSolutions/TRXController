@@ -4,9 +4,10 @@ import { attachLogEvents } from '../store/log';
 import { initTheme } from '../store/theme';
 import ProgLogImport from './ProgLogImport';
 import ProgNameFromLookups from './ProgNameFromLookups';
+import ProgSearch from './ProgSearch';
 import ProgGrid, { NAME_MAX, Popover, ScanlistPicker, TextCell, mhz, squelchText, type ObjectPatch } from './ProgGrid';
 
-type Tab = 'general' | 'scanlists' | 'objects' | 'trunked';
+type Tab = 'general' | 'scanlists' | 'objects' | 'trunked' | 'search';
 const UNDO_DEPTH = 100;
 const btn = 'no-drag whitespace-nowrap rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40 disabled:hover:text-ink-3';
 const primary = 'no-drag whitespace-nowrap rounded-md bg-cyan px-2.5 py-1 text-[11px] font-bold text-bg disabled:opacity-40';
@@ -53,7 +54,7 @@ const newObject = (index: number, scanlist: number): ProgObject => ({
  * writes it to the SD card's CDAT folder, read off the card (which mounts as a drive while the scanner
  * is off) or a V-Scanner folder beside it, edited in place in the grid, and written back over the
  * folder (after a backup beside it) or into a new V-Scanner folder. Every edit is one undo step.
- * Tabs follow EZ Scan's: General, Scanlists, Conventional objects, Trunked systems (read-only).
+ * Tabs follow EZ Scan's: General, Scanlists, Conventional objects, Trunked systems (read-only), Search.
  */
 export default function ProgrammingApp() {
   const [base, setBase] = useState<Programming | null>(null);
@@ -363,6 +364,7 @@ export default function ProgrammingApp() {
             {tabBtn('scanlists', 'Scanlists')}
             {tabBtn('objects', 'Conventional')}
             {tabBtn('trunked', 'Trunked')}
+            {tabBtn('search', 'Search')}
             {tab === 'objects' && (
               <>
                 <input
@@ -475,6 +477,7 @@ export default function ProgrammingApp() {
             )}
             {tab === 'general' && <General prog={prog} onChange={commit} />}
             {tab === 'trunked' && <Trunked prog={prog} />}
+            {tab === 'search' && <ProgSearch prog={prog} onChange={commit} />}
           </div>
           <div className="flex shrink-0 items-center gap-3 border-t border-edge bg-panel px-3 py-1 text-[11px] text-ink-3">
             {dirty ? (

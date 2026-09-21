@@ -513,7 +513,10 @@ captured on 14 Sep 2026.
   so the editor has no Default), DESCRIPT.TXT is plain text in four
   16-character lines, 64 bytes (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 2-3
   are a check, the one's complement of the 16-bit byte sum from byte 4 (`glbChecksum`, rewritten on every change);
-  its lockout table starts at 694 as uint32 Hz. Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
+  the search delay is at 512 in tenths, the WX button's search at 566 (0 Pub Safety, 3 Amateur; `WX_BUTTON`) and the
+  lockout table runs from 694 to the end as uint32 Hz, lowest first (all found by EZ Scan's one-change saves, 21 Sep
+  2026); the Search tab (`ProgSearch.tsx`) edits those three. The search band tables are not decoded (608 looks like
+  the Public Safety group bits, 571 the Sweeper's; unconfirmed). Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
   its three channels, and its own re-save changed only the bytes it was asked to (Backlight, an enabled bit). DCS and NAC squelch have not been seen on a card, so
   the editor offers them greyed out and never writes them (a log entry with one imports as Search); DMR colour
   code, slot and talkgroup are wildcards on every object seen and are left alone. `locate.ts` finds the folders,
@@ -521,7 +524,7 @@ captured on 14 Sep 2026.
   beside it, or into the next free `CDAT_VS.nnn` (a copy of the folder with the regenerated files over it). Main
   registers the `programming:*` IPC (`open`, `locate` with an optional folder whose siblings list first, `load`,
   `save`) and the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General
-  / Scanlists / Conventional / Trunked, the last read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
+  / Scanlists / Conventional / Trunked / Search, Trunked read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
   bar's Program button. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
   Enter, Esc reverts; a change to a row inside the selection applies to every selected row, which is the bulk
   edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK

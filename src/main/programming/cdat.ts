@@ -14,10 +14,12 @@
  *   PLSETS.DAT: 20 x 44 bytes, name (16), ?, enabled, 25-byte scanlist bitmap, ?.
  * - TSnnnnnn._TS: a trunked system, name at 19, then 654-byte site records (32 x 6-byte frequency
  *   entries, then the name); ._GD: its talkgroups as 126-byte object-shaped records, scattered.
- * - ISCAN___.GLB: a 15-byte header, the five welcome lines (16 each, centred) at 15, the five signal-bar
- *   thresholds at 100, the last Tune Mode frequency at 153.
+ * - ISCAN___.GLB: a 15-byte header (bytes 2-3 the check, see write.ts; 8-12 backlight timeout, contrast, speaker,
+ *   headphone and key volume), the five welcome lines (16 each, centred) at 15, the five signal-bar thresholds at 100,
+ *   the last Tune Mode frequency at 153, the search delay in tenths at 512, the WX button's search at 566, and the
+ *   lockouts from 694 to the end as uint32 Hz (found by EZ Scan's own saves, one change each, 21 Sep 2026).
  */
-import { CTCSS_TONES, type DMode, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
+import { CTCSS_TONES, GLB_LOCKOUTS, GLB_SEARCH_DELAY, GLB_WX_BUTTON, type DMode, type Modulation, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type ProgSite, type ProgTalkgroup, type ProgTrunkedSystem, type Programming, type ToneSetting } from '../../shared/programming';
 import { keystream } from './keystream';
 
 export const OBJECT_RECORD = 126;
@@ -194,7 +196,20 @@ export function parseGlobals(glb: Uint8Array): ProgGlobals {
   const signalBars: number[] = [];
   for (let i = 0; i < 5; i++) signalBars.push(u16(glb, 100 + i * 2));
   const tune = glb.length >= 157 ? u32(glb, 153) : 0;
-  return { welcome, signalBars, lastTuneHz: plausibleHz(tune) ? tune : null };
+  const lockoutsHz: number[] = [];
+  for (let o = GLB_LOCKOUTS; o + 4 <= glb.length; o += 4) {
+    const hz = u32(glb, o);
+    if (plausibleHz(hz)) lockoutsHz.push(hz);
+  }
+  lockoutsHz.sort((a, b) => a - b);
+  return {
+    welcome,
+    signalBars,
+    lastTuneHz: plausibleHz(tune) ? tune : null,
+    searchDelayS: glb.length > GLB_SEARCH_DELAY ? glb[GLB_SEARCH_DELAY]! / 10 : null,
+    wxButton: glb.length > GLB_WX_BUTTON ? glb[GLB_WX_BUTTON]! : null,
+    lockoutsHz,
+  };
 }
 
 /**
@@ -225,7 +240,7 @@ export function parseCdat(dir: string, files: ReadonlyMap<string, Uint8Array>, r
   return {
     dir,
     description,
-    globals: glb ? parseGlobals(glb) : { welcome: [], signalBars: [], lastTuneHz: null },
+    globals: glb ? parseGlobals(glb) : { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [] },
     objects,
     scanlists: pldef ? parseScanlists(pldef, objects) : [],
     scanSets: plsets ? parseScanSets(plsets) : [],

@@ -11,7 +11,7 @@
  * zeros); talkgroup entries (first byte 1) already in a list are kept after them, and the tenth byte,
  * which EZ Scan leaves as memory garbage (always a multiple of 8), is written as 0.
  */
-import { CTCSS_TONES, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
+import { CTCSS_TONES, GLB_LOCKOUTS, GLB_SEARCH_DELAY, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
 import { CG_HEADER, OBJECT_RECORD, decode, parseObjects } from './cdat';
 
 /** A blank record: the bytes constant across 7,412 objects on two cards. */
@@ -174,9 +174,15 @@ export function glbChecksum(glb: Uint8Array): number {
   return ~sum & 0xffff;
 }
 
-export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome'>): Uint8Array {
+export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' | 'searchDelayS' | 'wxButton' | 'lockoutsHz'>): Uint8Array {
   const out = new Uint8Array(base);
   for (let i = 0; i < 5; i++) if (15 + (i + 1) * NAME_LENGTH <= out.length) putText(out, 15 + i * NAME_LENGTH, NAME_LENGTH, centre(globals.welcome[i] ?? ''));
+  if (globals.searchDelayS !== null && out.length > GLB_SEARCH_DELAY) out[GLB_SEARCH_DELAY] = Math.max(0, Math.min(255, Math.round(globals.searchDelayS * 10)));
+  if (globals.wxButton !== null && out.length > GLB_WX_BUTTON) out[GLB_WX_BUTTON] = globals.wxButton & 0xff;
+  // Lockouts: lowest first as EZ Scan keeps them, the rest of the table zero.
+  const slots = Math.max(0, Math.floor((out.length - GLB_LOCKOUTS) / 4));
+  const lockouts = [...new Set(globals.lockoutsHz.map((hz) => Math.round(hz)))].sort((a, b) => a - b).slice(0, slots);
+  for (let i = 0; i < slots; i++) putU32(out, GLB_LOCKOUTS + i * 4, lockouts[i] ?? 0);
   const check = glbChecksum(out);
   out[2] = check & 0xff;
   out[3] = check >> 8;

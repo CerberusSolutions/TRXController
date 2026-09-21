@@ -104,6 +104,9 @@ describe('parseCdat', () => {
     });
     const tune = 145_637_500;
     glb.set([tune & 0xff, (tune >> 8) & 0xff, (tune >> 16) & 0xff, (tune >>> 24) & 0xff], 153);
+    glb[512] = 30;
+    glb[566] = 3;
+    for (const [i, hz] of [450_500_000, 145_500_000].entries()) glb.set([hz & 0xff, (hz >> 8) & 0xff, (hz >> 16) & 0xff, (hz >>> 24) & 0xff], 694 + i * 4);
     enc('ISCAN___.GLB', glb);
     const ts = new Uint8Array(35 + 654 * 2);
     ts.set(ascii('USAF Bases UK', 16), 19);
@@ -133,7 +136,7 @@ describe('parseCdat', () => {
     expect(p.scanlists.find((l) => l.number === 7)!.objects).toEqual([2]);
     expect(p.scanlists[0]).toMatchObject({ number: 1, name: 'HAM UK A+D Rpts', enabled: true, objects: [] });
     expect(p.scanSets[1]).toMatchObject({ number: 2, name: 'AIR', enabled: true, scanlists: [12] });
-    expect(p.globals).toEqual({ welcome: ['WHISTLER', 'TRX-1e', 'Handheld', 'Trunking Scanner', 'MOONRAKER UK'], signalBars: [190, 230, 260, 290, 320], lastTuneHz: 145_637_500 });
+    expect(p.globals).toEqual({ welcome: ['WHISTLER', 'TRX-1e', 'Handheld', 'Trunking Scanner', 'MOONRAKER UK'], signalBars: [190, 230, 260, 290, 320], lastTuneHz: 145_637_500, searchDelayS: 3, wxButton: 3, lockoutsHz: [145_500_000, 450_500_000] });
     expect(p.trunked).toHaveLength(1);
     expect(p.trunked[0]).toMatchObject({ number: 1, name: 'USAF Bases UK' });
     expect(p.trunked[0]!.sites.map((s) => [s.name, s.frequenciesHz])).toEqual([
