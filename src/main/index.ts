@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
-import { IPC, type AppInfo, type ImportResult, type LogCursor, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, MAP_MIN_WINDOW, type AppInfo, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -21,6 +21,10 @@ import { listPorts, preferredPath, serialTransportFactory } from './scanner/seri
 
 let win: BrowserWindow | null = null;
 let mapWin: BrowserWindow | null = null;
+/** Which side of the main window the map is docked to, or null while it floats. */
+let mapDocked: MapDockSide | null = null;
+/** True while we are placing the map window ourselves, so its move events are not taken for a drag. */
+let placingMap = false;
 
 /** Window chrome colours per theme, matching the renderer's tokens. */
 const CHROME = {
@@ -224,6 +228,11 @@ function isLogCursor(v: unknown): v is LogCursor {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
+  ipcMain.handle(IPC.mapDock, (_e, side: unknown) => {
+    if (side === 'off') undockMap();
+    else dockMap(side === 'left' || side === 'right' ? side : 'auto');
+    return { docked: mapDocked };
+  });
   ipcMain.handle(IPC.listPorts, async (): Promise<PortsResult> => {
     // A system that cannot enumerate ports (no udev on a minimal Linux, say) gets an empty list with the
     // reason attached, which the top bar shows, rather than a bare "No serial ports".
@@ -498,8 +507,7 @@ function openLog(): void {
 const DEFAULT_WINDOW = { width: 1320, height: 780 };
 
 /** The saved placement, if enough of it still lands on a connected screen to grab. */
-function savedBounds(): Rectangle | null {
-  const w = settings?.get().window;
+function savedBounds(w: WindowState | null | undefined = settings?.get().window): Rectangle | null {
   if (!w) return null;
   const area = screen.getDisplayMatching(w).workArea;
   const grip = 80;
@@ -567,18 +575,131 @@ function openMap(target: MapTarget): void {
     mapWin.focus();
     return;
   }
-  mapWin = new BrowserWindow({ ...windowChrome(), width: 960, height: 720, minWidth: 480, minHeight: 360, title: 'TRXController map' });
+  const saved = savedBounds(settings?.get().mapWindow);
+  mapWin = new BrowserWindow({
+    ...windowChrome(),
+    ...(saved ?? { width: 960, height: 720 }),
+    minWidth: MAP_MIN_WINDOW.width,
+    minHeight: MAP_MIN_WINDOW.height,
+    title: 'TRXController map',
+  });
   mapWin.webContents.setUserAgent(`TRXController/${app.getVersion()} (+https://cerberussolutions.github.io/TRXController/)`);
-  mapWin.on('ready-to-show', () => mapWin?.show());
+  mapWin.on('ready-to-show', () => {
+    // Reopen docked where it was docked last time.
+    if (settings?.get().mapDock) dockMap(settings.get().mapDock!);
+    mapWin?.show();
+  });
   mapWin.on('closed', () => {
     mapWin = null;
+    mapDocked = null;
   });
+  // Dragged or resized by hand: a docked map lets go; a free one remembers its place.
+  const onMapMoved = (): void => {
+    if (!mapWin || placingMap) return;
+    if (mapDocked) {
+      const want = dockedBounds(mapDocked);
+      const b = mapWin.getBounds();
+      if (!want || Math.abs(b.x - want.x) > 4 || Math.abs(b.y - want.y) > 4 || Math.abs(b.width - want.width) > 4 || Math.abs(b.height - want.height) > 4) undockMap();
+      return;
+    }
+    rememberMapBounds();
+  };
+  mapWin.on('move', onMapMoved);
+  mapWin.on('resize', onMapMoved);
   mapWin.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
   });
-  mapWin.webContents.once('did-finish-load', () => mapWin?.webContents.send(IPC.mapTarget, target));
+  mapWin.webContents.once('did-finish-load', () => {
+    mapWin?.webContents.send(IPC.mapTarget, target);
+    mapWin?.webContents.send(IPC.mapDockState, { docked: mapDocked });
+  });
   loadRenderer(mapWin, 'map');
+}
+
+let saveMapBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+function rememberMapBounds(): void {
+  if (saveMapBoundsTimer) clearTimeout(saveMapBoundsTimer);
+  saveMapBoundsTimer = setTimeout(() => {
+    saveMapBoundsTimer = null;
+    if (!mapWin || mapWin.isDestroyed() || mapWin.isMinimized() || mapDocked) return;
+    settings?.set({ mapWindow: { ...mapWin.getNormalBounds(), maximized: false } });
+  }, 400);
+}
+
+/** Where the map goes on one side of the main window, filling that side of the display; null when the side has no room. */
+function dockedBounds(side: MapDockSide): Rectangle | null {
+  if (!win || win.isDestroyed()) return null;
+  const main = win.getBounds();
+  const area = screen.getDisplayMatching(main).workArea;
+  const right = area.x + area.width - (main.x + main.width);
+  const left = main.x - area.x;
+  if (side === 'right' && right >= MAP_MIN_WINDOW.width) return { x: main.x + main.width, y: main.y, width: right, height: main.height };
+  if (side === 'left' && left >= MAP_MIN_WINDOW.width) return { x: area.x, y: main.y, width: left, height: main.height };
+  return null;
+}
+
+function placeMap(b: Rectangle): void {
+  if (!mapWin || mapWin.isDestroyed()) return;
+  placingMap = true;
+  if (mapWin.isMaximized()) mapWin.unmaximize();
+  mapWin.setBounds(b);
+  setTimeout(() => {
+    placingMap = false;
+  }, 300);
+}
+
+function setDock(side: MapDockSide | null): void {
+  mapDocked = side;
+  settings?.set({ mapDock: side });
+  if (mapWin && !mapWin.isDestroyed()) mapWin.webContents.send(IPC.mapDockState, { docked: side });
+}
+
+/**
+ * Dock the map beside the main window: the asked-for side when it has room, else the other, else the
+ * two windows share the display, the main one keeping the larger part. 'auto' prefers the side used
+ * last time, then the right.
+ */
+function dockMap(side: MapDockSide | 'auto'): void {
+  if (!win || win.isDestroyed() || !mapWin || mapWin.isDestroyed()) return;
+  const prefer: MapDockSide = side === 'auto' ? (mapDocked ?? settings?.get().mapDock ?? 'right') : side;
+  const other: MapDockSide = prefer === 'right' ? 'left' : 'right';
+  let b = dockedBounds(prefer);
+  let got: MapDockSide = prefer;
+  if (!b) {
+    b = dockedBounds(other);
+    if (b) got = other;
+  }
+  if (!b) {
+    // No room either side: split the display between the two, the main window keeping about 62%.
+    if (win.isMaximized()) win.unmaximize();
+    const area = screen.getDisplayMatching(win.getBounds()).workArea;
+    const mapW = Math.max(MAP_MIN_WINDOW.width, Math.round(area.width * 0.38));
+    const mainW = area.width - mapW;
+    got = prefer;
+    if (got === 'left') {
+      win.setBounds({ x: area.x + mapW, y: area.y, width: mainW, height: area.height });
+      b = { x: area.x, y: area.y, width: mapW, height: area.height };
+    } else {
+      win.setBounds({ x: area.x, y: area.y, width: mainW, height: area.height });
+      b = { x: area.x + mainW, y: area.y, width: mapW, height: area.height };
+    }
+  }
+  placeMap(b);
+  setDock(got);
+}
+
+function undockMap(): void {
+  if (!mapDocked) return;
+  setDock(null);
+  rememberMapBounds();
+}
+
+/** The main window moved or resized: a docked map goes with it while its side still has room. */
+function followDock(): void {
+  if (!mapDocked || !mapWin || mapWin.isDestroyed()) return;
+  const b = dockedBounds(mapDocked);
+  if (b) placeMap(b);
 }
 
 function isMapTarget(v: unknown): v is MapTarget {
@@ -606,6 +727,12 @@ function createWindow(): void {
   win.on('move', remember);
   win.on('maximize', remember);
   win.on('unmaximize', remember);
+  // A docked map follows the main window; maximising the main window takes the whole display, so the map lets go.
+  win.on('move', followDock);
+  win.on('resize', followDock);
+  win.on('maximize', () => {
+    if (mapDocked) undockMap();
+  });
   win.on('closed', () => {
     win = null;
     if (mapWin && !mapWin.isDestroyed()) mapWin.close();

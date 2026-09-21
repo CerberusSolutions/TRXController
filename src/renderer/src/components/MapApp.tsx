@@ -19,6 +19,8 @@ export default function MapApp() {
   const [picked, setPicked] = useState<string | null>(null);
   const [tilesFailing, setTilesFailing] = useState(false);
   const [command, setCommand] = useState<{ n: number; what: 'fit' | 'home' } | null>(null);
+  const [docked, setDocked] = useState<'left' | 'right' | null>(null);
+  const [helpOpen, setHelpOpen] = useState(false);
   const snapshot = useScanner((s) => s.snapshot);
   const rows = useLog((s) => s.rows);
   const settings = useIdentities((s) => s.settings);
@@ -35,7 +37,9 @@ export default function MapApp() {
           setPicked(t.kind === 'row' && t.pick !== undefined ? `c${t.pick}` : null);
         })
       : () => undefined;
+    const offDock = window.trx?.onMapDock ? window.trx.onMapDock((s) => setDocked(s.docked)) : () => undefined;
     return () => {
+      offDock();
       offTarget();
       offLog();
       offScanner();
@@ -43,22 +47,37 @@ export default function MapApp() {
     };
   }, []);
 
+  const toggleDock = useCallback(() => {
+    const p = window.trx?.mapDock?.(docked ? 'off' : 'auto');
+    if (p) void p.then((s) => setDocked(s.docked));
+  }, [docked]);
+
   // Keyboard: + / - and the arrows are Leaflet's own once the map has focus; these work anywhere in the window.
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.key === 'Escape') {
+        setHelpOpen(false);
+        return;
+      }
+      if (e.key === '?') {
+        setHelpOpen((v) => !v);
+        e.preventDefault();
+        return;
+      }
       const k = e.key.toLowerCase();
       if (k === 'a') setCommand({ n: Date.now(), what: 'fit' });
       else if (k === 'z' || k === 'h') setCommand({ n: Date.now(), what: 'home' });
       else if (k === 'f') {
         setTarget({ kind: 'follow' });
         setPicked(null);
-      } else return;
+      } else if (k === 'd') toggleDock();
+      else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggleDock]);
 
   const userLat = settings.lat;
   const userLon = settings.lon;
@@ -159,9 +178,23 @@ export default function MapApp() {
               Following
             </span>
           )}
-          <span className="hidden text-[11px] text-ink-3 lg:inline" title="Keyboard: + and − zoom, arrows pan, A fits everything in, Z centres on you, F follows the scanner">
-            + − · arrows · A fit · Z home · F follow
-          </span>
+          <button
+            type="button"
+            className={`no-drag rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+            title={docked ? `Docked to the ${docked} of the main window; click (or D) to set it free` : 'Dock beside the main window and follow it (D)'}
+            onClick={toggleDock}
+          >
+            {docked ? 'Undock' : 'Dock'}
+          </button>
+          <button
+            type="button"
+            className="no-drag flex h-7 w-7 items-center justify-center rounded-md border border-edge text-sm font-semibold text-ink-2 hover:bg-panel-2 hover:text-ink"
+            onClick={() => setHelpOpen((v) => !v)}
+            title="Help: keys and what the pins mean (?)"
+            aria-label="Map help"
+          >
+            ?
+          </button>
         </span>
       </header>
       <div className="relative min-h-0 flex-1">
@@ -174,6 +207,50 @@ export default function MapApp() {
         {!user && (
           <div className="pointer-events-none absolute inset-x-0 bottom-3 z-[1000] mx-auto w-max max-w-[90%] rounded-md border border-edge bg-panel/95 px-3 py-1.5 text-center text-xs text-ink-2">
             Set your location in the Data dialog to see yourself on the map and the line to each site.
+          </div>
+        )}
+        {helpOpen && (
+          <div
+            className="no-drag absolute inset-0 z-[1100] flex items-start justify-end bg-bg/40 p-3"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setHelpOpen(false);
+            }}
+            role="presentation"
+          >
+            <div role="dialog" aria-label="Map help" className="w-80 max-w-full rounded-xl border border-edge bg-panel p-4 text-sm text-ink-2 shadow-2xl">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Map keys</span>
+                <button type="button" className="text-ink-3 hover:text-ink" onClick={() => setHelpOpen(false)} aria-label="Close" title="Close (Esc)">
+                  ×
+                </button>
+              </div>
+              <dl className="grid grid-cols-[4.5rem_1fr] gap-x-2 gap-y-1">
+                {(
+                  [
+                    ['+ / −', 'Zoom in and out (scroll wheel too)'],
+                    ['Arrows', 'Pan'],
+                    ['A', 'Fit everything in: you and every pin'],
+                    ['Z', 'Centre on your location'],
+                    ['F', 'Follow the scanner again'],
+                    ['D', 'Dock beside the main window, or set it free'],
+                    ['Click a pin', 'Its card, and the line moves to it'],
+                    ['Esc', 'Close this'],
+                  ] as const
+                ).map(([k, v]) => (
+                  <div key={k} className="contents">
+                    <dt className="font-mono text-[12px] text-ink">{k}</dt>
+                    <dd className="text-[12px]">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div className="mt-3 border-t border-edge pt-2 text-[11.5px] text-ink-3">
+                <p>
+                  <span className="map-legend map-pin-wtr" /> WTR is the Ofcom licence holder, often a reseller's address rather than the transmitter.{' '}
+                  <span className="map-legend map-pin-rruk" /> RRUK and <span className="map-legend map-pin-rrdb" /> RRDB pins are the sites those databases list.{' '}
+                  <span className="map-legend map-pin-ukr" /> UKR is the repeater itself. The larger pin is the one the log chose; the dashed line carries its distance and bearing.
+                </p>
+              </div>
+            </div>
           </div>
         )}
         {points.length === 0 && (

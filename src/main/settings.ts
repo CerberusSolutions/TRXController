@@ -1,13 +1,13 @@
 /** Small JSON settings file in userData, owned by the main process. */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import type { RrSettings, RrukSettings, Settings, WindowState } from '../shared/ipc';
+import { MAP_MIN_WINDOW, type RrSettings, type RrukSettings, type Settings, type WindowState } from '../shared/ipc';
 import { normaliseUnits } from '../shared/geo';
 import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
 export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '' };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -48,6 +48,8 @@ export function sanitize(s: Settings): Settings {
     port: typeof s.port === 'string' && s.port.trim() !== '' ? s.port.trim() : null,
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),
+    mapDock: s.mapDock === 'left' || s.mapDock === 'right' ? s.mapDock : null,
+    mapWindow: sanitizeWindow(s.mapWindow, MAP_MIN_WINDOW),
     rr: sanitizeRr(s.rr),
     rruk: sanitizeRruk(s.rruk),
     lookups: normaliseLookups(s.lookups),
@@ -80,7 +82,7 @@ function sanitizeRruk(r: unknown): RrukSettings {
 
 export const MIN_WINDOW = { width: 900, height: 600 };
 
-function sanitizeWindow(w: unknown): WindowState | null {
+function sanitizeWindow(w: unknown, min: { width: number; height: number } = MIN_WINDOW): WindowState | null {
   if (typeof w !== 'object' || w === null) return null;
   const o = w as Record<string, unknown>;
   const int = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? Math.round(v) : null);
@@ -89,6 +91,6 @@ function sanitizeWindow(w: unknown): WindowState | null {
   const width = int(o['width']);
   const height = int(o['height']);
   if (x === null || y === null || width === null || height === null) return null;
-  if (width < MIN_WINDOW.width || height < MIN_WINDOW.height) return null;
+  if (width < min.width || height < min.height) return null;
   return { x, y, width, height, maximized: o['maximized'] === true };
 }

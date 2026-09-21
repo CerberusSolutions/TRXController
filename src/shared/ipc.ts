@@ -429,7 +429,18 @@ export interface Settings {
   autoConnect: boolean;
   /** Last window placement, restored at launch when it is still on a screen. */
   window: WindowState | null;
+  /** Which side of the main window the map window is docked to; null when it floats free. */
+  mapDock: MapDockSide | null;
+  /** The map window's own placement while undocked, restored when it opens. */
+  mapWindow: WindowState | null;
 }
+
+export type MapDockSide = 'left' | 'right';
+export interface MapDockState {
+  docked: MapDockSide | null;
+}
+/** The map window's smallest useful size. */
+export const MAP_MIN_WINDOW = { width: 480, height: 360 } as const;
 
 export interface WindowState {
   x: number;
@@ -468,6 +479,8 @@ export interface ImportResult {
 export const IPC = {
   mapOpen: 'map:open',
   mapTarget: 'map:target',
+  mapDock: 'map:dock',
+  mapDockState: 'map:dock-state',
   listPorts: 'scanner:list-ports',
   connect: 'scanner:connect',
   disconnect: 'scanner:disconnect',

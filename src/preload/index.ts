@@ -11,6 +11,8 @@ import {
   type Settings,
   type ThemeMode,
   type LogCursor,
+  type MapDockSide,
+  type MapDockState,
   type MapTarget,
   type PortsResult,
   type TrafficGroup,
@@ -99,6 +101,13 @@ const api = {
     const listener = (_e: unknown, t: MapTarget): void => cb(t);
     ipcRenderer.on(IPC.mapTarget, listener);
     return () => ipcRenderer.removeListener(IPC.mapTarget, listener);
+  },
+  /** Dock the map window beside the main one ('auto' picks the free side, else the remembered one), or set it free ('off'). */
+  mapDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.mapDock, side),
+  onMapDock: (cb: (s: MapDockState) => void): (() => void) => {
+    const listener = (_e: unknown, s: MapDockState): void => cb(s);
+    ipcRenderer.on(IPC.mapDockState, listener);
+    return () => ipcRenderer.removeListener(IPC.mapDockState, listener);
   },
   settingsGet: (): Promise<Settings> => ipcRenderer.invoke(IPC.settingsGet),
   settingsSet: (patch: Partial<Settings>): Promise<Settings> => ipcRenderer.invoke(IPC.settingsSet, patch),
