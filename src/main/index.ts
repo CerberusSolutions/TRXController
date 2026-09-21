@@ -6,6 +6,7 @@ import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type 
 import { isDayKey } from '../shared/dayMap';
 import { locateCdat, readCdat, writeCdat } from './programming/locate';
 import type { ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
+import type { LookupMode } from '../shared/ipc';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -462,16 +463,20 @@ function registerIpc(): void {
     rr?.clearCache();
     return rr?.status() ?? null;
   });
-  // Both lookups answer from the cache at once (`pending` set while a call is in flight); `force` re-asks
-  // the service even when cached (the Data dialog's refresh), otherwise only an uncached or stale frequency is asked.
-  ipcMain.handle(IPC.rrukLookup, (_e, hz: unknown, force: unknown) => {
+  // Both lookups answer from the cache at once (`pending` set while a call is in flight). The mode says
+  // whether to ask the service: 'force' even when cached (the Data dialog's refresh), 'ask' only when
+  // uncached or stale, 'cache' never (the editor's bulk naming, which must not fire hundreds of calls).
+  const lookupMode = (v: unknown, fallback: LookupMode): LookupMode => (v === 'force' || v === 'ask' || v === 'cache' ? v : fallback);
+  ipcMain.handle(IPC.rrukLookup, (_e, hz: unknown, mode: unknown) => {
     if (!rruk || typeof hz !== 'number') return null;
-    rruk.request(hz, force === true);
+    const m = lookupMode(mode, 'ask');
+    if (m !== 'cache') rruk.request(hz, m === 'force');
     return rruk.info(hz);
   });
-  ipcMain.handle(IPC.rrLookup, (_e, hz: unknown, force: unknown) => {
+  ipcMain.handle(IPC.rrLookup, (_e, hz: unknown, mode: unknown) => {
     if (!rr || typeof hz !== 'number') return null;
-    rr.request(hz, force !== false);
+    const m = lookupMode(mode, 'force');
+    if (m !== 'cache') rr.request(hz, m === 'force');
     return rr.info(hz);
   });
   ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {

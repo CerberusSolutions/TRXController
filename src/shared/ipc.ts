@@ -494,6 +494,9 @@ export interface ImportResult {
   file: string;
 }
 
+/** How a RadioReference / RRUK lookup treats the service: ask it even when cached, only when uncached, or never. */
+export type LookupMode = 'force' | 'ask' | 'cache';
+
 export const IPC = {
   programmingOpen: 'programming:open',
   programmingLocate: 'programming:locate',

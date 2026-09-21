@@ -360,7 +360,7 @@ function Lookup({ o, onPick }: { o: ProgObject; onPick: (c: ListedCandidate) => 
       api.wtrLookup?.(hz).catch(() => []) ?? [],
       api.repeatersLookup?.(hz).catch(() => []) ?? [],
       api.rrukLookup?.(hz).catch(() => null) ?? null,
-      api.rrLookup?.(hz, false).catch(() => null) ?? null,
+      api.rrLookup?.(hz, 'ask').catch(() => null) ?? null,
     ]);
     const tone = o.tone.type === 'CTCSS' ? `CTCSS ${o.tone.value}` : null;
     setCands(candidatesFor({ rr, rruk, licences, repeaters, detectedTone: tone }, normaliseLookups(settings?.lookups)));
@@ -401,7 +401,15 @@ function Lookup({ o, onPick }: { o: ProgObject; onPick: (c: ListedCandidate) => 
           ) : (
             <div className="max-h-72 overflow-auto">
               {cands.map((c) => (
-                <button key={c.key} type="button" className="flex w-full items-start gap-2 rounded px-1 py-1 text-left hover:bg-panel-2" onClick={() => onPick(c)} title={`${c.title}\nUse as the alpha tag (cut to 16 characters), with the tone and mode it names`}>
+                <button
+                  key={c.key}
+                  type="button"
+                  className="flex w-full items-start gap-2 rounded px-1 py-1 text-left hover:bg-panel-2"
+                  onClick={() => {
+                    onPick(c);
+                    close();
+                  }}
+                  title={`${c.title}\nUse as the alpha tag (cut to 16 characters), with the tone and mode it names`}>
                   <span className={`mt-0.5 shrink-0 rounded px-1 text-[9px] font-bold ${SOURCE_PILL[c.source]}`}>{c.source}</span>
                   <span className="min-w-0">
                     <span className="block truncate text-ink">
