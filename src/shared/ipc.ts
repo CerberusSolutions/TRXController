@@ -471,6 +471,8 @@ export interface AppInfo {
   name: string;
   version: string;
   electron: string;
+  /** Running unpackaged (`npm run dev` / `npm start`): development-only screens are offered. */
+  dev: boolean;
 }
 
 /** Result of asking GitHub for the latest release. */
@@ -493,6 +495,9 @@ export interface ImportResult {
 }
 
 export const IPC = {
+  programmingOpen: 'programming:open',
+  programmingLocate: 'programming:locate',
+  programmingLoad: 'programming:load',
   mapOpen: 'map:open',
   mapTarget: 'map:target',
   mapDock: 'map:dock',

@@ -76,6 +76,15 @@ export default function TopBar() {
 
       <div className="no-drag ml-auto flex items-center gap-2">
         <DataButton />
+        {app?.dev && window.trx?.programmingOpen && (
+          <button
+            className="rounded-md border border-dashed border-edge px-2.5 py-1.5 text-sm text-ink-2 hover:text-ink"
+            onClick={() => void window.trx.programmingOpen()}
+            title="Development build only: read the scanner's SD-card programming (CDAT)"
+          >
+            Program
+          </button>
+        )}
         <select
           className="rounded-md border border-edge bg-panel-2 px-2 py-1.5 text-sm text-ink outline-none focus:border-cyan disabled:opacity-50"
           value={selectedPort ?? ''}
