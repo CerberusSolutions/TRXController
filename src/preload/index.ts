@@ -24,9 +24,10 @@ import {
   type RrRegion,
   type RrStatus,
   type RrukStatus,
+  type RrukInfo,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
-import type { CdatCandidate, Programming } from '../shared/programming';
+import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
 // require Node modules; the serial port lives in the main process.
@@ -105,11 +106,16 @@ const api = {
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
+  /** Ask RadioReference UK about a frequency now (cached answer at once, else null while the call is made). */
+  rrukLookup: (hz: number): Promise<RrukInfo | null> => ipcRenderer.invoke(IPC.rrukLookup, hz),
   /** Development only (no-ops in a packaged build): the scanner's SD-card programming. */
   programmingOpen: (): Promise<void> => ipcRenderer.invoke(IPC.programmingOpen),
-  programmingLocate: (): Promise<CdatCandidate[]> => ipcRenderer.invoke(IPC.programmingLocate),
+  /** The CDAT and V-Scanner folders on mounted cards; with `near`, those beside that folder first. */
+  programmingLocate: (near?: string): Promise<CdatCandidate[]> => ipcRenderer.invoke(IPC.programmingLocate, near),
   /** Read a CDAT folder; without `dir` a folder dialog asks for it. Null when cancelled. */
   programmingLoad: (dir?: string): Promise<Programming | null> => ipcRenderer.invoke(IPC.programmingLoad, dir),
+  /** Write an edited programming over its folder (backed up first) or into a new V-Scanner folder beside it. */
+  programmingSave: (prog: Programming, target: ProgSaveTarget): Promise<ProgSaveResult> => ipcRenderer.invoke(IPC.programmingSave, prog, target),
   /** Open (or refocus) the map window on the scanner's current frequency, on one log entry, or on one day of the log. */
   mapOpen: (target: MapTarget): Promise<void> => ipcRenderer.invoke(IPC.mapOpen, target),
   /** The map window's own feed: what to show, sent on open and each time the map button is pressed again. */

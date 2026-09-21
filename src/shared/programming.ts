@@ -16,7 +16,7 @@ export interface ToneSetting {
 
 /** One conventional object (a channel). */
 export interface ProgObject {
-  /** Record number, EZ Scan's Rec# (0-based). */
+  /** Record number, EZ Scan's Rec# (0-based). An object added in the editor gets the next number after the card's last; the save renumbers. */
   index: number;
   name: string;
   frequencyHz: number;
@@ -94,11 +94,29 @@ export interface Programming {
   readAt: number;
 }
 
-/** A CDAT folder found on a mounted volume. */
+/** A CDAT folder found on a mounted volume: the card's live `CDAT`, or a `CDAT_VS.nnn` V-Scanner folder beside it. */
 export interface CdatCandidate {
   dir: string;
   description: string;
+  kind: 'card' | 'vscanner';
 }
+
+/** Where a save goes: over the folder that was read (after a backup beside it), or into a new V-Scanner folder beside it. */
+export type ProgSaveTarget = { kind: 'inplace' } | { kind: 'vscanner'; description: string };
+
+export interface ProgSaveResult {
+  /** The folder written. */
+  dir: string;
+  /** The copy of the original folder taken before an in-place save. */
+  backupDir: string | null;
+  /** How many files were written. */
+  files: number;
+}
+
+/** EZ Scan's channel types: analogue (or P25), DMR, NXDN. Which digital flags an object carries. */
+export type ChannelType = 'analog' | 'dmr' | 'nxdn';
+export const channelTypeOf = (o: Pick<ProgObject, 'digital' | 'nxdn'>): ChannelType => (o.nxdn ? 'nxdn' : o.digital ? 'dmr' : 'analog');
+
 
 /** The 50 CTCSS tones in the order the scanner indexes them. */
 export const CTCSS_TONES = [
