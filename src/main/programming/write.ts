@@ -11,7 +11,8 @@
  * zeros); talkgroup entries (first byte 1) already in a list are kept after them, and the tenth byte,
  * which EZ Scan leaves as memory garbage (always a multiple of 8), is written as 0.
  */
-import { CTCSS_TONES, FLAG_ATTENUATOR, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
+import { CHANNEL_SEARCHES } from '../../shared/searchChannels';
+import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
 import { CG_HEADER, OBJECT_RECORD, decode, parseObjects } from './cdat';
 
 /** A blank record: the bytes constant across 7,412 objects on two cards. */
@@ -207,6 +208,16 @@ export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' 
     setBits(GLB_SWEEPER_GROUPS, s.sweeper.groups.slice(0, 10));
     setBit(GLB_SWEEPER_FLAGS, 0x20, s.sweeper.specialMode);
     setBits(GLB_AMATEUR_GROUPS, s.amateur.groups.slice(0, 8));
+    setOptions(GLB_AMATEUR_FLAGS, s.amateur);
+    if (out.length >= GLB_CHANNELS_END) {
+      for (const t of CHANNEL_SEARCHES) {
+        const block = GLB_CHANNEL_BLOCKS[t.id];
+        const c = s.channels[t.id];
+        setOptions(block, c);
+        // Row n is bit n; the bits past the table's rows are left as they are (set, on every card seen).
+        setBits(block + 1, c.enabled.slice(0, t.channels.length));
+      }
+    }
   }
   // Lockouts: lowest first as EZ Scan keeps them, the rest of the table zero.
   const slots = Math.max(0, Math.floor((out.length - GLB_LOCKOUTS) / 4));

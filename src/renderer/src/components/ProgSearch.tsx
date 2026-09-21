@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { SEARCH_GROUPS, WX_BUTTON, type ProgSearch as SearchSettings, type Programming, type SearchOptions } from '../../../shared/programming';
+import { CHANNEL_SEARCHES } from '../../../shared/searchChannels';
 import { TextCell, mhz } from './ProgGrid';
 
 const card = 'rounded-lg border border-edge bg-panel p-3';
@@ -47,7 +48,7 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
             </select>
           )}
         </label>
-        <span className="text-[11px] text-ink-3">The Sweeper's own options, its mode, and the Mosque, CB, Marine and PMR446 channel tables are kept as read.</span>
+        <span className="text-[11px] text-ink-3">The Sweeper's own options and its mode are kept as read.</span>
       </div>
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(17rem, 1fr))' }}>
         <Lockouts hz={g.lockoutsHz} onChange={(lockoutsHz) => set({ lockoutsHz })} />
@@ -66,10 +67,15 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
             </Groups>
             <Groups title="Spectrum Sweeper" labels={SEARCH_GROUPS.sweeper} on={s.sweeper.groups} onChange={(groups) => setSearch({ sweeper: { ...s.sweeper, groups } })}>
               <div className="mb-2">
-                <Flag label="Special Mode" on={s.sweeper.specialMode} onChange={(v) => setSearch({ sweeper: { ...s.sweeper, specialMode: v } })} />
+                <Flag label="Special Mode" on={s.sweeper.specialMode} onChange={(v) => setSearch({ sweeper: { ...s.sweeper, specialMode: v } })} title="Skips a 1 MHz block once five or more of its frequencies have been skipped: for when many high-power transmitters sit close together in frequency (Whistler's manual)" />
               </div>
             </Groups>
-            <Groups title="Amateur" labels={SEARCH_GROUPS.amateur} on={s.amateur.groups} onChange={(groups) => setSearch({ amateur: { groups } })} />
+            <Groups title="Amateur" labels={SEARCH_GROUPS.amateur} on={s.amateur.groups} onChange={(groups) => setSearch({ amateur: { ...s.amateur, groups } })}>
+              <Options o={s.amateur} onChange={(o) => setSearch({ amateur: { ...s.amateur, ...o } })} />
+            </Groups>
+            {CHANNEL_SEARCHES.map((t) => (
+              <Channels key={t.id} title={t.name} table={t.channels} state={s.channels[t.id]} onChange={(c) => setSearch({ channels: { ...s.channels, [t.id]: c } })} />
+            ))}
           </>
         )}
       </div>
@@ -77,9 +83,9 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
   );
 }
 
-function Flag({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
+function Flag({ label, on, onChange, title }: { label: string; on: boolean; onChange: (v: boolean) => void; title?: string }) {
   return (
-    <label className="mr-4 inline-flex items-center gap-1 text-[12.5px]">
+    <label className="mr-4 inline-flex items-center gap-1 text-[12.5px]" title={title}>
       <input type="checkbox" className="h-3.5 w-3.5 accent-cyan" checked={on} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
@@ -89,9 +95,9 @@ function Flag({ label, on, onChange }: { label: string; on: boolean; onChange: (
 function Options({ o, onChange }: { o: SearchOptions; onChange: (o: SearchOptions) => void }) {
   return (
     <div className="mb-2">
-      <Flag label="Attenuator" on={o.attenuator} onChange={(v) => onChange({ ...o, attenuator: v })} />
-      <Flag label="Zeromatic" on={o.zeromatic} onChange={(v) => onChange({ ...o, zeromatic: v })} />
-      <Flag label="Delay" on={o.delay} onChange={(v) => onChange({ ...o, delay: v })} />
+      <Flag label="Attenuator" on={o.attenuator} onChange={(v) => onChange({ ...o, attenuator: v })} title="Reduce the signal into the receiver: for strong nearby transmitters" />
+      <Flag label="Zeromatic" on={o.zeromatic} onChange={(v) => onChange({ ...o, zeromatic: v })} title="Centre the search on the carrier rather than a step beside it" />
+      <Flag label="Delay" on={o.delay} onChange={(v) => onChange({ ...o, delay: v })} title="Wait the search delay for a reply before moving on" />
     </div>
   );
 }
@@ -180,6 +186,37 @@ function Lockouts({ hz, onChange }: { hz: number[]; onChange: (hz: number[]) => 
           </tbody>
         </table>
       )}
+    </section>
+  );
+}
+
+/** A service search's channel table: the scanner's fixed frequencies with the card's tick per row. */
+function Channels({ title, table, state, onChange }: { title: string; table: readonly { label: string; hz: number }[]; state: SearchOptions & { enabled: boolean[] }; onChange: (c: SearchOptions & { enabled: boolean[] }) => void }) {
+  const all = state.enabled.every(Boolean);
+  const on = state.enabled.filter(Boolean).length;
+  return (
+    <section className={card}>
+      <div className="flex items-baseline">
+        <h3 className={h3}>
+          {title} <span className="ml-1 normal-case tracking-normal text-ink-3">{on} of {table.length}</span>
+        </h3>
+        <button type="button" className="ml-auto text-[11px] text-ink-3 hover:text-ink" onClick={() => onChange({ ...state, enabled: table.map(() => !all) })}>
+          {all ? 'None' : 'All'}
+        </button>
+      </div>
+      <div className="mb-2">
+        <Flag label="Attenuator" on={state.attenuator} onChange={(v) => onChange({ ...state, attenuator: v })} />
+        <Flag label="Delay" on={state.delay} onChange={(v) => onChange({ ...state, delay: v })} />
+      </div>
+      <div className="grid max-h-64 grid-cols-2 gap-x-4 gap-y-0.5 overflow-y-auto text-[12px]">
+        {table.map((c, i) => (
+          <label key={`${c.label}-${c.hz}`} className="flex items-center gap-2">
+            <input type="checkbox" className="h-3.5 w-3.5 accent-cyan" checked={state.enabled[i] ?? false} onChange={(e) => onChange({ ...state, enabled: state.enabled.map((v, j) => (j === i ? e.target.checked : v)) })} />
+            <span className="w-6 font-mono text-[11px] text-ink-3">{c.label}</span>
+            <span className={`font-mono ${state.enabled[i] ? 'text-amber' : 'text-ink-3'}`}>{(c.hz / 1e6).toFixed(c.hz % 1000 ? 6 : 4)}</span>
+          </label>
+        ))}
+      </div>
     </section>
   );
 }

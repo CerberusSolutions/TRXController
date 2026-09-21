@@ -1,3 +1,5 @@
+import type { ChannelSearch } from './searchChannels';
+
 /**
  * The scanner's programming as EZ Scan writes it to the SD card's CDAT folder (read by
  * `src/main/programming/cdat.ts`). Field names follow EZ Scan's own columns so the Programming window
@@ -100,7 +102,9 @@ export interface ProgSearch {
   uvhfAm: SearchOptions & { groups: boolean[] };
   /** The Sweeper's flags byte has its own layout; only Special Mode is decoded. */
   sweeper: { specialMode: boolean; groups: boolean[] };
-  amateur: { groups: boolean[] };
+  amateur: SearchOptions & { groups: boolean[] };
+  /** The four channel-table searches: options plus one tick per row of the table in `searchChannels.ts`. */
+  channels: Record<ChannelSearch, SearchOptions & { enabled: boolean[] }>;
 }
 
 /** The search groups' ranges on the United Kingdom band plan, for labelling; the card holds only the ticks. */
@@ -122,10 +126,18 @@ export const FLAG_ATTENUATOR = 0x04;
 export const FLAG_DELAY = 0x08;
 export const GLB_LIMIT_LOW = 576;
 export const GLB_LIMIT_HIGH = 580;
+export const GLB_AMATEUR_FLAGS = 598;
 export const GLB_AMATEUR_GROUPS = 599;
 export const GLB_PS_FLAGS = 607;
 export const GLB_PS_GROUPS = 608;
 export const GLB_SEARCH_END = 613;
+/**
+ * The channel-table blocks: a flags byte then 128 channel bits (row n = bit n). All four proven by EZ Scan's
+ * saves on 21 Sep 2026: CB UK channels 1-2 moved bits 0-1 of 616; then one, two and three channels unticked
+ * in VHF Mar, Mosque and PMR446 cleared that many bits at 634, 670 and 652.
+ */
+export const GLB_CHANNEL_BLOCKS: Readonly<Record<ChannelSearch, number>> = { cbUk: 615, vhfMarine: 633, pmr446: 651, mosque: 669 };
+export const GLB_CHANNELS_END = 669 + 17;
 
 /** WX button operations by code: EZ Scan's dropdown order (Amateur = 3 seen on a card). */
 export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 1: 'U/VHF AM', 2: 'Mosque', 3: 'Amateur', 4: 'CB UK', 5: 'VHF Mar', 6: 'PMR446' };
