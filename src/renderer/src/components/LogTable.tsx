@@ -486,7 +486,7 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
           </span>
           <span className="shrink-0 truncate font-sans text-[12.5px] text-ink">{current.name}</span>
           <span className="min-w-0 flex-1 truncate text-ink-3">{current.detail || "typed in by you"}</span>
-          {r.lat !== null && r.lon !== null && (
+          {r.lat != null && r.lon != null && (
             <button type="button" className={btn} title="Show this entry on the map" onClick={() => void window.trx.mapOpen?.({ kind: "row", row: r })}>
               map
             </button>

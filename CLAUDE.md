@@ -361,7 +361,7 @@ captured on 14 Sep 2026.
   `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
   position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
   source's pin marks (a WTR pin is the licence holder, not necessarily the transmitter), fit-to-bounds once
-  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (follow) in
+  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), D (dock), ? (help) in
   `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
 - Docking (`dockMap` / `undockMap` / `followDock` in `src/main/index.ts`, `map:dock` IPC with `auto` /
   `left` / `right` / `off`, state pushed as `map:dock-state`): the map is set against the side of the main
