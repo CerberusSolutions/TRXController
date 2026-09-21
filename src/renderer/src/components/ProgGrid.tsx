@@ -123,10 +123,11 @@ export default function ProgGrid({ rows, first, newFrom, scanlists, selected, on
               <Squelch o={o} onEdit={(p) => onEdit(o.index, p)} />
               <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-cyan" checked={o.skip} onChange={(e) => onEdit(o.index, { skip: e.target.checked })} title="Skip" />
               <TextCell value={o.delayS.toFixed(1)} mono onCommit={(s) => onEdit(o.index, { delayS: Math.max(0, Math.min(25.5, Number(s) || 0)) })} title="Delay, seconds" />
-              <select className={select} value={o.backlight === 'Leave' || o.backlight === 'Flash' ? o.backlight : 'other'} onChange={(e) => onEdit(o.index, { backlight: e.target.value })}>
+              <select className={select} value={o.backlight === 'Leave' || o.backlight === 'On' || o.backlight === 'Flash' ? o.backlight : 'other'} onChange={(e) => onEdit(o.index, { backlight: e.target.value })}>
                 <option>Leave</option>
+                <option>On</option>
                 <option>Flash</option>
-                {o.backlight !== 'Leave' && o.backlight !== 'Flash' && <option value="other">{o.backlight}</option>}
+                {o.backlight !== 'Leave' && o.backlight !== 'On' && o.backlight !== 'Flash' && <option value="other">{o.backlight}</option>}
               </select>
               <span className="flex items-center gap-1">
                 <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-cyan" checked={o.led.on} onChange={(e) => onEdit(o.index, { led: { on: e.target.checked, colour: o.led.colour ?? '#FF00FF' } })} title="LED on" />

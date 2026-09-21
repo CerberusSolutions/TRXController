@@ -71,6 +71,7 @@ describe('object records', () => {
     expect(parseObject(record({ name: 'nx', hz: 1e8, mod: 2, b123: 2 }), 0)).toMatchObject({ modulation: 'NXDN', nxdn: true });
     expect(parseObject(record({ name: 'an', hz: 1e8, mod: 2, b40: 0x24 }), 0).dmode).toBe('Analog');
     expect(parseObject(record({ name: 's', hz: 1e8, skip: true, backlight: 2, delay: 50 }), 0)).toMatchObject({ skip: true, backlight: 'Flash', delayS: 5 });
+    expect(parseObject(record({ name: 's', hz: 1e8, backlight: 1 }), 0).backlight).toBe('On');
   });
 });
 
@@ -86,7 +87,6 @@ describe('parseCdat', () => {
     pldef.set(ascii('HAM UK A+D Rpts', 16), 0);
     pldef[17] = 1;
     pldef.set(ascii('Civil Airband', 16), 11 * 18);
-    pldef[11 * 18 + 16] = 1;
     pldef[11 * 18 + 17] = 1;
     enc('PLDEF.DAT', pldef);
     const plsets = new Uint8Array(20 * 44);
@@ -129,9 +129,9 @@ describe('parseCdat', () => {
     ]);
     // Membership comes from each object's bitmap: object 0 is in list 12, object 2 in list 7.
     const l12 = p.scanlists.find((l) => l.number === 12)!;
-    expect(l12).toMatchObject({ name: 'Civil Airband', enabled: true, isDefault: true, objects: [0] });
+    expect(l12).toMatchObject({ name: 'Civil Airband', enabled: true, objects: [0] });
     expect(p.scanlists.find((l) => l.number === 7)!.objects).toEqual([2]);
-    expect(p.scanlists[0]).toMatchObject({ number: 1, name: 'HAM UK A+D Rpts', enabled: true, isDefault: false, objects: [] });
+    expect(p.scanlists[0]).toMatchObject({ number: 1, name: 'HAM UK A+D Rpts', enabled: true, objects: [] });
     expect(p.scanSets[1]).toMatchObject({ number: 2, name: 'AIR', enabled: true, scanlists: [12] });
     expect(p.globals).toEqual({ welcome: ['WHISTLER', 'TRX-1e', 'Handheld', 'Trunking Scanner', 'MOONRAKER UK'], signalBars: [190, 230, 260, 290, 320], lastTuneHz: 145_637_500 });
     expect(p.trunked).toHaveLength(1);

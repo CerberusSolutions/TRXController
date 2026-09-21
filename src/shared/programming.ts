@@ -42,7 +42,6 @@ export interface ProgScanlist {
   number: number;
   name: string;
   enabled: boolean;
-  isDefault: boolean;
   /** Object record numbers, in the scanlist's own order. */
   objects: number[];
 }

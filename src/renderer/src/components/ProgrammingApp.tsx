@@ -414,7 +414,7 @@ export default function ProgrammingApp() {
               <ProgLogImport
                 scanlists={prog.scanlists}
                 existing={prog.objects}
-                defaultList={tab === 'scanlists' && list ? list : (prog.scanlists.find((l) => l.isDefault)?.number ?? 1)}
+                defaultList={tab === 'scanlists' && list ? list : 1}
                 nextIndex={nextIndex}
                 onAdd={(objects) => {
                   commit({ ...prog, objects: [...prog.objects, ...objects] });
@@ -433,7 +433,7 @@ export default function ProgrammingApp() {
                   {prog.scanlists
                     .filter((l) => l.objects.length || !/^Scanlist \d{3}$/.test(l.name))
                     .map((l) => (
-                      <ScanlistRow key={l.number} l={l} active={list === l.number} onPick={() => setList(l.number)} onEdit={(patch) => commit({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, ...patch } : patch.isDefault ? { ...x, isDefault: false } : x)) })} />
+                      <ScanlistRow key={l.number} l={l} active={list === l.number} onPick={() => setList(l.number)} onEdit={(patch) => commit({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, ...patch } : x)) })} />
                     ))}
                   <button type="button" className="w-full px-3 py-2 text-left text-[11px] text-ink-3 hover:text-ink" onClick={() => setList(prog.scanlists.find((l) => !l.objects.length && /^Scanlist \d{3}$/.test(l.name))?.number ?? null)} title="Bring the next unused scanlist into view to name it">
                     + Use the next empty scanlist
@@ -449,10 +449,6 @@ export default function ProgrammingApp() {
                         <label className="flex items-center gap-1">
                           <input type="checkbox" className="accent-cyan" checked={selectedList.enabled} onChange={(e) => commit({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === selectedList.number ? { ...x, enabled: e.target.checked } : x)) })} />
                           Enabled
-                        </label>
-                        <label className="flex items-center gap-1">
-                          <input type="checkbox" className="accent-cyan" checked={selectedList.isDefault} onChange={(e) => commit({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === selectedList.number ? { ...x, isDefault: e.target.checked } : e.target.checked ? { ...x, isDefault: false } : x)) })} />
-                          Default
                         </label>
                       </div>
                       <ProgGrid rows={listRows} first="Pos" newFrom={base?.objects.length ?? 0} scanlists={prog.scanlists} selected={selected} onSelect={select} onEdit={edit} focus={focus} />
@@ -618,7 +614,6 @@ function General({ prog, onChange }: { prog: Programming; onChange: (p: Programm
               <th className="py-1 pr-2">##</th>
               <th className="py-1 pr-2">Alpha tag</th>
               <th className="py-1 pr-2">Enabled</th>
-              <th className="py-1 pr-2">Default</th>
               <th className="py-1">Objects</th>
             </tr>
           </thead>
@@ -633,9 +628,6 @@ function General({ prog, onChange }: { prog: Programming; onChange: (p: Programm
                   </td>
                   <td className="py-0.5 pr-2">
                     <input type="checkbox" className="accent-green" checked={l.enabled} onChange={(e) => onChange({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, enabled: e.target.checked } : x)) })} />
-                  </td>
-                  <td className="py-0.5 pr-2">
-                    <input type="checkbox" className="accent-cyan" checked={l.isDefault} onChange={(e) => onChange({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, isDefault: e.target.checked } : e.target.checked ? { ...x, isDefault: false } : x)) })} title="The scanlist new objects go into" />
                   </td>
                   <td className="py-0.5 font-mono text-[11px]">{l.objects.length}</td>
                 </tr>

@@ -77,7 +77,7 @@ export function encodeObject(o: ProgObject, base?: Uint8Array): Uint8Array {
   r[40] = (r[40]! & 0xce) | 0x04 | (o.dmode === 'Digital' ? 0x10 : o.dmode === 'Analog' ? 0x20 : 0) | (o.led.on ? 1 : 0);
   r[39] = o.skip ? r[39]! | 0x08 : r[39]! & ~0x08;
   r[66] = Math.max(0, Math.min(255, Math.round(o.delayS * 10)));
-  r[81] = o.backlight === 'Leave' ? 0 : o.backlight === 'Flash' ? 2 : Number(/^Code (\d+)$/.exec(o.backlight)?.[1] ?? r[81]);
+  r[81] = o.backlight === 'Leave' ? 0 : o.backlight === 'On' ? 1 : o.backlight === 'Flash' ? 2 : Number(/^Code (\d+)$/.exec(o.backlight)?.[1] ?? r[81]);
   const colour = rgb(o.led.colour);
   r[68] = o.led.on ? 1 : 0;
   if (o.led.on && colour) r.set(colour, 69);
@@ -132,14 +132,13 @@ export function buildPl(members: readonly number[], existing?: Uint8Array): Uint
   return out;
 }
 
-/** PLDEF.DAT with the names and flags rewritten; other bits of the flag bytes kept. */
+/** PLDEF.DAT with the names and enabled bits rewritten; the other bits of the flag byte and byte 16 kept. */
 export function patchPldef(base: Uint8Array, scanlists: readonly ProgScanlist[]): Uint8Array {
   const out = new Uint8Array(base);
   for (const l of scanlists) {
     const o = (l.number - 1) * 18;
     if (l.number < 1 || o + 18 > out.length) continue;
     putText(out, o, NAME_LENGTH, l.name);
-    out[o + 16] = (out[o + 16]! & ~1) | (l.isDefault ? 1 : 0);
     out[o + 17] = (out[o + 17]! & ~1) | (l.enabled ? 1 : 0);
   }
   return out;
