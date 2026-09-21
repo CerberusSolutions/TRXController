@@ -170,3 +170,4 @@ body {
 .leaflet-bar a { background: var(--t-panel); color: var(--t-ink); border-bottom-color: var(--t-edge); }
 .leaflet-bar a:hover { background: var(--t-panel-2); }
 .map-legend { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 2px; }
+.map-pin-scan { background: var(--t-ink-3); }

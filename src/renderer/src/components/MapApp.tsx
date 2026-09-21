@@ -8,6 +8,9 @@ import { useIdentities } from '../store/identities';
 import { initTheme } from '../store/theme';
 import MapView, { type MapPoint } from './MapView';
 
+/** Within about a metre: the same place, whatever rounding the two sources applied. */
+const samePoint = (a: { lat: number; lon: number }, b: { lat: number; lon: number }): boolean => Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lon - b.lon) < 1e-5;
+
 /**
  * The map window (`#map` route): you and every candidate for a frequency pinned on OpenStreetMap,
  * with a line to the identity the log chose. Follows the scanner by default, taking the log's newest
@@ -122,9 +125,13 @@ export default function MapApp() {
     });
     // A confirmed or otherwise placed identity that no candidate carries gets its own pin.
     // `!= null` on purpose: rows from before the columns existed (and the preview mock) carry undefined, not null.
+    // The row's own point gets a pin only when no candidate already stands there: a scanner-named row is
+    // placed by the lookup that identified it, so that candidate's pin is the row's. A pin of its own is a
+    // confirmation (CONF), a lookup's placement that no longer appears in the list, or the scanner's object.
     const own = row ? point(row.lat, row.lon) : null;
-    if (row && own && row.name && !out.some((p) => p.name === row.name)) {
-      add({ key: 'row', source: row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'CONF', name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
+    if (row && own && row.name && !out.some((p) => samePoint(p, own))) {
+      const source: MapPoint['source'] = row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'SCAN';
+      add({ key: 'row', source, name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
     }
     return out;
   }, [row, snapshot]);
@@ -135,12 +142,16 @@ export default function MapApp() {
   if (stable.current.key !== pointsKey) stable.current = { key: pointsKey, points: rawPoints };
   const points = stable.current.points;
 
-  // The line goes to the pin the user clicked, else the identity the log chose for the entry, else the top candidate.
+  // The line goes to the pin the user clicked, else the identity the log chose for the entry (by name, else the
+  // candidate standing on the row's own point, which is how a scanner-named row was placed), else the top candidate.
   const chosenKey = useMemo(() => {
     if (picked && points.some((p) => p.key === picked)) return picked;
     if (row) {
       const byName = points.find((p) => p.name === row.name && (p.source === row.source || row.source === 'CONF' || row.source === ''));
       if (byName) return byName.key;
+      const at = point(row.lat, row.lon);
+      const byPoint = at ? points.find((p) => samePoint(p, at)) : undefined;
+      if (byPoint) return byPoint.key;
       const own = points.find((p) => p.key === 'row');
       if (own) return own.key;
     }
@@ -262,7 +273,7 @@ export default function MapApp() {
                 <p>
                   <span className="map-legend map-pin-wtr" /> WTR is the Ofcom licence holder, often a reseller's address rather than the transmitter.{' '}
                   <span className="map-legend map-pin-rruk" /> RRUK and <span className="map-legend map-pin-rrdb" /> RRDB pins are the sites those databases list.{' '}
-                  <span className="map-legend map-pin-ukr" /> UKR is the repeater itself. The larger pin is the one the log chose; the dashed line carries its distance and bearing.
+                  <span className="map-legend map-pin-ukr" /> UKR is the repeater itself. <span className="map-legend map-pin-scan" /> A grey pin is the scanner's own object where it was placed. <span className="map-legend map-pin-conf" /> CONF is one you confirmed. The larger pin is the one the log chose; the dashed line carries its distance and bearing.
                 </p>
               </div>
             </div>
