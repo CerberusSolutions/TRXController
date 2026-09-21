@@ -12,7 +12,7 @@
  * which EZ Scan leaves as memory garbage (always a multiple of 8), is written as 0.
  */
 import { CHANNEL_SEARCHES } from '../../shared/searchChannels';
-import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SIGNAL_BARS, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
+import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_LOCKOUT_SLOTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SIGNAL_BARS, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
 import { CG_HEADER, OBJECT_RECORD, decode, parseObjects } from './cdat';
 
 /** A blank record: the bytes constant across 7,412 objects on two cards. */
@@ -224,8 +224,8 @@ export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' 
       }
     }
   }
-  // Lockouts: lowest first as EZ Scan keeps them, the rest of the table zero.
-  const slots = Math.max(0, Math.floor((out.length - GLB_LOCKOUTS) / 4));
+  // Lockouts: lowest first as EZ Scan keeps them, the rest of the table zero; the bytes after the table are not ours.
+  const slots = Math.max(0, Math.min(GLB_LOCKOUT_SLOTS, Math.floor((out.length - GLB_LOCKOUTS) / 4)));
   const lockouts = [...new Set(globals.lockoutsHz.map((hz) => Math.round(hz)))].sort((a, b) => a - b).slice(0, slots);
   for (let i = 0; i < slots; i++) putU32(out, GLB_LOCKOUTS + i * 4, lockouts[i] ?? 0);
   const check = glbChecksum(out);
