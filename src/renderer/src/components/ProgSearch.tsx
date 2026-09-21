@@ -67,7 +67,7 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
             </Groups>
             <Groups title="Spectrum Sweeper" labels={SEARCH_GROUPS.sweeper} on={s.sweeper.groups} onChange={(groups) => setSearch({ sweeper: { ...s.sweeper, groups } })}>
               <div className="mb-2">
-                <Flag label="Special Mode" on={s.sweeper.specialMode} onChange={(v) => setSearch({ sweeper: { ...s.sweeper, specialMode: v } })} />
+                <Flag label="Special Mode" on={s.sweeper.specialMode} onChange={(v) => setSearch({ sweeper: { ...s.sweeper, specialMode: v } })} title="Skips a 1 MHz block once five or more of its frequencies have been skipped: for when many high-power transmitters sit close together in frequency (Whistler's manual)" />
               </div>
             </Groups>
             <Groups title="Amateur" labels={SEARCH_GROUPS.amateur} on={s.amateur.groups} onChange={(groups) => setSearch({ amateur: { groups } })} />
@@ -81,9 +81,9 @@ export default function ProgSearch({ prog, onChange }: { prog: Programming; onCh
   );
 }
 
-function Flag({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }) {
+function Flag({ label, on, onChange, title }: { label: string; on: boolean; onChange: (v: boolean) => void; title?: string }) {
   return (
-    <label className="mr-4 inline-flex items-center gap-1 text-[12.5px]">
+    <label className="mr-4 inline-flex items-center gap-1 text-[12.5px]" title={title}>
       <input type="checkbox" className="h-3.5 w-3.5 accent-cyan" checked={on} onChange={(e) => onChange(e.target.checked)} />
       {label}
     </label>
@@ -93,9 +93,9 @@ function Flag({ label, on, onChange }: { label: string; on: boolean; onChange: (
 function Options({ o, onChange }: { o: SearchOptions; onChange: (o: SearchOptions) => void }) {
   return (
     <div className="mb-2">
-      <Flag label="Attenuator" on={o.attenuator} onChange={(v) => onChange({ ...o, attenuator: v })} />
-      <Flag label="Zeromatic" on={o.zeromatic} onChange={(v) => onChange({ ...o, zeromatic: v })} />
-      <Flag label="Delay" on={o.delay} onChange={(v) => onChange({ ...o, delay: v })} />
+      <Flag label="Attenuator" on={o.attenuator} onChange={(v) => onChange({ ...o, attenuator: v })} title="Reduce the signal into the receiver: for strong nearby transmitters" />
+      <Flag label="Zeromatic" on={o.zeromatic} onChange={(v) => onChange({ ...o, zeromatic: v })} title="Centre the search on the carrier rather than a step beside it" />
+      <Flag label="Delay" on={o.delay} onChange={(v) => onChange({ ...o, delay: v })} title="Wait the search delay for a reply before moving on" />
     </div>
   );
 }
