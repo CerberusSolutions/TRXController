@@ -320,7 +320,7 @@ export default function ProgrammingApp() {
           <span>New V-Scanner folder beside {prog.dir.replace(/[\\/][^\\/]+$/, '')}, described as</span>
           <input
             className="w-48 rounded border border-edge bg-panel px-2 py-0.5 text-[12px] text-ink outline-none focus:border-cyan"
-            maxLength={NAME_MAX}
+            maxLength={64}
             value={saveAs}
             placeholder={prog.description}
             autoFocus
@@ -336,7 +336,7 @@ export default function ProgrammingApp() {
           <button type="button" className={btn} onClick={() => setSaveAs(null)}>
             Cancel
           </button>
-          <span className="text-ink-3">The scanner loads it from Main Menu › V-Scanner; EZ Scan lists it under Scanner/SD Card.</span>
+          <span className="text-ink-3">Up to four lines of 16 characters, wrapped at a word. The scanner loads it from Main Menu › V-Scanner; EZ Scan lists it under Scanner/SD Card.</span>
         </div>
       )}
       {error && <div className="border-b border-red/40 bg-panel px-4 py-2 text-xs text-red">{error}</div>}

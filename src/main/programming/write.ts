@@ -29,6 +29,7 @@ export const TEMPLATE: Readonly<Uint8Array> = (() => {
 
 const PL_ENTRY = 10;
 export const NAME_LENGTH = 16;
+export const DESCRIPT_LINES = 4;
 
 const putText = (b: Uint8Array, o: number, n: number, s: string): void => {
   for (let i = 0; i < n; i++) {
@@ -162,16 +163,43 @@ export const centre = (line: string): string => {
   return ' '.repeat(Math.floor((NAME_LENGTH - s.length) / 2)) + s;
 };
 
+/**
+ * ISCAN___.GLB's check: bytes 2-3 (uint16 LE) are the one's complement of the 16-bit sum of every byte from 4 to
+ * the end, so the whole adds to 0xFFFF (held on both cards and on EZ Scan's own re-save after a lockout was added,
+ * 21 Sep 2026). Rewritten after every change to the file.
+ */
+export function glbChecksum(glb: Uint8Array): number {
+  let sum = 0;
+  for (let i = 4; i < glb.length; i++) sum += glb[i]!;
+  return ~sum & 0xffff;
+}
+
 export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome'>): Uint8Array {
   const out = new Uint8Array(base);
   for (let i = 0; i < 5; i++) if (15 + (i + 1) * NAME_LENGTH <= out.length) putText(out, 15 + i * NAME_LENGTH, NAME_LENGTH, centre(globals.welcome[i] ?? ''));
+  const check = glbChecksum(out);
+  out[2] = check & 0xff;
+  out[3] = check >> 8;
   return out;
 }
 
-/** DESCRIPT.TXT: 16 characters, space padded, plain text. */
+/**
+ * DESCRIPT.TXT: plain text, up to four lines of 16 characters, space padded (EZ Scan's "Set V-Scanner Folder
+ * Description" shows the first four lines in its folder picker); as many lines as the words need, wrapped at a
+ * word ("TRXC Import" / "Tests").
+ */
 export function buildDescript(description: string): Uint8Array {
-  const out = new Uint8Array(NAME_LENGTH);
-  putText(out, 0, NAME_LENGTH, description.trim());
+  const words = description.trim().split(/\s+/).filter(Boolean);
+  const lines: string[] = [''];
+  for (const w of words) {
+    const cur = lines[lines.length - 1]!;
+    if (cur === '') lines[lines.length - 1] = w.slice(0, NAME_LENGTH);
+    else if (cur.length + 1 + w.length <= NAME_LENGTH) lines[lines.length - 1] = `${cur} ${w}`;
+    else if (lines.length < DESCRIPT_LINES) lines.push(w.slice(0, NAME_LENGTH));
+    else break;
+  }
+  const out = new Uint8Array(NAME_LENGTH * lines.length);
+  lines.forEach((l, i) => putText(out, i * NAME_LENGTH, NAME_LENGTH, l));
   return out;
 }
 

@@ -510,8 +510,10 @@ captured on 14 Sep 2026.
   record order as ten-byte entries (0, uint16 record, zeros; a list's talkgroup entries, first byte 1, are kept
   after them; the tenth byte is EZ Scan's memory garbage, written 0), PLDEF / PLSETS keep the other bits of their
   flag bytes (EZ Scan's Default tick on a scanlist is not on the card: a save with it on AIR left every PLDEF byte alone,
-  so the editor has no Default), DESCRIPT.TXT is 16 characters of plain text (32, two lines, when EZ Scan named the
-  folder; read as one). Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
+  so the editor has no Default), DESCRIPT.TXT is plain text in up to four
+  16-character lines (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 2-3
+  are a check, the one's complement of the 16-bit byte sum from byte 4 (`glbChecksum`, rewritten on every change);
+  its lockout table starts at 694 as uint32 Hz. Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
   its three channels, and its own re-save changed only the bytes it was asked to (Backlight, an enabled bit). DCS and NAC squelch have not been seen on a card, so
   the editor offers them greyed out and never writes them (a log entry with one imports as Search); DMR colour
   code, slot and talkgroup are wildcards on every object seen and are left alone. `locate.ts` finds the folders,

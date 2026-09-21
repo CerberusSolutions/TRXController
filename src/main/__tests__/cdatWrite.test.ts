@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CG_HEADER, OBJECT_RECORD, decode, parseCdat, parseObject, parseObjects } from '../programming/cdat';
-import { TEMPLATE, buildCdat, buildCg, buildPl, centre, encodeObject, patchGlb, patchPldef, plEntryRecord, plName } from '../programming/write';
+import { TEMPLATE, buildCdat, buildCg, buildDescript, buildPl, centre, encodeObject, glbChecksum, patchGlb, patchPldef, plEntryRecord, plName } from '../programming/write';
 import type { ProgObject, Programming } from '../../shared/programming';
 
 const ascii = (s: string, n: number): Uint8Array => {
@@ -135,6 +135,18 @@ describe('patchPldef / patchGlb', () => {
     expect(new TextDecoder().decode(out.subarray(15, 31))).toBe('    WHISTLER    ');
     expect(new TextDecoder().decode(out.subarray(31, 47))).toBe('     TRX-1e     ');
     expect(new TextDecoder().decode(out.subarray(47, 63))).toBe(' '.repeat(16));
+    // The check in bytes 2-3 makes the sum of the file from byte 4 plus itself 0xFFFF.
+    let sum = 0;
+    for (let i = 4; i < out.length; i++) sum += out[i]!;
+    expect(((out[2]! | (out[3]! << 8)) + sum) & 0xffff).toBe(0xffff);
+    expect(glbChecksum(out)).toBe(out[2]! | (out[3]! << 8));
+  });
+
+  it('writes the description on one line, or two when a word does not fit', () => {
+    expect(new TextDecoder().decode(buildDescript('UK Starter'))).toBe('UK Starter      ');
+    expect(new TextDecoder().decode(buildDescript('TRXC Import Tests'))).toBe('TRXC Import     Tests           ');
+    expect(buildDescript('a'.repeat(40)).length).toBe(16);
+    expect(buildDescript('one two three four five six seven eight nine ten eleven twelve thirteen').length).toBe(64);
   });
 });
 
@@ -217,6 +229,9 @@ describe('buildCdat', () => {
     expect(decode(out.get('PLDEF.DAT')!)[17]).toBe(0x80);
     expect(after.globals.welcome).toEqual(['HELLO', '', '', '', '']);
     expect(new TextDecoder().decode(out.get('DESCRIPT.TXT')!)).toBe('UK Starter v2   ');
+    // The globals file's check is right after the welcome text changed.
+    const glbOut = decode(out.get('ISCAN___.GLB')!);
+    expect(glbOut[2]! | (glbOut[3]! << 8)).toBe(glbChecksum(glbOut));
     // Every written file is obfuscated: a raw read decodes it.
     expect(parseObjects(decode(out.get('CG000000._CG')!))).toHaveLength(3);
   });
