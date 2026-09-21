@@ -17,6 +17,12 @@ export interface MapPoint {
   bearingDeg: number | null;
   /** Its tone / colour code matched the one the scanner detected. */
   match?: boolean;
+  /** Log view: how many entries stand at this placement; shown on the pin in place of the source. */
+  count?: number;
+  /** Log view: the entries themselves, one line each, for the card. */
+  lines?: string[];
+  /** Overrides the source's standard note on the card. */
+  note?: string;
 }
 
 export interface MapViewProps {
@@ -51,10 +57,11 @@ const PIN_TITLE: Partial<Record<MapPoint['source'], string>> = { SCAN: 'Scanner 
 
 const esc = (s: string): string => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
-function pinIcon(source: MapPoint['source'], chosen: boolean): L.DivIcon {
+function pinIcon(source: MapPoint['source'], chosen: boolean, count?: number): L.DivIcon {
+  const label = count === undefined ? esc(source) : count > 999 ? '999+' : String(count);
   return L.divIcon({
     className: '',
-    html: `<span class="map-pin map-pin-${source.toLowerCase()}${chosen ? ' map-pin-chosen' : ''}"><span class="map-pin-label">${esc(source)}</span></span>`,
+    html: `<span class="map-pin map-pin-${source.toLowerCase()}${chosen ? ' map-pin-chosen' : ''}${count === undefined ? '' : ' map-pin-count'}"><span class="map-pin-label">${label}</span></span>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
     popupAnchor: [0, -14],
@@ -69,7 +76,8 @@ function card(p: MapPoint, units: Units): string {
     <div class="map-card-name">${esc(p.name)}</div>
     ${p.detail ? `<div class="map-card-detail">${esc(p.detail)}</div>` : ''}
     <div class="map-card-src"><b>${esc(PIN_TITLE[p.source] ?? SOURCE_NAME[p.source as LookupId] ?? p.source)}</b>${where ? ` · ${esc(where)} from you` : ''}${p.match ? ' · tone matches' : ''}</div>
-    <div class="map-card-note">${esc(PIN_MEANING[p.source])}</div>
+    ${p.lines ? `<ul class="map-card-lines">${p.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+    <div class="map-card-note">${esc(p.note ?? PIN_MEANING[p.source])}</div>
   </div>`;
 }
 
@@ -132,8 +140,8 @@ export default function MapView({ user, points, chosenKey, units, onPick, onTile
     line.current = null;
     if (user) L.marker([user.lat, user.lon], { icon: homeIcon, zIndexOffset: 1000, keyboard: false }).bindTooltip('You', { direction: 'top', offset: [0, -8] }).addTo(lg);
     for (const p of points) {
-      const mk = L.marker([p.lat, p.lon], { icon: pinIcon(p.source, false), title: p.name });
-      mk.bindPopup(card(p, units), { maxWidth: 320 });
+      const mk = L.marker([p.lat, p.lon], { icon: pinIcon(p.source, false, p.count), title: p.count === undefined ? p.name : `${p.name} · ${p.count} ${p.count === 1 ? 'entry' : 'entries'}` });
+      mk.bindPopup(card(p, units), { maxWidth: 340 });
       mk.on('click', () => onPick(p.key));
       mk.addTo(lg);
       markers.current.set(p.key, mk);
@@ -158,7 +166,7 @@ export default function MapView({ user, points, chosenKey, units, onPick, onTile
       const mk = markers.current.get(p.key);
       if (!mk) continue;
       const chosen = p.key === chosenKey;
-      mk.setIcon(pinIcon(p.source, chosen));
+      mk.setIcon(pinIcon(p.source, chosen, p.count));
       mk.setZIndexOffset(chosen ? 500 : 0);
     }
     if (line.current) {

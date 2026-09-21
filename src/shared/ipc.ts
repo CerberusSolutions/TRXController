@@ -81,8 +81,24 @@ export interface LogCursor {
   id: number;
 }
 
-/** What the map window shows: the scanner's current frequency as it moves, or one log entry, pinned. */
-export type MapTarget = { kind: 'follow' } | { kind: 'row'; row: ReceptionRow; /** Index into `row.candidates` of the pin to draw the line to; the log's own choice when absent. */ pick?: number };
+/**
+ * What the map window shows: the scanner's current frequency as it moves, one log entry pinned, or the
+ * log for one day (`day` is a local calendar date as YYYY-MM-DD, today when absent; `filter` is the
+ * log's filter text to start with).
+ */
+export type MapTarget =
+  | { kind: 'follow' }
+  | { kind: 'row'; row: ReceptionRow; /** Index into `row.candidates` of the pin to draw the line to; the log's own choice when absent. */ pick?: number }
+  | { kind: 'day'; day?: string; filter?: string };
+
+/** One day of the log for the map: the entries active in the period that carry a position, and how many there were in all. */
+export interface DayLog {
+  rows: ReceptionRow[];
+  /** Every entry active in the period, placed or not. */
+  total: number;
+  /** `rows` was cut at the limit: the busiest placements may be under-counted. */
+  truncated: boolean;
+}
 
 /** The serial ports the OS lists, or why it could not list them (shown in the top bar). */
 export interface PortsResult {
@@ -491,8 +507,10 @@ export const IPC = {
   snapshot: 'scanner:snapshot',
   ccdump: 'scanner:ccdump',
   logRecent: 'log:recent',
+  logDay: 'log:day',
   logClear: 'log:clear',
   logUpsert: 'log:upsert',
+  logChanged: 'log:changed',
   logExportCsv: 'log:export-csv',
   logConfirm: 'log:confirm',
   logUnconfirm: 'log:unconfirm',

@@ -193,6 +193,11 @@ export default function HelpDialog() {
                 the main window and keeps it there as that moves. Keys: + and − zoom, arrows pan, A fits everything in, Z centres on you; ? in the map's bar lists them. A WTR pin is the Ofcom licence holder, often a reseller's address
                 rather than the transmitter; the card under each pin says what it marks. Tiles need an internet connection; the pins do not.
               </p>
+              <p>
+                The log's <b className="text-ink">Map</b> button, or L in the map, is the <b className="text-ink">Log view</b>: one day of the log, every placed entry as a pin at its
+                placement with the number of entries on it and a card listing them. The bar picks the day ([ and ] step it) and filters as the log does; Live goes
+                back to following the scanner. Only entries with a position appear; the bar counts the rest.
+              </p>
             </Section>
 
             <Section title="Log export for EZ Scan">

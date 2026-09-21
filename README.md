@@ -111,8 +111,15 @@ main window, and keeps it there as the main window moves; drag it away or press 
 everything in, Z centres on you, D docks; ? in the window's bar lists them. A WTR pin marks
 the Ofcom licence holder, which is often a reseller's address rather than the transmitter; RRUK and
 RadioReference pins are the sites those databases list; a UKR pin is the repeater. The card under a
-pin says which. Tiles need an internet connection; the pins do not. Rows and candidates store their
-position from now on, for a later "everything heard today" map.
+pin says which. Tiles need an internet connection; the pins do not.
+
+The log's **Map** button (or L in the map window) is the **Log view**: one day of the log on the same
+map, every placed entry as a pin at its placement with the number of entries on it, its colour the source
+behind the newest name, and a card listing the entries. The bar picks the day ([ and ] step it, never past
+today) and has the log's filter, so "taxi" shows where every taxi firm heard that day sits; today's view
+follows the log as new entries arrive. **Live** (or L again) goes back to following the scanner. Only
+entries with a position are pinned (rows and candidates have stored one since 0.2.11); the bar counts the
+rest.
 
 Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: after the chosen
 number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
