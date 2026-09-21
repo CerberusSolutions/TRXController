@@ -166,7 +166,8 @@ describe('patchPldef / patchGlb', () => {
     expect(out[566]).toBe(3);
     // Search blocks: only the decoded bits move, the others in each flags byte stay.
     expect([out[571], out[572], out[573], out[575], out[589], out[590], out[598], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0x06, 0xff, 0x0a, 0x1e]);
-    expect([out[615], out[616], out[617], out[633], out[651], out[652], out[669]]).toEqual([0x0a, 0xfc, 0xff, 0x06, 0x0a, 0xfd, 0x0a]);
+    // CB UK at 615, VHF Marine at 633, PMR446 at 651, Mosque at 669.
+    expect([out[615], out[616], out[617], out[633], out[634], out[651], out[669]]).toEqual([0x0a, 0xfc, 0xff, 0x0a, 0xfd, 0x0a, 0x06]);
     expect(out[616 + 5]).toBe(0xff); // CB has 40 rows: bits past them stay as read
     expect(new DataView(out.buffer).getUint32(576, true)).toBe(25_000_000);
     expect(new DataView(out.buffer).getUint32(580, true)).toBe(1_300_000_000);

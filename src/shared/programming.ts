@@ -132,10 +132,11 @@ export const GLB_PS_FLAGS = 607;
 export const GLB_PS_GROUPS = 608;
 export const GLB_SEARCH_END = 613;
 /**
- * The channel-table blocks: a flags byte then 128 channel bits (row n = bit n). CB UK's is proven (EZ
- * Scan's save moved bits 0-1 of 616 for channels 1-2); the other three are assumed in WX-code order.
+ * The channel-table blocks: a flags byte then 128 channel bits (row n = bit n). All four proven by EZ Scan's
+ * saves on 21 Sep 2026: CB UK channels 1-2 moved bits 0-1 of 616; then one, two and three channels unticked
+ * in VHF Mar, Mosque and PMR446 cleared that many bits at 634, 670 and 652.
  */
-export const GLB_CHANNEL_BLOCKS: Readonly<Record<ChannelSearch, number>> = { cbUk: 615, mosque: 633, vhfMarine: 651, pmr446: 669 };
+export const GLB_CHANNEL_BLOCKS: Readonly<Record<ChannelSearch, number>> = { cbUk: 615, vhfMarine: 633, pmr446: 651, mosque: 669 };
 export const GLB_CHANNELS_END = 669 + 17;
 
 /** WX button operations by code: EZ Scan's dropdown order (Amateur = 3 seen on a card). */

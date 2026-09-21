@@ -519,9 +519,8 @@ captured on 14 Sep 2026.
   Special Mode bit 5 of 573 (the Sweeper's other option bits have their own layout, kept), Limit flags at 575 with its
   range as uint32 Hz at 576 / 580, U/VHF AM flags at 589 and four group bits at 590, Amateur flags at 598 and groups at 599, Public
   Safety flags at 607 and five group bits at 608; in a flags byte bit 0 is Zeromatic, bit 2 Attenuator, bit 3 Delay
-  (`FLAG_*`). The four channel-table searches (a flags byte then 128 channel bits, row n = bit n: CB UK at 615, proven
-  by EZ Scan's save moving bits 0-1 for channels 1-2; Mosque 633, VHF Marine 651, PMR446 669 assumed in WX-code
-  order, `GLB_CHANNEL_BLOCKS`) are ticks over the scanner's fixed tables in `src/shared/searchChannels.ts` (CB UK 40,
+  (`FLAG_*`). The four channel-table searches (a flags byte then 128 channel bits, row n = bit n: CB UK at 615, VHF Marine 633,
+  PMR446 651, Mosque 669, all proven by EZ Scan's saves moving the expected bits, `GLB_CHANNEL_BLOCKS`) are ticks over the scanner's fixed tables in `src/shared/searchChannels.ts` (CB UK 40,
   Mosque 23, VHF Marine 97 rows on the ITU plan, PMR446 16 analogue + 16 digital, from EZ Scan's lists); bits past a
   table's rows are left as read. `settings.programmingRecent` is the folders opened, most recent
   first (eight), listed as `recent` candidates and the folder dialog's start. Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
