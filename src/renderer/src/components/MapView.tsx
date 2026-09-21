@@ -113,10 +113,13 @@ export default function MapView({ user, points, chosenKey, units, onPick, onTile
     tiles.addTo(m);
     layer.current = L.layerGroup().addTo(m);
     map.current = m;
-    // Attribution links must not navigate the window; main hands them to the system browser.
+    // Attribution links must not navigate the window; main hands them to the system browser. Only links
+    // written as absolute URLs: Leaflet's own controls are anchors too (the popup's × is href="#close"),
+    // and a resolved `a.href` would match them whenever the page itself is served over http (the dev build).
     host.current.addEventListener('click', (e) => {
       const a = (e.target as HTMLElement).closest('a');
-      if (a && a.href && /^https?:/.test(a.href)) {
+      const href = a?.getAttribute('href') ?? '';
+      if (a && /^https?:\/\//i.test(href)) {
         e.preventDefault();
         window.open(a.href);
       }
