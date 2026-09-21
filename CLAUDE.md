@@ -362,6 +362,12 @@ captured on 14 Sep 2026.
   `tile.openstreetmap.org` images. `MapApp` attaches the scanner, log, identities and theme stores like `App`
   does; in follow mode the entry on show is the log's newest row on the scanner's frequency (the log is what
   knows which candidate won), else the live `candidatesFor` list; pinned mode is the row it was opened from.
+  Follow mode follows where the scanner *stops*, never the sweep (UAT, 21 Sep 2026: a scan retargeting the map
+  several times a second, each with a fit-to-bounds, was nauseating): the followed frequency moves when the
+  squelch opens on it, or once it has sat there for `SETTLE_MS` (1.5 s) with the squelch closed (Tune Mode, a
+  hold), and stays put otherwise. F (or the Following button) holds what is on show: the log entry when there is
+  one (`target` `row`), else the frequency and the pins as they stand (`hold` state, captured from `liveRef`), so
+  it works mid-sweep too (UAT: it used to do nothing until something was logged on the frequency); F again follows.
   `MapView.tsx` is imperative Leaflet (`leaflet`, devDependency, bundled; `divIcon` pins styled by the
   `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
   position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
