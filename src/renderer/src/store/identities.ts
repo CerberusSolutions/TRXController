@@ -44,7 +44,7 @@ export const useIdentities = create<IdentityState>((set) => ({
   wtrResult: null,
   repeatersImporting: false,
   repeatersResult: null,
-  settings: { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, rr: { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' }, rruk: { apiKey: '', postcode: '' }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) },
+  settings: { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, rr: { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' }, rruk: { apiKey: '', postcode: '' }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) },
   rr: null,
   rrBusy: false,
   rrMessage: null,

@@ -189,8 +189,8 @@ export default function HelpDialog() {
               <p>
                 The <b className="text-ink">map</b> button beside Listed, or beside any placed candidate in a log entry, opens a second window: you (your
                 location from the Data dialog) and every candidate pinned on OpenStreetMap, with a line to the one the log chose and its
-                distance and bearing. It follows the scanner, or stays on the entry it was opened from (Follow, or F, lets go). Keys: + and −
-                zoom, arrows pan, A fits everything in, Z centres on you. A WTR pin is the Ofcom licence holder, often a reseller's address
+                distance and bearing. It follows the scanner, or stays on the entry it was opened from (Follow, or F, lets go). Dock (or D) parks it beside
+                the main window and keeps it there as that moves. Keys: + and − zoom, arrows pan, A fits everything in, Z centres on you. A WTR pin is the Ofcom licence holder, often a reseller's address
                 rather than the transmitter; the card under each pin says what it marks. Tiles need an internet connection; the pins do not.
               </p>
             </Section>

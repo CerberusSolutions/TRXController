@@ -19,6 +19,7 @@ export default function MapApp() {
   const [picked, setPicked] = useState<string | null>(null);
   const [tilesFailing, setTilesFailing] = useState(false);
   const [command, setCommand] = useState<{ n: number; what: 'fit' | 'home' } | null>(null);
+  const [docked, setDocked] = useState<'left' | 'right' | null>(null);
   const snapshot = useScanner((s) => s.snapshot);
   const rows = useLog((s) => s.rows);
   const settings = useIdentities((s) => s.settings);
@@ -35,13 +36,20 @@ export default function MapApp() {
           setPicked(t.kind === 'row' && t.pick !== undefined ? `c${t.pick}` : null);
         })
       : () => undefined;
+    const offDock = window.trx?.onMapDock ? window.trx.onMapDock((s) => setDocked(s.docked)) : () => undefined;
     return () => {
+      offDock();
       offTarget();
       offLog();
       offScanner();
       offTheme();
     };
   }, []);
+
+  const toggleDock = useCallback(() => {
+    const p = window.trx?.mapDock?.(docked ? 'off' : 'auto');
+    if (p) void p.then((s) => setDocked(s.docked));
+  }, [docked]);
 
   // Keyboard: + / - and the arrows are Leaflet's own once the map has focus; these work anywhere in the window.
   useEffect(() => {
@@ -53,12 +61,13 @@ export default function MapApp() {
       else if (k === 'f') {
         setTarget({ kind: 'follow' });
         setPicked(null);
-      } else return;
+      } else if (k === 'd') toggleDock();
+      else return;
       e.preventDefault();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [toggleDock]);
 
   const userLat = settings.lat;
   const userLon = settings.lon;
@@ -159,8 +168,16 @@ export default function MapApp() {
               Following
             </span>
           )}
-          <span className="hidden text-[11px] text-ink-3 lg:inline" title="Keyboard: + and − zoom, arrows pan, A fits everything in, Z centres on you, F follows the scanner">
-            + − · arrows · A fit · Z home · F follow
+          <button
+            type="button"
+            className={`no-drag rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+            title={docked ? `Docked to the ${docked} of the main window; click (or D) to set it free` : 'Dock beside the main window and follow it (D)'}
+            onClick={toggleDock}
+          >
+            {docked ? 'Undock' : 'Dock'}
+          </button>
+          <span className="hidden text-[11px] text-ink-3 lg:inline" title="Keyboard: + and − zoom, arrows pan, A fits everything in, Z centres on you, F follows the scanner, D docks beside the main window">
+            + − · arrows · A fit · Z home · F follow · D dock
           </span>
         </span>
       </header>

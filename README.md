@@ -106,7 +106,9 @@ The **map** button beside the hero's Listed block, or beside any placed candidat
 window with you (your Data-dialog location) and every candidate for the frequency pinned on
 OpenStreetMap, coloured by source, with a dashed line to the one the log chose carrying its distance
 and bearing. It follows the scanner, or stays pinned to the log entry it was opened from (Follow, or
-F, lets go). Keys: + and - zoom, arrows pan, A fits everything in, Z centres on you. A WTR pin marks
+F, lets go). Dock (or D) parks it against whichever side of the main window has room and keeps it there as
+the main window moves; drag it away or press Dock again to free it. Keys: + and - zoom, arrows pan, A fits
+everything in, Z centres on you, D docks. A WTR pin marks
 the Ofcom licence holder, which is often a reseller's address rather than the transmitter; RRUK and
 RadioReference pins are the sites those databases list; a UKR pin is the repeater. The card under a
 pin says which. Tiles need an internet connection; the pins do not. Rows and candidates store their
