@@ -343,22 +343,35 @@ function Lookup({ o, onPick }: { o: ProgObject; onPick: (c: ListedCandidate) => 
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const [cands, setCands] = useState<ListedCandidate[] | null>(null);
   const [pending, setPending] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const api = window.trx;
   const canLookup = !!api && (!!api.wtrLookup || !!api.repeatersLookup || !!api.rrukLookup || !!api.rrLookup);
-  const run = async (): Promise<void> => {
+  /**
+   * The registers answer at once; RadioReference and RRUK answer from their cache, with `pending` set while
+   * the service is being asked, so the popover asks again every couple of seconds until they have answered.
+   */
+  const run = async (attempt = 0): Promise<void> => {
     if (!api) return;
-    setCands(null);
+    if (attempt === 0) setCands(null);
     const hz = o.frequencyHz;
     const [settings, licences, repeaters, rruk, rr] = await Promise.all([
       api.settingsGet().catch(() => null),
       api.wtrLookup?.(hz).catch(() => []) ?? [],
       api.repeatersLookup?.(hz).catch(() => []) ?? [],
       api.rrukLookup?.(hz).catch(() => null) ?? null,
-      api.rrLookup?.(hz).catch(() => null) ?? null,
+      api.rrLookup?.(hz, false).catch(() => null) ?? null,
     ]);
     const tone = o.tone.type === 'CTCSS' ? `CTCSS ${o.tone.value}` : null;
     setCands(candidatesFor({ rr, rruk, licences, repeaters, detectedTone: tone }, normaliseLookups(settings?.lookups)));
-    setPending((!rruk && !!api.rrukLookup) || (!rr && !!api.rrLookup));
+    const waiting = !!rruk?.pending || !!rr?.pending;
+    setPending(waiting);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = waiting && attempt < 8 ? setTimeout(() => void run(attempt + 1), 2000) : null;
+  };
+  const close = (): void => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    setAnchor(null);
   };
   if (!canLookup) return null;
   return (
@@ -375,19 +388,15 @@ function Lookup({ o, onPick }: { o: ProgObject; onPick: (c: ListedCandidate) => 
         ?
       </button>
       {anchor && (
-        <Popover anchor={anchor} onClose={() => setAnchor(null)} width={420}>
+        <Popover anchor={anchor} onClose={close} width={420}>
           <div className="mb-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-ink-2">
             <span>Listed on {mhz(o.frequencyHz)}</span>
-            {pending && (
-              <button type="button" className="ml-auto normal-case tracking-normal text-cyan" onClick={() => void run()} title="RadioReference is being asked; refresh for its answer">
-                refresh
-              </button>
-            )}
+            {pending && <span className="ml-auto normal-case tracking-normal text-ink-3">asking RadioReference…</span>}
           </div>
           {cands === null ? (
             <div className="py-2 text-ink-3">Looking up…</div>
           ) : cands.length === 0 ? (
-            <div className="py-2 text-ink-3">Nothing listed{pending ? ' yet' : ''}. {pending ? 'RadioReference has been asked: refresh in a moment.' : ''}</div>
+            <div className="py-2 text-ink-3">{pending ? 'Nothing in the registers; waiting for RadioReference.' : 'Nothing listed.'}</div>
           ) : (
             <div className="max-h-72 overflow-auto">
               {cands.map((c) => (

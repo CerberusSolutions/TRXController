@@ -211,7 +211,8 @@ export function parseCdat(dir: string, files: ReadonlyMap<string, Uint8Array>, r
   const plsets = get('PLSETS.DAT');
   const glb = get('ISCAN___.GLB');
   const descRaw = files.get('DESCRIPT.TXT');
-  const description = descRaw ? text(descRaw, 0, Math.min(descRaw.length, 32)) : '';
+  // EZ Scan writes 16 bytes, or 32 as two 16-character lines when it names the folder itself: one line here.
+  const description = descRaw ? text(descRaw, 0, Math.min(descRaw.length, 32)).replace(/\s{2,}/g, ' ') : '';
   const trunked: ProgTrunkedSystem[] = [];
   for (const name of [...files.keys()].sort()) {
     const m = /^TS(\d{6})\._TS$/.exec(name);

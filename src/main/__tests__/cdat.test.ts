@@ -144,6 +144,13 @@ describe('parseCdat', () => {
     expect(p.readAt).toBe(1234);
   });
 
+  it('reads a two-line description as one line', () => {
+    const two = new Uint8Array(32).fill(0x20);
+    two.set(ascii('TRXC Import', 16), 0);
+    two.set(ascii('Tests', 16), 16);
+    expect(parseCdat('x', new Map([['DESCRIPT.TXT', two]])).description).toBe('TRXC Import Tests');
+  });
+
   it('copes with a folder missing files', () => {
     const p = parseCdat('x', new Map());
     expect(p.objects).toEqual([]);

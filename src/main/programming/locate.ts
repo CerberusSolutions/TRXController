@@ -23,7 +23,7 @@ async function isCdat(dir: string): Promise<boolean> {
 
 async function description(dir: string): Promise<string> {
   try {
-    return (await readFile(join(dir, 'DESCRIPT.TXT'), 'latin1')).replace(/[^\x20-\x7e]/g, '').trim();
+    return (await readFile(join(dir, 'DESCRIPT.TXT'), 'latin1')).replace(/[^\x20-\x7e]/g, '').replace(/\s{2,}/g, ' ').trim();
   } catch {
     return '';
   }
