@@ -6,6 +6,7 @@
  * and the log's expander draw it).
  */
 import type { RepeaterMatch, RrConventional, RrInfo, RrSystemInfo, RrukEntry, RrukInfo, WtrMatch } from './ipc';
+import { point } from './geo';
 import { ctcssHz, rankRepeaters, toneMatches } from './repeaters';
 import { conventionalLabel, rrToneMatches } from './rr';
 import { lookupRank, type LookupId, type LookupPref } from './sources';
@@ -35,6 +36,9 @@ export interface ListedCandidate extends Candidate {
   title: string;
 }
 
+/** The pair as stored on a candidate: the point when believable, else nulls. */
+const pointOrNull = (lat: number | null | undefined, lon: number | null | undefined): { lat: number | null; lon: number | null } => point(lat, lon) ?? { lat: null, lon: null };
+
 /** Nobody could place it relative to the user: it never outranks one that was. A nationwide allocation counts as placed. */
 export const placed = (c: { distanceKm: number | null; nationwide?: boolean }): boolean => c.distanceKm !== null || c.nationwide === true;
 
@@ -56,8 +60,7 @@ function fromSystem(sys: RrSystemInfo): ListedCandidate {
     detail: [sys.site?.descr, tg ? `${tg.descr || tg.alpha}${tg.category ? ` (${tg.category})` : ''}${tg.enc ? ' · enc' : ''}` : ''].filter(Boolean).join(' · '),
     distanceKm: sys.distanceKm,
     bearingDeg: sys.bearingDeg,
-    lat: sys.lat,
-    lon: sys.lon,
+    ...pointOrNull(sys.lat, sys.lon),
     title: `RadioReference system ${sys.sid}${sys.city ? ` · ${sys.city}` : ''}${sys.site ? ` · site ${sys.site.descr} (${sys.site.location}) NAC ${sys.site.nac}` : ''}${tg ? ` · TG ${tg.tgDec} ${tg.alpha}` : ''}`,
   };
 }
@@ -71,8 +74,7 @@ function fromConventional(c: RrConventional, i: number, detected: string | null 
     detail: [c.county, c.tone ? `${c.tone}${match === true ? ' ✓' : ''}` : '', c.mode, c.tags[0]].filter(Boolean).join(' · '),
     distanceKm: c.distanceKm,
     bearingDeg: c.bearingDeg,
-    lat: c.lat,
-    lon: c.lon,
+    ...pointOrNull(c.lat, c.lon),
     ...(match === null ? {} : { match }),
     title: `${conventionalLabel(c)}${c.callsign ? ` · ${c.callsign}` : ''}${c.tags.length ? ` · ${c.tags.join(', ')}` : ''}${match === false ? ' · tone differs from the detected one' : ''}`,
   };
@@ -98,8 +100,7 @@ function fromRruk(e: RrukEntry, i: number, detected: string | null | undefined):
       .join(' · '),
     distanceKm: e.distanceKm,
     bearingDeg: e.bearingDeg,
-    lat: e.lat,
-    lon: e.lon,
+    ...pointOrNull(e.lat, e.lon),
     title: `RadioReference UK${e.licence ? ` · licence ${e.licence}` : ''}${e.location && e.location !== e.place ? ` · ${e.location}` : ''}${e.county ? ` · ${e.county}` : ''}${e.postcode ? ` · ${e.postcode}` : ''}${e.group ? ` · ${e.group}` : ''}${e.tags ? ` · ${e.tags}` : ''}${e.isTrunk ? ' · trunked' : ''}${e.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}${match === false ? ' · code differs from the detected one' : ''}`,
   };
   if (match !== null) c.match = match;
@@ -115,8 +116,7 @@ function fromLicence(l: WtrMatch): ListedCandidate {
     detail: [l.mode, l.direction === 'R' ? 'mob' : l.direction === 'T' ? 'base' : ''].filter(Boolean).join(' · '),
     distanceKm: l.distanceKm,
     bearingDeg: l.bearingDeg,
-    lat: l.lat,
-    lon: l.lon,
+    ...pointOrNull(l.lat, l.lon),
     title: `${l.product} · ${l.emission || 'emission unknown'} · ${l.ngr || 'no grid ref'}${l.direction === 'R' ? ' · base receives here (mobiles transmit)' : ''}`,
   };
 }
@@ -131,8 +131,7 @@ function fromRepeater(r: RepeaterMatch, detectedHz: number | null): ListedCandid
     detail: [r.where ? r.where.charAt(0) + r.where.slice(1).toLowerCase() : '', r.ctcss !== null ? `${r.ctcss.toFixed(1)} Hz${match ? ' ✓' : ''}` : '', r.side === 'input' ? 'input' : ''].filter(Boolean).join(' · '),
     distanceKm: r.distanceKm,
     bearingDeg: r.bearingDeg,
-    lat: r.lat,
-    lon: r.lon,
+    ...pointOrNull(r.lat, r.lon),
     ...(detectedHz !== null && r.ctcss !== null ? { match } : {}),
     title: `${r.channel || r.band}${r.inputHz ? ` · input ${(r.inputHz / 1e6).toFixed(4)}` : ''} · ${r.locator || 'no locator'}${r.side === 'input' ? ' · you are hearing its input (a mobile)' : ''}${
       match ? ' · CTCSS matches the detected tone' : detectedHz !== null && r.ctcss !== null ? ' · CTCSS differs from the detected tone' : ''
@@ -187,8 +186,7 @@ export function normaliseCandidates(v: unknown): Candidate[] {
       detail: typeof o['detail'] === 'string' ? o['detail'] : '',
       distanceKm: num(o['distanceKm']),
       bearingDeg: num(o['bearingDeg']),
-      lat: num(o['lat']),
-      lon: num(o['lon']),
+      ...pointOrNull(num(o['lat']), num(o['lon'])),
     };
     if (typeof o['match'] === 'boolean') c.match = o['match'];
     if (typeof o['pills'] === 'string' && o['pills']) c.pills = o['pills'];

@@ -377,6 +377,9 @@ captured on 14 Sep 2026.
   county centre: `RrConventional` / `RrSystemInfo` got `lat` / `lon` in `rrService`); the tracker moves it
   with the placement (`placementAfter`), `LogDb.confirm` carries it onto renamed rows. Rows from before
   20 Sep 2026 have null and can be reconstructed from the user's position plus bearing and distance.
+  Every pair passes `point()` in `src/shared/geo.ts` on the way in (candidate builders, `normaliseCandidates`,
+  the tracker, the map, the log's map buttons): finite, in range, and not the 0,0 / -0 a register writes for
+  "unknown", which would pin the Gulf of Guinea and drag the fit-to-bounds with it.
 
 ## Scan timeout
 

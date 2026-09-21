@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MapTarget, ReceptionRow } from '../../../shared/ipc';
 import { candidatesFor } from '../../../shared/listed';
-import { normaliseUnits } from '../../../shared/geo';
+import { normaliseUnits, point } from '../../../shared/geo';
 import { attachLogEvents, useLog } from '../store/log';
 import { attachScannerEvents, useScanner } from '../store/scanner';
 import { useIdentities } from '../store/identities';
@@ -116,13 +116,15 @@ export default function MapApp() {
       ? row.candidates
       : candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups);
     list.forEach((c, i) => {
-      if (c.lat === null || c.lon === null || c.lat === undefined || c.lon === undefined) return;
-      add({ key: `c${i}`, source: c.source, name: c.name, detail: c.detail, lat: c.lat, lon: c.lon, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg, ...(c.match === undefined ? {} : { match: c.match }) });
+      const at = point(c.lat, c.lon);
+      if (!at) return;
+      add({ key: `c${i}`, source: c.source, name: c.name, detail: c.detail, ...at, distanceKm: c.distanceKm, bearingDeg: c.bearingDeg, ...(c.match === undefined ? {} : { match: c.match }) });
     });
     // A confirmed or otherwise placed identity that no candidate carries gets its own pin.
     // `!= null` on purpose: rows from before the columns existed (and the preview mock) carry undefined, not null.
-    if (row && row.lat != null && row.lon != null && row.name && !out.some((p) => p.name === row.name)) {
-      add({ key: 'row', source: row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'CONF', name: row.name, detail: row.system, lat: row.lat, lon: row.lon, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
+    const own = row ? point(row.lat, row.lon) : null;
+    if (row && own && row.name && !out.some((p) => p.name === row.name)) {
+      add({ key: 'row', source: row.source === 'CONF' ? 'CONF' : row.source === 'RRDB' || row.source === 'RRUK' || row.source === 'WTR' || row.source === 'UKR' ? row.source : 'CONF', name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
     }
     return out;
   }, [row, snapshot]);
