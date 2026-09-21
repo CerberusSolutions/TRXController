@@ -462,14 +462,16 @@ function registerIpc(): void {
     rr?.clearCache();
     return rr?.status() ?? null;
   });
-  ipcMain.handle(IPC.rrukLookup, (_e, hz: unknown) => {
+  // Both lookups answer from the cache at once (`pending` set while a call is in flight); `force` re-asks
+  // the service even when cached (the Data dialog's refresh), otherwise only an uncached or stale frequency is asked.
+  ipcMain.handle(IPC.rrukLookup, (_e, hz: unknown, force: unknown) => {
     if (!rruk || typeof hz !== 'number') return null;
-    rruk.request(hz, true);
+    rruk.request(hz, force === true);
     return rruk.info(hz);
   });
-  ipcMain.handle(IPC.rrLookup, (_e, hz: unknown) => {
+  ipcMain.handle(IPC.rrLookup, (_e, hz: unknown, force: unknown) => {
     if (!rr || typeof hz !== 'number') return null;
-    rr.request(hz, true);
+    rr.request(hz, force !== false);
     return rr.info(hz);
   });
   ipcMain.handle(IPC.setTheme, (_e, mode: unknown) => {

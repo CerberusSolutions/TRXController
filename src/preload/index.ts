@@ -99,15 +99,15 @@ const api = {
   rrStates: (coid: number): Promise<RrRegion[]> => ipcRenderer.invoke(IPC.rrStates, coid),
   rrRegionSet: (region: { coid: number; stid: number; countryName: string; stateName: string }): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrRegionSet, region),
   rrClearCache: (): Promise<RrStatus> => ipcRenderer.invoke(IPC.rrClearCache),
-  /** Force a fresh lookup of a frequency. */
-  rrLookup: (hz: number): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz),
+  /** What RadioReference knows about a frequency, asking it afresh unless `force` is false (then only if uncached). */
+  rrLookup: (hz: number, force = true): Promise<RrInfo | null> => ipcRenderer.invoke(IPC.rrLookup, hz, force),
   /** RadioReference UK: the user's own API key (stored encrypted; an empty key clears it), a test call, the cache. */
   rrukStatus: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukStatus),
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
-  /** Ask RadioReference UK about a frequency now (cached answer at once, else null while the call is made). */
-  rrukLookup: (hz: number): Promise<RrukInfo | null> => ipcRenderer.invoke(IPC.rrukLookup, hz),
+  /** What RadioReference UK knows about a frequency (the cache, `pending` while it is being asked); `force` re-asks. */
+  rrukLookup: (hz: number, force = false): Promise<RrukInfo | null> => ipcRenderer.invoke(IPC.rrukLookup, hz, force),
   /** Development only (no-ops in a packaged build): the scanner's SD-card programming. */
   programmingOpen: (): Promise<void> => ipcRenderer.invoke(IPC.programmingOpen),
   /** The CDAT and V-Scanner folders on mounted cards; with `near`, those beside that folder first. */

@@ -45,6 +45,7 @@ describe('encodeObject', () => {
       obj(),
       obj({ modulation: 'AM', tone: { type: 'None', value: '' }, scanlists: [12] }),
       obj({ modulation: 'FM', tone: { type: 'Search', value: '' }, skip: true, backlight: 'Flash', delayS: 5, led: { on: true, colour: '#FF00FF' } }),
+      obj({ backlight: 'On' }),
       obj({ modulation: 'AUTO', dmode: 'Analog' }),
       obj({ modulation: 'DMR', dmode: 'Digital', digital: true, colourCode: 'any', tone: { type: 'Search', value: '' } }),
       obj({ modulation: 'NXDN', dmode: 'Digital', nxdn: true, tone: { type: 'Search', value: '' } }),
@@ -113,12 +114,13 @@ describe('patchPldef / patchGlb', () => {
     const base = new Uint8Array(201 * 18);
     base.set(ascii('OLD', 16), 0);
     base[17] = 0xc9; // enabled plus garbage bits
+    base[16] = 0x05; // not understood: kept
     const out = patchPldef(base, [
-      { number: 1, name: 'AIR', enabled: false, isDefault: true, objects: [] },
-      { number: 2, name: 'WTR 1', enabled: true, isDefault: false, objects: [] },
+      { number: 1, name: 'AIR', enabled: false, objects: [] },
+      { number: 2, name: 'WTR 1', enabled: true, objects: [] },
     ]);
     expect(new TextDecoder().decode(out.subarray(0, 16))).toBe('AIR             ');
-    expect(out[16]).toBe(1);
+    expect(out[16]).toBe(0x05);
     expect(out[17]).toBe(0xc8);
     expect(out[18 + 17]).toBe(1);
     expect(base[17]).toBe(0xc9); // the input is not mutated

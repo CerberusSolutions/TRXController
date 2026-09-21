@@ -8,8 +8,9 @@
  * - CG000000._CG: 19-byte header (0x13 0x00 + a 17-char signature), then 126-byte object records.
  *   CG000000._CI: one int32 per record (-2 = unused index slot).
  * - Scanlist membership is the 25-byte bitmap at byte 12 of each object (bit n = scanlist n+1); the PLnnn.DAT
- *   files hold the scanner's own partial per-list tables and are not read. PLDEF.DAT: 201 x 18 bytes, name (16) +
- *   default flag + enabled flag.
+ *   files are the same membership as ten-byte entries (see write.ts) and are not read. PLDEF.DAT: 201 x 18 bytes, name (16),
+ *   a byte always 0, and a flag byte whose bit 0 is enabled (EZ Scan's Default marker is not on the card: byte 16 stayed 0
+ *   on the list EZ Scan showed as Default, 21 Sep 2026).
  *   PLSETS.DAT: 20 x 44 bytes, name (16), ?, enabled, 25-byte scanlist bitmap, ?.
  * - TSnnnnnn._TS: a trunked system, name at 19, then 654-byte site records (32 x 6-byte frequency
  *   entries, then the name); ._GD: its talkgroups as 126-byte object-shaped records, scattered.
@@ -85,7 +86,7 @@ export function parseObject(r: Uint8Array, index: number): ProgObject {
     dmode: dmodeOf(r),
     tone: toneOf(r),
     skip: (r[39]! & 0x08) !== 0,
-    backlight: r[81] === 0 ? 'Leave' : r[81] === 2 ? 'Flash' : `Code ${r[81]}`,
+    backlight: r[81] === 0 ? 'Leave' : r[81] === 1 ? 'On' : r[81] === 2 ? 'Flash' : `Code ${r[81]}`,
     delayS: r[66]! / 10,
     led: { on: r[68] === 1, colour: r[68] === 1 ? `#${hex2(r[69]!)}${hex2(r[70]!)}${hex2(r[71]!)}` : null },
     digital,
@@ -118,7 +119,7 @@ export function parseScanlists(pldef: Uint8Array, objects: readonly ProgObject[]
   for (let n = 1; n <= 200; n++) {
     const o = (n - 1) * 18;
     if (o + 18 > pldef.length) break;
-    out.push({ number: n, name: text(pldef, o, 16), enabled: (pldef[o + 17]! & 1) !== 0, isDefault: (pldef[o + 16]! & 1) !== 0, objects: members.get(n) ?? [] });
+    out.push({ number: n, name: text(pldef, o, 16), enabled: (pldef[o + 17]! & 1) !== 0, objects: members.get(n) ?? [] });
   }
   return out;
 }
@@ -211,7 +212,8 @@ export function parseCdat(dir: string, files: ReadonlyMap<string, Uint8Array>, r
   const plsets = get('PLSETS.DAT');
   const glb = get('ISCAN___.GLB');
   const descRaw = files.get('DESCRIPT.TXT');
-  const description = descRaw ? text(descRaw, 0, Math.min(descRaw.length, 32)) : '';
+  // EZ Scan writes 16 bytes, or 32 as two 16-character lines when it names the folder itself: one line here.
+  const description = descRaw ? text(descRaw, 0, Math.min(descRaw.length, 32)).replace(/\s{2,}/g, ' ') : '';
   const trunked: ProgTrunkedSystem[] = [];
   for (const name of [...files.keys()].sort()) {
     const m = /^TS(\d{6})\._TS$/.exec(name);
