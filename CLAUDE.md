@@ -365,7 +365,10 @@ captured on 14 Sep 2026.
   Follow mode follows where the scanner *stops*, never the sweep (UAT, 21 Sep 2026: a scan retargeting the map
   several times a second, each with a fit-to-bounds, was nauseating): the followed frequency moves when the
   squelch opens on it, or once it has sat there for `SETTLE_MS` (1.5 s) with the squelch closed (Tune Mode, a
-  hold), and stays put otherwise. F (or the Following button) holds what is on show: the log entry when there is
+  hold), and stays put otherwise; the bar's amber figure is still the radio's live frequency (UAT read a frozen
+  one as a bug), with "pins 145.6375" in grey beside it whenever the pins are for another; while held the bar shows nothing right of
+  MAP but the buttons (the live readout would be noise then). Mid-sweep, with no stop yet, the snapshot's lookups
+  are not drawn (they belong to whatever the scanner is passing). F (or the Following button) holds what is on show: the log entry when there is
   one (`target` `row`), else the frequency and the pins as they stand (`hold` state, captured from `liveRef`), so
   it works mid-sweep too (UAT: it used to do nothing until something was logged on the frequency); F again follows.
   `MapView.tsx` is imperative Leaflet (`leaflet`, devDependency, bundled; `divIcon` pins styled by the

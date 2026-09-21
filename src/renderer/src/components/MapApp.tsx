@@ -89,8 +89,10 @@ export default function MapApp() {
       setTarget({ kind: 'follow' });
     } else if (rowRef.current) {
       setTarget({ kind: 'row', row: rowRef.current });
-    } else {
+    } else if (liveRef.current.hz !== null) {
       setHold({ ...liveRef.current });
+    } else {
+      return; // nothing on show yet to hold
     }
     setPicked(null);
   }, []);
@@ -249,7 +251,9 @@ export default function MapApp() {
       seen.add(k);
       out.push(p);
     };
-    const live = candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups);
+    // The snapshot's lookups are for the radio's live frequency: only the pins to draw when that is the one
+    // followed (parked, or stopped), never mid-sweep, where they would belong to whatever it is passing.
+    const live = hz !== null && hz === liveHz ? candidatesFor({ rr: snapshot.rr, rruk: snapshot.rruk, licences: snapshot.licences, repeaters: snapshot.repeaters, detectedTone: null }, snapshot.lookups) : [];
     liveRef.current = { hz, candidates: live };
     const list = row ? row.candidates : hold ? hold.candidates : live;
     list.forEach((c, i) => {
@@ -268,7 +272,7 @@ export default function MapApp() {
       add({ key: 'row', source, name: row.name, detail: row.system, ...own, distanceKm: row.distanceKm, bearingDeg: row.bearingDeg });
     }
     return out;
-  }, [row, snapshot, dayView, dayShown, hold, hz]);
+  }, [row, snapshot, dayView, dayShown, hold, hz, liveHz]);
   // The snapshot changes several times a second; the pins must only change when their content does, or
   // the map would rebuild them on every poll and lose the popup the user is opening.
   const pointsKey = JSON.stringify(rawPoints);
@@ -296,10 +300,14 @@ export default function MapApp() {
   const onPick = useCallback((key: string) => setPicked(key), []);
   const onTiles = useCallback((failing: boolean) => setTilesFailing(failing), []);
 
-  const shownHz = hold ? hold.hz : hz;
-  const mhz = row ? row.frequencyHz / 1e6 : shownHz !== null ? shownHz / 1e6 : null;
-  const title = row ? row.name || row.licensee || 'Unnamed' : shownHz !== null ? 'Nothing logged here yet' : 'No scanner';
+  // The bar's amber figure is the radio's own frequency and moves with it, sweep included; the frequency the
+  // pins are for (the followed stop, a held entry) is named beside it in grey whenever the two differ.
+  const shownHz = row ? row.frequencyHz : hold ? hold.hz : hz;
+  const mhz = liveHz !== null ? liveHz / 1e6 : shownHz !== null ? shownHz / 1e6 : null;
+  const pinsMhz = shownHz !== null && shownHz !== liveHz ? shownHz / 1e6 : null;
+  const title = row ? row.name || row.licensee || 'Unnamed' : shownHz !== null ? 'Nothing logged here yet' : liveHz !== null ? 'Waiting for the scanner to stop' : 'No scanner';
   const when = target.kind === 'row' ? new Date(target.row.startedAt).toLocaleString() : hold ? 'Held' : null;
+  /** Held (an entry, or the frequency and pins as they stood): the bar shows just the buttons. */
   const holding = target.kind === 'row' || hold !== null;
 
   return (
@@ -353,9 +361,14 @@ export default function MapApp() {
                 : `${dayShown.length} ${dayShown.length === 1 ? 'entry' : 'entries'}${dayFilter.trim() ? ` of ${dayLog.total}` : ''} · ${dayPlaced} placed at ${points.length} ${points.length === 1 ? 'point' : 'points'}${dayLog.truncated ? ' · newest 5000' : ''}`}
             </span>
           </>
-        ) : (
+        ) : holding ? null : (
           <>
-            {mhz !== null && <span className="font-mono text-base text-amber">{mhz.toFixed(4)}</span>}
+            {mhz !== null && <span className="font-mono text-base text-amber" title="The scanner's frequency now">{mhz.toFixed(4)}</span>}
+            {pinsMhz !== null && (
+              <span className="font-mono text-[12px] text-ink-3" title="The frequency the pins are for: where the scanner last stopped, or the entry held">
+                pins {pinsMhz.toFixed(4)}
+              </span>
+            )}
             <span className="min-w-0 truncate text-ink">{title}</span>
             {row?.system && <span className="min-w-0 truncate text-ink-3">{row.system}</span>}
           </>
@@ -484,7 +497,9 @@ export default function MapApp() {
                   : 'None of the entries shown has a position.'
               : row
                 ? 'Nothing placed this entry: none of its candidates carries a position.'
-                : 'No candidates to pin for this frequency yet.'}
+                : shownHz === null && liveHz !== null
+                  ? 'Scanning: the pins appear when the scanner stops on a station.'
+                  : 'No candidates to pin for this frequency yet.'}
           </div>
         )}
       </div>
