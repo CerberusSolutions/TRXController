@@ -5,6 +5,7 @@ import { attachLogEvents } from '../store/log';
 import { initTheme } from '../store/theme';
 import ProgLogImport from './ProgLogImport';
 import ProgNameFromLookups from './ProgNameFromLookups';
+import ProgGeneral from './ProgGeneral';
 import ProgSearch from './ProgSearch';
 import ProgGrid, { NAME_MAX, Popover, ScanlistPicker, TextCell, mhz, squelchText, type ObjectPatch } from './ProgGrid';
 
@@ -481,7 +482,7 @@ export default function ProgrammingApp() {
                 </div>
               </div>
             )}
-            {tab === 'general' && <General prog={prog} onChange={commit} />}
+            {tab === 'general' && <ProgGeneral prog={prog} onChange={commit} />}
             {tab === 'trunked' && <Trunked prog={prog} />}
             {tab === 'search' && <ProgSearch prog={prog} onChange={commit} />}
           </div>
@@ -562,102 +563,6 @@ function ScanlistRow({ l, active, onPick, onEdit }: { l: ProgScanlist; active: b
         {l.objects.length}
       </button>
       <input type="checkbox" className="h-3.5 w-3.5 cursor-pointer accent-green" checked={l.enabled} onChange={(e) => onEdit({ enabled: e.target.checked })} title={l.enabled ? 'Enabled: untick to leave it out of scanning' : 'Disabled: tick to scan it'} />
-    </div>
-  );
-}
-
-function General({ prog, onChange }: { prog: Programming; onChange: (p: Programming) => void }) {
-  const g = prog.globals;
-  const named = prog.scanlists.filter((l) => l.name && !/^Scanlist \d{3}$/.test(l.name));
-  const [setAnchor, setSetAnchor] = useState<{ rect: DOMRect; number: number } | null>(null);
-  const welcome = [0, 1, 2, 3, 4].map((i) => g.welcome[i] ?? '');
-  return (
-    <div className="grid h-full grid-cols-[22rem_minmax(0,1fr)] gap-4 overflow-auto p-4 text-sm text-ink-2">
-      <div className="space-y-4">
-        <section>
-          <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2">Welcome text</h3>
-          <div className="lcd-screen lcd-radio rounded-lg bg-lcd font-mono leading-[1.35] text-lcd-ink">
-            {welcome.map((l, i) => (
-              <input
-                key={i}
-                className="lcd-line block w-full bg-transparent text-center text-lcd-ink outline-none placeholder:text-lcd-ink/40 focus:bg-lcd-ink/10"
-                maxLength={NAME_MAX}
-                value={l}
-                placeholder={i === 0 ? 'line 1' : ''}
-                onChange={(e) => onChange({ ...prog, globals: { ...g, welcome: welcome.map((w, j) => (j === i ? e.target.value : w)) } })}
-                title="Shown at power-on, centred, up to 16 characters"
-              />
-            ))}
-          </div>
-        </section>
-        <section>
-          <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2">Signal bars (RSSI)</h3>
-          <div className="font-mono text-ink">{g.signalBars.join(' · ') || '—'}</div>
-        </section>
-        <section>
-          <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2">Last Tune Mode frequency</h3>
-          <div className="font-mono text-amber">{g.lastTuneHz ? `${mhz(g.lastTuneHz)} MHz` : '—'}</div>
-        </section>
-        <section>
-          <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2">Scan sets</h3>
-          <table className="w-full text-[12.5px]">
-            <tbody>
-              {prog.scanSets
-                .filter((s) => s.scanlists.length || !/^Scan Set \d{2}$/.test(s.name))
-                .map((s) => (
-                  <tr key={s.number} className="border-b border-edge/60">
-                    <td className="py-0.5 pr-2 font-mono text-[11px] text-ink-3">{String(s.number).padStart(2, '0')}</td>
-                    <td className="py-0.5 pr-2 text-ink">
-                      <TextCell value={s.name} maxLength={NAME_MAX} onCommit={(name) => onChange({ ...prog, scanSets: prog.scanSets.map((x) => (x.number === s.number ? { ...x, name } : x)) })} />
-                    </td>
-                    <td className="py-0.5 pr-2">
-                      <input type="checkbox" className="accent-green" checked={s.enabled} onChange={(e) => onChange({ ...prog, scanSets: prog.scanSets.map((x) => (x.number === s.number ? { ...x, enabled: e.target.checked } : x)) })} title="Enabled" />
-                    </td>
-                    <td className="py-0.5">
-                      <button type="button" className="rounded border border-transparent px-1 text-left font-mono text-[11px] hover:border-edge" onClick={(e) => setSetAnchor({ rect: e.currentTarget.getBoundingClientRect(), number: s.number })} title="The scanlists in this set">
-                        {s.scanlists.length > 24 ? `${s.scanlists.length} lists` : s.scanlists.join(', ') || <span className="text-ink-3">none</span>}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-          {setAnchor && (
-            <Popover anchor={setAnchor.rect} onClose={() => setSetAnchor(null)} width={360}>
-              <ScanlistPicker value={prog.scanSets.find((s) => s.number === setAnchor.number)?.scanlists ?? []} named={named} onCommit={(scanlists) => onChange({ ...prog, scanSets: prog.scanSets.map((x) => (x.number === setAnchor.number ? { ...x, scanlists } : x)) })} onClose={() => setSetAnchor(null)} />
-            </Popover>
-          )}
-        </section>
-      </div>
-      <section>
-        <h3 className="mb-1 text-[10px] font-bold uppercase tracking-widest text-ink-2">Scanlist control</h3>
-        <table className="w-full text-[12.5px]">
-          <thead>
-            <tr className="text-left text-[10px] font-bold uppercase tracking-widest text-ink-2">
-              <th className="py-1 pr-2">##</th>
-              <th className="py-1 pr-2">Alpha tag</th>
-              <th className="py-1 pr-2">Enabled</th>
-              <th className="py-1">Objects</th>
-            </tr>
-          </thead>
-          <tbody>
-            {prog.scanlists
-              .filter((l) => l.objects.length || !/^Scanlist \d{3}$/.test(l.name))
-              .map((l) => (
-                <tr key={l.number} className="border-b border-edge/60">
-                  <td className="py-0.5 pr-2 font-mono text-[11px] text-ink-3">{String(l.number).padStart(2, '0')}</td>
-                  <td className="py-0.5 pr-2 text-ink">
-                    <TextCell value={l.name} maxLength={NAME_MAX} onCommit={(name) => onChange({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, name } : x)) })} />
-                  </td>
-                  <td className="py-0.5 pr-2">
-                    <input type="checkbox" className="accent-green" checked={l.enabled} onChange={(e) => onChange({ ...prog, scanlists: prog.scanlists.map((x) => (x.number === l.number ? { ...x, enabled: e.target.checked } : x)) })} />
-                  </td>
-                  <td className="py-0.5 font-mono text-[11px]">{l.objects.length}</td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
-      </section>
     </div>
   );
 }

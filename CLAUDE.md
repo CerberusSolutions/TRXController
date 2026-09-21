@@ -513,7 +513,7 @@ captured on 14 Sep 2026.
   so the editor has no Default), DESCRIPT.TXT is plain text in four
   16-character lines, 64 bytes (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 2-3
   are a check, the one's complement of the 16-bit byte sum from byte 4 (`glbChecksum`, rewritten on every change);
-  the search delay is at 512 in tenths, the WX button's search at 566 (0 Pub Safety, 3 Amateur; `WX_BUTTON`) and the
+  the five signal-bar RSSI thresholds are uint16 at 100 (`GLB_SIGNAL_BARS`, edited on the General tab), the search delay is at 512 in tenths, the WX button's search at 566 (0 Pub Safety, 3 Amateur; `WX_BUTTON`) and the
   lockout table runs from 694 to the end as uint32 Hz, lowest first (all found by EZ Scan's one-change saves, 21 Sep
   2026); the Search tab (`ProgSearch.tsx`) edits those, plus the search blocks: Sweeper groups as bits at 571-572 with
   Special Mode bit 5 of 573 (the Sweeper's other option bits have their own layout, kept), Limit flags at 575 with its
@@ -532,7 +532,13 @@ captured on 14 Sep 2026.
   registers the `programming:*` IPC (`open`, `locate` with an optional folder whose siblings list first, `load`,
   `save`) and the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General
   / Scanlists / Conventional / Trunked / Search, Trunked read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
-  bar's Program button. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
+  bar's Program button. The General tab (`ProgGeneral.tsx`) is a card grid like the Search tab: welcome text, scanlist control,
+  scan sets and signal bars are the card's; every other EZ Scan General Settings / Advanced Features group is a greyed
+  "Not decoded" card showing EZ Scan's defaults (`GENERAL_PENDING` / `ADVANCED_PENDING`) until its bytes are found.
+  Candidates from two cards, unproven by a save: GLB bytes 8-12 read 5, 12, 20, 20, 15 on the UK Starter, EZ Scan's
+  Backlight Timeout, Contrast, Speaker, Headphone and Key (or Alert) Volume (the second card has 5, 12, 21, 25, 5);
+  uint16 at 176 = 1180, 178 = 520 and 192 = 50 match ZeroMatic's Threshold, Slope and Delay; the ten SAME weather
+  entries (name, six-digit FIPS, `***`) run from 209 in 29-byte records. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
   Enter, Esc reverts; a change to a row inside the selection applies to every selected row, which is the bulk
   edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK
   (`rruk:lookup` IPC), RadioReference and the repeater list, and a pick names the channel with the tone and mode

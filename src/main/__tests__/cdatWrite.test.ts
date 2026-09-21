@@ -142,6 +142,7 @@ describe('patchPldef / patchGlb', () => {
     }
     const out = patchGlb(glb, {
       welcome: ['WHISTLER', 'TRX-1e', '', '', 'MOONRAKER UK'],
+      signalBars: [190, 230, 260, 290, 321],
       searchDelayS: 2.5,
       wxButton: 3,
       lockoutsHz: [450_500_000, 145_500_000, 145_500_000],
@@ -168,6 +169,8 @@ describe('patchPldef / patchGlb', () => {
     expect([out[571], out[572], out[573], out[575], out[589], out[590], out[598], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0x06, 0xff, 0x0a, 0x1e]);
     // CB UK at 615, VHF Marine at 633, PMR446 at 651, Mosque at 669.
     expect([out[615], out[616], out[617], out[633], out[634], out[651], out[669]]).toEqual([0x0a, 0xfc, 0xff, 0x0a, 0xfd, 0x0a, 0x06]);
+    // The signal bars as little-endian uint16 at 100.
+    expect([...out.subarray(100, 110)]).toEqual([0xbe, 0x00, 0xe6, 0x00, 0x04, 0x01, 0x22, 0x01, 0x41, 0x01]);
     expect(out[616 + 5]).toBe(0xff); // CB has 40 rows: bits past them stay as read
     expect(new DataView(out.buffer).getUint32(576, true)).toBe(25_000_000);
     expect(new DataView(out.buffer).getUint32(580, true)).toBe(1_300_000_000);

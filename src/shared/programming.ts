@@ -143,6 +143,8 @@ export const GLB_CHANNELS_END = 669 + 17;
 export const WX_BUTTON: Readonly<Record<number, string>> = { 0: 'Pub Safety', 1: 'U/VHF AM', 2: 'Mosque', 3: 'Amateur', 4: 'CB UK', 5: 'VHF Mar', 6: 'PMR446' };
 /** How many lockouts ISCAN___.GLB holds: its table runs from `GLB_LOCKOUTS` to the end of the 1,706-byte file. */
 export const GLB_LOCKOUTS = 694;
+/** The five signal-bar RSSI thresholds, uint16 each, ascending (EZ Scan's defaults 190, 230, 260, 290, 320). */
+export const GLB_SIGNAL_BARS = 100;
 export const GLB_SEARCH_DELAY = 512;
 export const GLB_WX_BUTTON = 566;
 

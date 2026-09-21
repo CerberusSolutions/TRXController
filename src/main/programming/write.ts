@@ -12,7 +12,7 @@
  * which EZ Scan leaves as memory garbage (always a multiple of 8), is written as 0.
  */
 import { CHANNEL_SEARCHES } from '../../shared/searchChannels';
-import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
+import { CTCSS_TONES, FLAG_ATTENUATOR, GLB_CHANNEL_BLOCKS, GLB_CHANNELS_END, FLAG_DELAY, FLAG_ZEROMATIC, GLB_AMATEUR_FLAGS, GLB_AMATEUR_GROUPS, GLB_UVHF_FLAGS, GLB_UVHF_GROUPS, type SearchOptions, GLB_LIMIT_FLAGS, GLB_LIMIT_HIGH, GLB_LIMIT_LOW, GLB_LOCKOUTS, GLB_PS_FLAGS, GLB_PS_GROUPS, GLB_SEARCH_DELAY, GLB_SEARCH_END, GLB_SIGNAL_BARS, GLB_SWEEPER_FLAGS, GLB_SWEEPER_GROUPS, GLB_WX_BUTTON, type ProgGlobals, type ProgObject, type ProgScanSet, type ProgScanlist, type Programming } from '../../shared/programming';
 import { CG_HEADER, OBJECT_RECORD, decode, parseObjects } from './cdat';
 
 /** A blank record: the bytes constant across 7,412 objects on two cards. */
@@ -37,6 +37,10 @@ const putText = (b: Uint8Array, o: number, n: number, s: string): void => {
     const c = i < s.length ? s.charCodeAt(i) : 0x20;
     b[o + i] = c >= 0x20 && c < 0x7f ? c : 0x3f;
   }
+};
+const putU16 = (b: Uint8Array, o: number, v: number): void => {
+  b[o] = v & 0xff;
+  b[o + 1] = (v >>> 8) & 0xff;
 };
 const putU32 = (b: Uint8Array, o: number, v: number): void => {
   b[o] = v & 0xff;
@@ -175,8 +179,9 @@ export function glbChecksum(glb: Uint8Array): number {
   return ~sum & 0xffff;
 }
 
-export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' | 'searchDelayS' | 'wxButton' | 'lockoutsHz' | 'search'>): Uint8Array {
+export function patchGlb(base: Uint8Array, globals: Pick<ProgGlobals, 'welcome' | 'signalBars' | 'searchDelayS' | 'wxButton' | 'lockoutsHz' | 'search'>): Uint8Array {
   const out = new Uint8Array(base);
+  if (globals.signalBars.length === 5 && out.length >= GLB_SIGNAL_BARS + 10) for (let i = 0; i < 5; i++) putU16(out, GLB_SIGNAL_BARS + i * 2, Math.max(0, Math.min(65535, Math.round(globals.signalBars[i]!))));
   for (let i = 0; i < 5; i++) if (15 + (i + 1) * NAME_LENGTH <= out.length) putText(out, 15 + i * NAME_LENGTH, NAME_LENGTH, centre(globals.welcome[i] ?? ''));
   if (globals.searchDelayS !== null && out.length > GLB_SEARCH_DELAY) out[GLB_SEARCH_DELAY] = Math.max(0, Math.min(255, Math.round(globals.searchDelayS * 10)));
   if (globals.wxButton !== null && out.length > GLB_WX_BUTTON) out[GLB_WX_BUTTON] = globals.wxButton & 0xff;
