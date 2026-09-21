@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
 import { writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { isDayKey } from '../shared/dayMap';
@@ -236,18 +236,23 @@ function registerIpc(): void {
   // renderer's calls resolve to nothing there and no window can be opened.
   if (!app.isPackaged) {
     ipcMain.handle(IPC.programmingOpen, () => openProgramming());
-    ipcMain.handle(IPC.programmingLocate, (_e, near: unknown) => locateCdat(process.platform, typeof near === 'string' && near ? near : undefined));
+    ipcMain.handle(IPC.programmingLocate, (_e, near: unknown) => locateCdat(process.platform, typeof near === 'string' && near ? near : undefined, settings?.get().programmingRecent ?? []));
     ipcMain.handle(IPC.programmingSave, (_e, prog: unknown, target: unknown): Promise<ProgSaveResult> => {
       if (!isProgramming(prog) || !isSaveTarget(target)) throw new Error('Bad programming payload');
       return writeCdat(prog, target);
     });
     ipcMain.handle(IPC.programmingLoad, async (_e, dir: unknown): Promise<Programming | null> => {
       let folder = typeof dir === 'string' && dir ? dir : null;
+      const recent = settings?.get().programmingRecent ?? [];
       if (!folder) {
-        const res = await dialog.showOpenDialog({ title: "Choose the scanner card's CDAT folder", properties: ['openDirectory'] });
+        const res = await dialog.showOpenDialog({ title: "Choose the scanner card's CDAT folder", properties: ['openDirectory'], defaultPath: recent[0] ? dirname(recent[0]) : undefined });
         folder = res.canceled ? null : (res.filePaths[0] ?? null);
       }
-      return folder ? readCdat(folder) : null;
+      if (!folder) return null;
+      const prog = await readCdat(folder);
+      // Most recently used first, so the picker lists it and the next dialog opens beside it.
+      settings?.set({ programmingRecent: [folder, ...recent.filter((d) => d !== folder)].slice(0, 8) });
+      return prog;
     });
   }
   ipcMain.handle(IPC.mapDock, (_e, side: unknown) => {

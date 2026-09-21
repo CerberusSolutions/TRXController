@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CG_HEADER, OBJECT_RECORD, decode, parseCdat, parseObject, parseObjects } from '../programming/cdat';
-import { TEMPLATE, buildCdat, buildCg, buildPl, centre, encodeObject, patchGlb, patchPldef, plEntryRecord, plName } from '../programming/write';
+import { TEMPLATE, buildCdat, buildCg, buildDescript, buildPl, centre, encodeObject, glbChecksum, patchGlb, patchPldef, plEntryRecord, plName } from '../programming/write';
 import type { ProgObject, Programming } from '../../shared/programming';
 
 const ascii = (s: string, n: number): Uint8Array => {
@@ -131,10 +131,48 @@ describe('patchPldef / patchGlb', () => {
     expect(centre('Trunking Scanner')).toBe('Trunking Scanner');
     expect(centre('a much longer line than fits')).toBe('a much longer li');
     const glb = new Uint8Array(1706);
-    const out = patchGlb(glb, { welcome: ['WHISTLER', 'TRX-1e', '', '', 'MOONRAKER UK'] });
+    glb[573] = 0x16;
+    glb[575] = 0x0b;
+    glb[589] = 0x06;
+    glb[607] = 0x0b;
+    const out = patchGlb(glb, {
+      welcome: ['WHISTLER', 'TRX-1e', '', '', 'MOONRAKER UK'],
+      searchDelayS: 2.5,
+      wxButton: 3,
+      lockoutsHz: [450_500_000, 145_500_000, 145_500_000],
+      search: {
+        publicSafety: { attenuator: false, zeromatic: false, delay: true, groups: [false, true, true, true, true] },
+        limit: { attenuator: true, zeromatic: false, delay: false, lowHz: 25_000_000, highHz: 1_300_000_000 },
+        uvhfAm: { attenuator: false, zeromatic: true, delay: true, groups: [true, true, false, false] },
+        sweeper: { specialMode: true, groups: [false, false, true, false, false, true, false, true, true, false] },
+        amateur: { groups: [true, true, true, true, true, true, true, true] },
+      },
+    });
     expect(new TextDecoder().decode(out.subarray(15, 31))).toBe('    WHISTLER    ');
     expect(new TextDecoder().decode(out.subarray(31, 47))).toBe('     TRX-1e     ');
     expect(new TextDecoder().decode(out.subarray(47, 63))).toBe(' '.repeat(16));
+    expect(out[512]).toBe(25);
+    expect(out[566]).toBe(3);
+    // Search blocks: only the decoded bits move, the others in each flags byte stay.
+    expect([out[571], out[572], out[573], out[575], out[589], out[590], out[599], out[607], out[608]]).toEqual([0xa4, 0x01, 0x36, 0x06, 0x0b, 0x03, 0xff, 0x0a, 0x1e]);
+    expect(new DataView(out.buffer).getUint32(576, true)).toBe(25_000_000);
+    expect(new DataView(out.buffer).getUint32(580, true)).toBe(1_300_000_000);
+    // Lockouts lowest first, once each, the rest of the table clear.
+    expect(new DataView(out.buffer).getUint32(694, true)).toBe(145_500_000);
+    expect(new DataView(out.buffer).getUint32(698, true)).toBe(450_500_000);
+    expect(new DataView(out.buffer).getUint32(702, true)).toBe(0);
+    // The check in bytes 2-3 makes the sum of the file from byte 4 plus itself 0xFFFF.
+    let sum = 0;
+    for (let i = 4; i < out.length; i++) sum += out[i]!;
+    expect(((out[2]! | (out[3]! << 8)) + sum) & 0xffff).toBe(0xffff);
+    expect(glbChecksum(out)).toBe(out[2]! | (out[3]! << 8));
+  });
+
+  it('writes the description on one line, or two when a word does not fit', () => {
+    expect(new TextDecoder().decode(buildDescript('UK Starter'))).toBe('UK Starter      ' + ' '.repeat(48));
+    expect(new TextDecoder().decode(buildDescript('TRXC Import Tests'))).toBe('TRXC Import     Tests           ' + ' '.repeat(32));
+    expect(new TextDecoder().decode(buildDescript('a'.repeat(40)).subarray(0, 16))).toBe('a'.repeat(16));
+    expect(new TextDecoder().decode(buildDescript('one two three four five six seven eight nine ten eleven twelve thirteen'))).toBe('one two three   four five six   seven eight nineten eleven      ');
   });
 });
 
@@ -185,7 +223,7 @@ describe('buildCdat', () => {
         obj({ index: 3, name: 'New one', frequencyHz: 156_800_000, modulation: 'FM', tone: { type: 'None', value: '' }, scanlists: [2] }),
       ],
       scanlists: before.scanlists.map((l) => (l.number === 1 ? { ...l, name: 'AIRBAND', enabled: false } : l)),
-      globals: { ...before.globals, welcome: ['HELLO', '', '', '', ''] },
+      globals: { ...before.globals, welcome: ['HELLO', '', '', '', ''], lockoutsHz: [156_800_000] },
     };
     const out = buildCdat(files, edited);
     const after = parseCdat('/card/CDAT', new Map([...files, ...out]));
@@ -216,7 +254,12 @@ describe('buildCdat', () => {
     expect(after.scanlists[0]).toMatchObject({ name: 'AIRBAND', enabled: false, objects: [1] });
     expect(decode(out.get('PLDEF.DAT')!)[17]).toBe(0x80);
     expect(after.globals.welcome).toEqual(['HELLO', '', '', '', '']);
-    expect(new TextDecoder().decode(out.get('DESCRIPT.TXT')!)).toBe('UK Starter v2   ');
+    expect(after.globals.lockoutsHz).toEqual([156_800_000]);
+    expect(new TextDecoder().decode(out.get('DESCRIPT.TXT')!.subarray(0, 16))).toBe('UK Starter v2   ');
+    expect(out.get('DESCRIPT.TXT')!.length).toBe(64);
+    // The globals file's check is right after the welcome text changed.
+    const glbOut = decode(out.get('ISCAN___.GLB')!);
+    expect(glbOut[2]! | (glbOut[3]! << 8)).toBe(glbChecksum(glbOut));
     // Every written file is obfuscated: a raw read decodes it.
     expect(parseObjects(decode(out.get('CG000000._CG')!))).toHaveLength(3);
   });
@@ -227,12 +270,12 @@ describe('buildCdat', () => {
     const out = buildCdat(files, prog);
     expect(out.get('CG000000._CG')).toEqual(files.get('CG000000._CG'));
     expect(out.get('PLDEF.DAT')).toEqual(files.get('PLDEF.DAT'));
-    expect(out.get('DESCRIPT.TXT')).toEqual(files.get('DESCRIPT.TXT'));
+    expect(out.get('DESCRIPT.TXT')!.subarray(0, 16)).toEqual(files.get('DESCRIPT.TXT'));
     // The list files are canonical: the garbage tenth byte goes, nothing else moves.
     expect(decode(out.get(plName(2))!).subarray(0, 9)).toEqual(decode(files.get(plName(2))!).subarray(0, 9));
   });
 
   it('refuses a folder without an object file', () => {
-    expect(() => buildCdat(new Map(), { dir: 'x', description: '', globals: { welcome: [], signalBars: [], lastTuneHz: null }, objects: [], scanlists: [], scanSets: [], trunked: [], readAt: 0 })).toThrow(/object file/);
+    expect(() => buildCdat(new Map(), { dir: 'x', description: '', globals: { welcome: [], signalBars: [], lastTuneHz: null, searchDelayS: null, wxButton: null, lockoutsHz: [], search: null }, objects: [], scanlists: [], scanSets: [], trunked: [], readAt: 0 })).toThrow(/object file/);
   });
 });

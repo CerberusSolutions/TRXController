@@ -510,8 +510,18 @@ captured on 14 Sep 2026.
   record order as ten-byte entries (0, uint16 record, zeros; a list's talkgroup entries, first byte 1, are kept
   after them; the tenth byte is EZ Scan's memory garbage, written 0), PLDEF / PLSETS keep the other bits of their
   flag bytes (EZ Scan's Default tick on a scanlist is not on the card: a save with it on AIR left every PLDEF byte alone,
-  so the editor has no Default), DESCRIPT.TXT is 16 characters of plain text (32, two lines, when EZ Scan named the
-  folder; read as one). Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
+  so the editor has no Default), DESCRIPT.TXT is plain text in four
+  16-character lines, 64 bytes (EZ Scan's folder description; read as one line, written wrapped at a word). ISCAN___.GLB's bytes 2-3
+  are a check, the one's complement of the 16-bit byte sum from byte 4 (`glbChecksum`, rewritten on every change);
+  the search delay is at 512 in tenths, the WX button's search at 566 (0 Pub Safety, 3 Amateur; `WX_BUTTON`) and the
+  lockout table runs from 694 to the end as uint32 Hz, lowest first (all found by EZ Scan's one-change saves, 21 Sep
+  2026); the Search tab (`ProgSearch.tsx`) edits those, plus the search blocks: Sweeper groups as bits at 571-572 with
+  Special Mode bit 5 of 573 (the Sweeper's other option bits have their own layout, kept), Limit flags at 575 with its
+  range as uint32 Hz at 576 / 580, U/VHF AM flags at 589 and four group bits at 590, Amateur groups at 599, Public
+  Safety flags at 607 and five group bits at 608; in a flags byte bit 0 is Zeromatic, bit 2 Attenuator, bit 3 Delay
+  (`FLAG_*`). The four channel-table searches (615, 633, 651, 669: a flags byte then 128 channel bits, Mosque / CB /
+  Marine / PMR446 in some order) are kept as read. `settings.programmingRecent` is the folders opened, most recent
+  first (eight), listed as `recent` candidates and the folder dialog's start. Verified 21 Sep 2026: EZ Scan opened a folder the writer produced, showed the new scanlist and
   its three channels, and its own re-save changed only the bytes it was asked to (Backlight, an enabled bit). DCS and NAC squelch have not been seen on a card, so
   the editor offers them greyed out and never writes them (a log entry with one imports as Search); DMR colour
   code, slot and talkgroup are wildcards on every object seen and are left alone. `locate.ts` finds the folders,
@@ -519,7 +529,7 @@ captured on 14 Sep 2026.
   beside it, or into the next free `CDAT_VS.nnn` (a copy of the folder with the regenerated files over it). Main
   registers the `programming:*` IPC (`open`, `locate` with an optional folder whose siblings list first, `load`,
   `save`) and the window (`#programming` route, `components/ProgrammingApp.tsx`, tabs mirroring EZ Scan's General
-  / Scanlists / Conventional / Trunked, the last read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
+  / Scanlists / Conventional / Trunked / Search, Trunked read-only) only when `!app.isPackaged`; `AppInfo.dev` gates the top
   bar's Program button. The editor is the grid itself (`ProgGrid.tsx`: every cell an editor, commit on blur or
   Enter, Esc reverts; a change to a row inside the selection applies to every selected row, which is the bulk
   edit; the scanlists cell is a chip picker of the named lists; `?` beside the name asks the lookups, WTR, RRUK

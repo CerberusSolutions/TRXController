@@ -449,6 +449,8 @@ export interface Settings {
   mapDock: MapDockSide | null;
   /** The map window's own placement while undocked, restored when it opens. */
   mapWindow: WindowState | null;
+  /** CDAT folders the Programming window opened, most recent first (development builds only). */
+  programmingRecent: string[];
 }
 
 export type MapDockSide = 'left' | 'right';

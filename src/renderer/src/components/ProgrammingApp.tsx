@@ -4,9 +4,10 @@ import { attachLogEvents } from '../store/log';
 import { initTheme } from '../store/theme';
 import ProgLogImport from './ProgLogImport';
 import ProgNameFromLookups from './ProgNameFromLookups';
+import ProgSearch from './ProgSearch';
 import ProgGrid, { NAME_MAX, Popover, ScanlistPicker, TextCell, mhz, squelchText, type ObjectPatch } from './ProgGrid';
 
-type Tab = 'general' | 'scanlists' | 'objects' | 'trunked';
+type Tab = 'general' | 'scanlists' | 'objects' | 'trunked' | 'search';
 const UNDO_DEPTH = 100;
 const btn = 'no-drag whitespace-nowrap rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40 disabled:hover:text-ink-3';
 const primary = 'no-drag whitespace-nowrap rounded-md bg-cyan px-2.5 py-1 text-[11px] font-bold text-bg disabled:opacity-40';
@@ -53,7 +54,7 @@ const newObject = (index: number, scanlist: number): ProgObject => ({
  * writes it to the SD card's CDAT folder, read off the card (which mounts as a drive while the scanner
  * is off) or a V-Scanner folder beside it, edited in place in the grid, and written back over the
  * folder (after a backup beside it) or into a new V-Scanner folder. Every edit is one undo step.
- * Tabs follow EZ Scan's: General, Scanlists, Conventional objects, Trunked systems (read-only).
+ * Tabs follow EZ Scan's: General, Scanlists, Conventional objects, Trunked systems (read-only), Search.
  */
 export default function ProgrammingApp() {
   const [base, setBase] = useState<Programming | null>(null);
@@ -270,11 +271,11 @@ export default function ProgrammingApp() {
         </span>
         {prog && (
           <>
-            {cands.length > 1 ? (
+            {cands.length > 1 || cands[0]?.kind === 'recent' ? (
               <select className="no-drag max-w-[16rem] rounded-md border border-edge bg-panel-2 px-2 py-1 text-[12px] text-ink" value={prog.dir} onChange={(e) => loadChecked(e.target.value)} title="The card's CDAT folder and the V-Scanner folders beside it">
                 {cands.map((c) => (
-                  <option key={c.dir} value={c.dir}>
-                    {c.kind === 'vscanner' ? `V-Scanner · ${c.description || c.dir}` : c.description || 'Card'}
+                  <option key={c.dir} value={c.dir} title={c.dir}>
+                    {c.kind === 'vscanner' ? `V-Scanner · ${c.description || c.dir}` : c.kind === 'recent' ? `Recent · ${c.description || c.dir.replace(/^.*[\\/]/, '')}` : c.description || 'Card'}
                   </option>
                 ))}
               </select>
@@ -320,7 +321,7 @@ export default function ProgrammingApp() {
           <span>New V-Scanner folder beside {prog.dir.replace(/[\\/][^\\/]+$/, '')}, described as</span>
           <input
             className="w-48 rounded border border-edge bg-panel px-2 py-0.5 text-[12px] text-ink outline-none focus:border-cyan"
-            maxLength={NAME_MAX}
+            maxLength={64}
             value={saveAs}
             placeholder={prog.description}
             autoFocus
@@ -336,7 +337,7 @@ export default function ProgrammingApp() {
           <button type="button" className={btn} onClick={() => setSaveAs(null)}>
             Cancel
           </button>
-          <span className="text-ink-3">The scanner loads it from Main Menu › V-Scanner; EZ Scan lists it under Scanner/SD Card.</span>
+          <span className="text-ink-3">Up to four lines of 16 characters, wrapped at a word. The scanner loads it from Main Menu › V-Scanner; EZ Scan lists it under Scanner/SD Card.</span>
         </div>
       )}
       {error && <div className="border-b border-red/40 bg-panel px-4 py-2 text-xs text-red">{error}</div>}
@@ -350,7 +351,7 @@ export default function ProgrammingApp() {
               <>
                 <p>Switch the scanner off with the USB lead in: its SD card mounts as a drive, and the programming EZ Scan wrote to it is in the card's CDAT folder. Plug the card into a reader if you prefer.</p>
                 <p>
-                  Nothing found on the mounted drives just now. Press <b className="text-ink">Open folder…</b> to point at a CDAT folder (or a copy of one), or <b className="text-ink">Reload</b> once the card is in.
+                  Nothing found on the mounted drives just now. Press <b className="text-ink">Open folder…</b> to point at a CDAT folder (or a copy of one), or <b className="text-ink">Reload</b> once the card is in. Folders opened before are offered first.
                 </p>
               </>
             )}
@@ -363,6 +364,7 @@ export default function ProgrammingApp() {
             {tabBtn('scanlists', 'Scanlists')}
             {tabBtn('objects', 'Conventional')}
             {tabBtn('trunked', 'Trunked')}
+            {tabBtn('search', 'Search')}
             {tab === 'objects' && (
               <>
                 <input
@@ -475,6 +477,7 @@ export default function ProgrammingApp() {
             )}
             {tab === 'general' && <General prog={prog} onChange={commit} />}
             {tab === 'trunked' && <Trunked prog={prog} />}
+            {tab === 'search' && <ProgSearch prog={prog} onChange={commit} />}
           </div>
           <div className="flex shrink-0 items-center gap-3 border-t border-edge bg-panel px-3 py-1 text-[11px] text-ink-3">
             {dirty ? (
