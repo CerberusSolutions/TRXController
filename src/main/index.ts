@@ -2,7 +2,8 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
-import { IPC, MAP_MIN_WINDOW, type AppInfo, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { isDayKey } from '../shared/dayMap';
 import { readUserFile } from './identities/radioid';
 import { readWtrCsv } from './identities/wtr';
 import { readRepeaterCsv } from './identities/repeaters';
@@ -277,6 +278,10 @@ function registerIpc(): void {
   ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
+  ipcMain.handle(IPC.logDay, (_e, from: unknown, to: unknown): DayLog => {
+    if (!db || typeof from !== 'number' || typeof to !== 'number' || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) return { rows: [], total: 0, truncated: false };
+    return db.day(from, to);
+  });
   ipcMain.handle(IPC.logExportCsv, async (_e, csv: unknown, suggestedName: unknown): Promise<string | null> => {
     if (typeof csv !== 'string') throw new Error('Bad CSV');
     const res = await dialog.showSaveDialog({
@@ -295,19 +300,23 @@ function registerIpc(): void {
     if (!db) throw new Error('No log');
     const conf = sanitizeConfirmation(c);
     const saved = db.confirm(conf);
-    // The hero and the open reception follow the confirmation at once.
+    // The hero and the open reception follow the confirmation at once; every window's log reloads
+    // (the map window's store otherwise only ever hears upserts).
     broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    broadcast(IPC.logChanged, null);
     return saved;
   });
   ipcMain.handle(IPC.logUnconfirm, (_e, id: unknown) => {
     if (!db || typeof id !== 'number') throw new Error('Bad confirmation');
     db.unconfirm(id);
     broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.logClear, () => {
     logger?.flush();
     db?.clear();
     logger?.reset();
+    broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
   ipcMain.handle(IPC.identityLookup, (_e, id: unknown) => (typeof id === 'number' && db ? (db.lookupDmrUser(id) ?? null) : null));
@@ -565,7 +574,8 @@ function loadRenderer(w: BrowserWindow, hash?: string): void {
 
 /**
  * The map window: the same renderer bundle opened on its `#map` route, one at a time. It shows the
- * user's location and every candidate pinned, following the scanner or pinned to one log entry.
+ * user's location and every candidate pinned, following the scanner or pinned to one log entry, or
+ * one day of the log, an entry count on each placement.
  * OpenStreetMap's tile servers ask that apps identify themselves, hence the user agent.
  */
 function openMap(target: MapTarget): void {
@@ -710,7 +720,8 @@ function followDock(): void {
 
 function isMapTarget(v: unknown): v is MapTarget {
   if (!v || typeof v !== 'object') return false;
-  const t = v as { kind?: unknown; row?: unknown };
+  const t = v as { kind?: unknown; row?: unknown; day?: unknown; filter?: unknown };
+  if (t.kind === 'day') return (t.day === undefined || isDayKey(t.day)) && (t.filter === undefined || typeof t.filter === 'string');
   return t.kind === 'follow' || (t.kind === 'row' && !!t.row && typeof t.row === 'object');
 }
 

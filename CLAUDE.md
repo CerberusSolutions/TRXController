@@ -361,8 +361,20 @@ captured on 14 Sep 2026.
   `.map-pin-*` classes in `index.css`, never Leaflet's image icons): the user's dot, a pin per candidate with a
   position, a dashed line to the chosen pin labelled with `formatPlace`, popups whose note says what each
   source's pin marks (a WTR pin is the licence holder, not necessarily the transmitter), fit-to-bounds once
-  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), D (dock), ? (help) in
+  per distinct pin set. Keys: Leaflet's own + / − / arrows, plus A (fit), Z or H (home), F (toggle: hold the entry on show / follow again), L (the Log view, below), [ / ] (its day), D (dock), ? (help) in
   `MapApp`. Tile failures (`tileerror` × 3) show an offline banner; nothing is cached.
+- Log view (`MapTarget` `{ kind: 'day', day?, filter? }`, from the log's Map button, the map's Log button or L; Live / L
+  again returns to `follow`): one local calendar day of the log (`src/shared/dayMap.ts`: `dayKey` / `isDayKey` /
+  `dayRange` / `shiftDay` / `activeIn`), fetched over `log:day` (`LogDb.day(from, to)`: entries active at any point in
+  the period that carry a position, newest activity first, capped at 5000 with `truncated`, plus `total` of every entry
+  placed or not) and overlaid with the log store's live rows for the same period, so today's view follows `log:upsert`
+  and a confirmation's rename; `log:changed`, broadcast by main after a clear, confirm or unconfirm, makes every
+  window's store reload and bumps its `generation`, which refetches the day. `dayPins` groups the filtered entries (`rowMatches`, the log's own filter) into one pin
+  per placement within about 50 m, busiest first, at the newest entry's point, named by the newest entry with a name
+  (else its licensee credited to the WTR, else the frequency); `MapPoint.count` puts the number on the pin
+  (`.map-pin-count`), `lines` lists up to 12 entries on the card, `note` replaces the source's standard caveat. No line
+  until a pin is clicked. `[` / `]` step the day, never past today; the date input is capped the same way; Esc in an
+  input blurs it so the keys reach the map again.
 - Docking (`dockMap` / `undockMap` / `followDock` in `src/main/index.ts`, `map:dock` IPC with `auto` /
   `left` / `right` / `off`, state pushed as `map:dock-state`): the map is set against the side of the main
   window that has room (`dockedBounds`: same y and height, square, i.e. as wide as the main window is tall, or as wide as the

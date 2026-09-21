@@ -355,6 +355,31 @@ describe('ReceptionTracker', () => {
 });
 
 describe('LogDb', () => {
+  it('returns one day of the log for the map: placed entries active in the period, and the total', () => {
+    const db = new LogDb(':memory:');
+    const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 1, calls: 1 };
+    const placed = { lat: 51.8, lon: -0.9, distanceKm: 3, bearingDeg: 47 };
+    const before = db.insert({ ...base, startedAt: 500, endedAt: 900, frequencyHz: 100, ...placed });
+    const spanning = db.insert({ ...base, startedAt: 900, endedAt: 1100, frequencyHz: 100, ...placed });
+    const inside = db.insert({ ...base, startedAt: 1200, endedAt: 1300, frequencyHz: 200, ...placed });
+    const unplaced = db.insert({ ...base, startedAt: 1400, endedAt: 1500, frequencyHz: 300 });
+    const open = db.insert({ ...base, startedAt: 1900, frequencyHz: 400, ...placed });
+    const after = db.insert({ ...base, startedAt: 2000, endedAt: 2100, frequencyHz: 100, ...placed });
+    const d = db.day(1000, 2000, 5000, 1950);
+    expect(d.total).toBe(4);
+    expect(d.rows.map((r) => r.id)).toEqual([open.id, inside.id, spanning.id]);
+    expect(d.rows.map((r) => r.id)).not.toContain(unplaced.id);
+    expect(d.rows.map((r) => r.id)).not.toContain(before.id);
+    expect(d.rows.map((r) => r.id)).not.toContain(after.id);
+    expect(d.rows[0]).toMatchObject({ lat: 51.8, lon: -0.9, hits: 1 });
+    expect(d.truncated).toBe(false);
+    const cut = db.day(1000, 2000, 2, 1950);
+    expect(cut.rows).toHaveLength(2);
+    expect(cut.truncated).toBe(true);
+    expect(cut.total).toBe(4);
+    db.close();
+  });
+
   it('inserts, updates, lists newest first and counts hits per frequency', () => {
     const db = new LogDb(':memory:');
     const base = { endedAt: null, mode: 'AM', signalType: 'AM', name: 'A', system: '', scanlist: 'L', objectType: 'CONV', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 1, calls: 1 };

@@ -10,6 +10,7 @@ import {
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
+  type DayLog,
   type LogCursor,
   type MapDockSide,
   type MapDockState,
@@ -57,6 +58,8 @@ const api = {
   },
   /** The newest `limit` log rows, or the page after `before` (the last row already shown). */
   logRecent: (limit?: number, before?: LogCursor): Promise<ReceptionRow[]> => ipcRenderer.invoke(IPC.logRecent, limit, before),
+  /** One day of the log for the map: the entries active in [from, to) that carry a position, plus the day's total. */
+  logDay: (from: number, to: number): Promise<DayLog> => ipcRenderer.invoke(IPC.logDay, from, to),
   logClear: (): Promise<void> => ipcRenderer.invoke(IPC.logClear),
   /** Save CSV text through a file dialog; resolves to the path, or null if cancelled. */
   logExportCsv: (csv: string, suggestedName: string): Promise<string | null> => ipcRenderer.invoke(IPC.logExportCsv, csv, suggestedName),
@@ -70,6 +73,12 @@ const api = {
     const listener = (_e: unknown, row: ReceptionRow): void => cb(row);
     ipcRenderer.on(IPC.logUpsert, listener);
     return () => ipcRenderer.removeListener(IPC.logUpsert, listener);
+  },
+  /** The log changed wholesale (cleared, or rows renamed by a confirmation): reload rather than patch. */
+  onLogChanged: (cb: () => void): (() => void) => {
+    const listener = (): void => cb();
+    ipcRenderer.on(IPC.logChanged, listener);
+    return () => ipcRenderer.removeListener(IPC.logChanged, listener);
   },
   identityStats: (): Promise<IdentityStats> => ipcRenderer.invoke(IPC.identityStats),
   identityImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.identityImport),
@@ -94,7 +103,7 @@ const api = {
   rrukKeySet: (key: string): Promise<RrukStatus> => ipcRenderer.invoke(IPC.rrukKeySet, key),
   rrukTest: (): Promise<{ user: string; entries: number }> => ipcRenderer.invoke(IPC.rrukTest),
   rrukClearCache: (): Promise<RrukStatus | null> => ipcRenderer.invoke(IPC.rrukClearCache),
-  /** Open (or refocus) the map window on the scanner's current frequency, or on one log entry. */
+  /** Open (or refocus) the map window on the scanner's current frequency, on one log entry, or on one day of the log. */
   mapOpen: (target: MapTarget): Promise<void> => ipcRenderer.invoke(IPC.mapOpen, target),
   /** The map window's own feed: what to show, sent on open and each time the map button is pressed again. */
   onMapTarget: (cb: (t: MapTarget) => void): (() => void) => {

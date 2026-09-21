@@ -3,7 +3,7 @@
  * bundles via Node 24. No native module, no rebuild.
  */
 import { DatabaseSync } from 'node:sqlite';
-import type { DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
+import type { DayLog, DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import { placeFrom } from '../../shared/geo';
@@ -360,6 +360,25 @@ export class LogDb {
       FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
     const rows = before ? this.db.prepare(sql).all(before.endedAt, before.startedAt, before.id, limit) : this.db.prepare(sql).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
+  }
+
+  /**
+   * One day of the log for the map: the entries active at any point in [from, to) that carry a position
+   * (an open entry counts up to now), newest activity first, at most `limit` of them, plus how many
+   * entries the period held in all, placed or not.
+   */
+  day(from: number, to: number, limit = 5000, now = Date.now()): DayLog {
+    const active = 'started_at < ? AND COALESCE(ended_at, ?) >= ?';
+    const total = Number((this.db.prepare(`SELECT COUNT(*) AS n FROM receptions WHERE ${active}`).get(to, now, from) as { n: number }).n);
+    const page = `SELECT * FROM receptions WHERE ${active} AND lat IS NOT NULL AND lon IS NOT NULL
+      ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
+    const sql = `SELECT r.*,
+      (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
+      u.callsign AS radio_callsign, u.name AS radio_name
+      FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
+    const rows = (this.db.prepare(sql).all(to, now, from, limit + 1) as unknown as Raw[]).map(toRow);
+    const truncated = rows.length > limit;
+    return { rows: truncated ? rows.slice(0, limit) : rows, total, truncated };
   }
 
   // --- DMR user database -------------------------------------------------

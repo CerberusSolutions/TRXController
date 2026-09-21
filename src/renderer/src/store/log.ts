@@ -17,6 +17,8 @@ interface LogState {
   loadingMore: boolean;
   /** Identities the user has confirmed by hand, every frequency. */
   confirmations: Confirmation[];
+  /** Bumped when the log changed wholesale (cleared, renamed by a confirmation): what reads the log by other routes refetches. */
+  generation: number;
   setFilter: (f: string) => void;
   load: () => Promise<void>;
   /** Fetch the page after the oldest row loaded. A no-op while one is in flight or nothing is left. */
@@ -35,6 +37,7 @@ export const useLog = create<LogState>((set, get) => ({
   capped: false,
   loadingMore: false,
   confirmations: [],
+  generation: 0,
 
   setFilter: (filter) => set({ filter }),
 
@@ -115,9 +118,16 @@ function lastActivity(r: ReceptionRow): number {
 
 export function attachLogEvents(): () => void {
   if (!window.trx) return () => undefined;
-  const off = window.trx.onLogUpsert((row) => useLog.getState().upsert(row));
+  const offUpsert = window.trx.onLogUpsert((row) => useLog.getState().upsert(row));
+  const offChanged = window.trx.onLogChanged?.(() => {
+    useLog.setState((s) => ({ generation: s.generation + 1 }));
+    void useLog.getState().load();
+  });
   void useLog.getState().load();
-  return off;
+  return () => {
+    offChanged?.();
+    offUpsert();
+  };
 }
 
 export function rowMatches(r: ReceptionRow, filter: string): boolean {

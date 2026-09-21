@@ -171,3 +171,7 @@ body {
 .leaflet-bar a:hover { background: var(--t-panel-2); }
 .map-legend { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: -1px; margin-right: 2px; }
 .map-pin-scan { background: var(--t-ink-3); }
+.map-pin-count .map-pin-label { font-size: 11px; letter-spacing: 0; }
+.map-pin-chosen.map-pin-count .map-pin-label { font-size: 12px; }
+.map-card-lines { margin: 6px 0 0; padding: 0; list-style: none; font: 11.5px ui-monospace, monospace; color: var(--t-ink-2); max-height: 11em; overflow-y: auto; }
+.map-card-lines li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
