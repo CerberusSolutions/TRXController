@@ -245,7 +245,18 @@ function RrukForm() {
           'Lookups run once a postcode or a location is set.'
         )}
       </p>
-      {rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>}
+      {rruk.halted ? (
+        <p className="rounded-md border border-red/40 bg-red/10 px-2 py-1 text-xs text-red">
+          <span className="font-bold">RRUK refused the last request: {rruk.halted.message}.</span>{' '}
+          {rruk.halted.kind === 'key'
+            ? 'Lookups are paused until you enter the correct API key (from your RRUK dashboard) and Test it.'
+            : rruk.halted.kind === 'offline'
+              ? 'RRUK could not be reached; lookups pause for a minute.'
+              : `Lookups pause until ${rruk.halted.until ? new Date(rruk.halted.until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'later'}. Put right what it names in your RRUK dashboard (your IP address, for instance), then Test to resume sooner.`}
+        </p>
+      ) : (
+        rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>
+      )}
       {rrukMessage && <p className={`text-xs ${rrukMessage.ok ? 'text-green' : 'text-red'}`}>{rrukMessage.text}</p>}
     </div>
   );

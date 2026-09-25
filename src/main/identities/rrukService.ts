@@ -5,7 +5,7 @@
  * emptying the queue. The same shape as RrService, minus the trunked-system fetches (RRUK's
  * search is already filtered to the user's area, so nothing needs placing afterwards).
  */
-import type { RrukInfo, RrukSettings, RrukStatus } from '../../shared/ipc';
+import type { RrukHalt, RrukInfo, RrukSettings, RrukStatus } from '../../shared/ipc';
 import { KM_PER_MILE, placeFrom } from '../../shared/geo';
 import type { LogDb } from '../log/db';
 import { RRUK_MAX_RANGE_MILES, RrukError, searchRruk, type FetchLike, type RrukResult } from './rruk';
@@ -16,6 +16,27 @@ export const RRUK_TTL_MS = 30 * 24 * 3600 * 1000;
 export const RRUK_RETRY_AFTER_MS = 10 * 60 * 1000;
 /** Gap between consecutive API calls: polite to a per-user key. */
 export const RRUK_CALL_SPACING_MS = 1200;
+/** After the server refuses a request for anything but the key (a rate limit, a locked address), ask nothing for this long. */
+export const RRUK_HALT_MS = 15 * 60 * 1000;
+/** After the server could not be reached at all, ask nothing for this long. */
+export const RRUK_OFFLINE_PAUSE_MS = 60 * 1000;
+
+/**
+ * What a failed call means for every other frequency. A refusal from the server (it answered, `success` false or
+ * a non-200 status) is not about the frequency: an invalid key fails every request the same way until the key is
+ * changed, and a rate limit or a locked address only gets worse with more requests, so the service stops asking.
+ * The RRUK operators asked for exactly this (25 Sep 2026): clients kept sending after a 401 "Invalid API key".
+ */
+export function haltFor(e: unknown, now: number): RrukHalt {
+  const err = e instanceof RrukError ? e : null;
+  const message = err?.message ?? (e as Error).message ?? 'RRUK failed';
+  if (!err || err.status === null) return { kind: 'offline', message, until: now + RRUK_OFFLINE_PAUSE_MS };
+  // "Access denied: This API key is locked to another IP address." (seen 25 Sep 2026) names the key but is about the
+  // address: the user fixes it in their RRUK dashboard, so it is a timed pause, not a wait for a new key.
+  if (err.status === 429 || /ip address|locked|too many|rate|limit|geo/i.test(message)) return { kind: 'limit', message, until: now + RRUK_HALT_MS };
+  if (err.status === 401 || err.status === 403 || /api[ _-]?key|invalid key|unauthori[sz]ed|authenticat|subscri/i.test(message)) return { kind: 'key', message, until: null };
+  return { kind: 'refused', message, until: now + RRUK_HALT_MS };
+}
 
 export interface RrukServiceOptions {
   db: LogDb;
@@ -49,6 +70,7 @@ export class RrukService {
   private inFlight: number | null = null;
   private lastCallAt = 0;
   private timer: NodeJS.Timeout | null = null;
+  private halt: RrukHalt | null = null;
   lastError: string | null = null;
 
   constructor(opts: RrukServiceOptions) {
@@ -97,7 +119,14 @@ export class RrukService {
   resetFailures(): void {
     this.failed.clear();
     this.checked.clear();
+    this.halt = null;
     this.lastError = null;
+  }
+
+  /** The pause in force, if any: a timed one lapses by itself, a key one holds until the key changes or a test passes. */
+  halted(): RrukHalt | null {
+    if (this.halt && this.halt.until !== null && this.now() >= this.halt.until) this.halt = null;
+    return this.halt;
   }
 
   status(): RrukStatus {
@@ -109,6 +138,7 @@ export class RrukService {
       enabled: this.enabled,
       cachedFreqs: this.db.rrukStats().freqs,
       lastError: this.lastError,
+      halted: this.halted(),
     };
   }
 
@@ -136,7 +166,7 @@ export class RrukService {
     const w = this.where()!;
     const cached = this.db.rrukGetFreq(hz);
     const pending = this.inFlight === hz || this.queue.includes(hz);
-    const error = this.failed.get(hz)?.message ?? null;
+    const error = this.halted()?.message ?? this.failed.get(hz)?.message ?? null;
     if (!cached || cached.scope !== w.scope) return { frequencyHz: hz, entries: [], fetchedAt: null, pending, error };
     return { frequencyHz: hz, entries: cached.entries, fetchedAt: cached.fetchedAt, pending, error };
   }
@@ -144,6 +174,8 @@ export class RrukService {
   /** Ask for `hz` if it is not cached for this location (or is stale) and not recently failed. True if queued. */
   request(hz: number, force = false): boolean {
     if (!this.enabled) return false;
+    // While the server is refusing, nothing is asked, forced or not: only a new key or a passed test resumes a key halt.
+    if (this.halted()) return false;
     if (this.inFlight === hz || this.queue.includes(hz)) return false;
     if (!force) {
       const at = this.checked.get(hz);
@@ -196,9 +228,10 @@ export class RrukService {
       const message = e instanceof RrukError ? e.message : (e as Error).message;
       this.failed.set(hz, { at: this.now(), message });
       this.lastError = message;
-      this.log(`${(hz / 1e6).toFixed(4)} MHz failed: ${message}`);
-      // A rejected key fails every frequency the same way: stop asking.
-      if (e instanceof RrukError && (e.status === 401 || e.status === 403 || /key|auth|subscri/i.test(e.message))) this.queue.length = 0;
+      // A refusal is about the key, the address or the rate, not the frequency: stop asking (see haltFor).
+      this.halt = haltFor(e, this.now());
+      this.queue.length = 0;
+      this.log(`${(hz / 1e6).toFixed(4)} MHz failed: ${message}; lookups paused (${this.halt.kind}${this.halt.until === null ? ' until the key is changed' : ` for ${Math.round((this.halt.until - this.now()) / 60000)} min`})`);
     } finally {
       this.inFlight = null;
       this.lastCallAt = this.now();

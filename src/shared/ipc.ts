@@ -374,6 +374,19 @@ export interface RrukSettings {
   postcode: string;
 }
 
+/**
+ * Why RRUK lookups are paused: the server refused a request. `key` (an invalid or unauthorised key) holds until the
+ * key is changed or tested; `limit` (too many requests, a locked IP address, too many locations) and `refused`
+ * (any other refusal) hold until `until`; `offline` is a short pause after the server could not be reached.
+ */
+export interface RrukHalt {
+  kind: 'key' | 'limit' | 'refused' | 'offline';
+  /** The server's own message where it gave one. */
+  message: string;
+  /** When lookups resume by themselves (epoch ms), or null when only a new key or a successful test resumes them. */
+  until: number | null;
+}
+
 export interface RrukStatus {
   hasKey: boolean;
   /** No stored key, but a development key from the environment is in use. */
@@ -384,6 +397,8 @@ export interface RrukStatus {
   enabled: boolean;
   cachedFreqs: number;
   lastError: string | null;
+  /** Set while lookups are paused after the server refused a request; see `RrukHalt`. */
+  halted: RrukHalt | null;
 }
 
 export interface RrRegion {
