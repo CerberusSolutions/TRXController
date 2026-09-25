@@ -42,7 +42,8 @@ npm run build && npm start    # run the built app
   their descriptions. Only builds made with the `RR_KEY` application key have this.
 - **RadioReference UK** (optional, online, <https://radioreferenceuk.co.uk/>): the UK-centric,
   Ofcom-backed database. Generate an API key in your RRUK account dashboard, paste it under Data >
-  RadioReference UK, and optionally enter a postcode (otherwise your latitude and longitude are
+  RadioReference UK and press Test: lookups run only once the key has passed a test and shows its
+  green tick, and stop (with the server's reason shown) if RRUK ever refuses it. Optionally enter a postcode (otherwise your latitude and longitude are
   used, with the radius as the range, up to RRUK's 50 miles). Heard frequencies are looked up once
   and cached; entries carry the licensee, place, distance, bearing and the colour code or tone, which
   the app matches against what the scanner shows. The key is yours: it is stored encrypted and never

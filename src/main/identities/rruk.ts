@@ -75,10 +75,10 @@ export async function searchRruk(q: RrukQuery, fetchImpl: FetchLike = fetch): Pr
   return parseRrukResponse(json, res.status);
 }
 
-/** The response body to entries; throws RrukError on a refusal. */
+/** The response body to entries; throws RrukError on a refusal. Anything but HTTP 200 is a refusal (the operators' rule), whatever the body says. */
 export function parseRrukResponse(json: unknown, status = 200): RrukResult {
   const o = (typeof json === 'object' && json !== null ? json : {}) as Record<string, unknown>;
-  if (o['success'] !== true) {
+  if (status !== 200 || o['success'] !== true) {
     const msg = text(o['error']) || text(o['message']) || (status === 401 || status === 403 ? 'RRUK rejected the API key' : `RRUK refused the request (HTTP ${status})`);
     throw new RrukError(msg, status);
   }

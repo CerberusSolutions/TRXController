@@ -372,6 +372,24 @@ export interface RrukSettings {
   apiKey: string;
   /** UK postcode (full or outward) to search from; blank = use the location's coordinates. */
   postcode: string;
+  /**
+   * The key has passed a Test since it was saved. Lookups run only while this is set: saving a key clears it, a
+   * passed Test sets it, and a refusal about the key clears it again, so a wrong key is never sent more than once.
+   */
+  tested: boolean;
+}
+
+/**
+ * Why RRUK lookups are paused: the server refused a request. `key` (an invalid or unauthorised key) holds until the
+ * key is changed or tested; `limit` (too many requests, a locked IP address, too many locations) and `refused`
+ * (any other refusal) hold until `until`; `offline` is a short pause after the server could not be reached.
+ */
+export interface RrukHalt {
+  kind: 'key' | 'limit' | 'refused' | 'offline';
+  /** The server's own message where it gave one. */
+  message: string;
+  /** When lookups resume by themselves (epoch ms), or null when only a new key or a successful test resumes them. */
+  until: number | null;
 }
 
 export interface RrukStatus {
@@ -381,9 +399,13 @@ export interface RrukStatus {
   postcode: string;
   /** A postcode or coordinates are set, so there is somewhere to search from. */
   located: boolean;
+  /** The key in use has passed a Test; lookups never run without it. */
+  tested: boolean;
   enabled: boolean;
   cachedFreqs: number;
   lastError: string | null;
+  /** Set while lookups are paused after the server refused a request; see `RrukHalt`. */
+  halted: RrukHalt | null;
 }
 
 export interface RrRegion {

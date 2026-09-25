@@ -234,18 +234,31 @@ function RrukForm() {
       <p className="text-[11px] text-ink-3">
         {rruk.enabled ? (
           <>
-            Lookups on. Cached: <span className="font-mono text-ink-2">{rruk.cachedFreqs}</span> frequencies.{' '}
+            <span className="text-green">✓ Key tested.</span> Lookups on. Cached: <span className="font-mono text-ink-2">{rruk.cachedFreqs}</span> frequencies.{' '}
             <button className="underline decoration-ink-3/40 underline-offset-2" onClick={() => void clearRrukCache()}>
               clear
             </button>
           </>
         ) : !rruk.hasKey && !rruk.devKey ? (
-          'Lookups run once a key is saved.'
+          'Lookups run once a key is saved and tested.'
+        ) : !rruk.tested ? (
+          <span className="text-amber">Key not tested yet: press Test. Lookups stay off until the key gets a tick.</span>
         ) : (
           'Lookups run once a postcode or a location is set.'
         )}
       </p>
-      {rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>}
+      {rruk.halted ? (
+        <p className="rounded-md border border-red/40 bg-red/10 px-2 py-1 text-xs text-red">
+          <span className="font-bold">RRUK refused the last request: {rruk.halted.message}.</span>{' '}
+          {rruk.halted.kind === 'key'
+            ? 'Lookups are paused until you enter the correct API key (from your RRUK dashboard) and Test it.'
+            : rruk.halted.kind === 'offline'
+              ? 'RRUK could not be reached; lookups pause for a minute.'
+              : `Lookups pause until ${rruk.halted.until ? new Date(rruk.halted.until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'later'}. Users cannot clear this themselves: contact RRUK support with the message above, then Test to resume sooner once they have.`}
+        </p>
+      ) : (
+        rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>
+      )}
       {rrukMessage && <p className={`text-xs ${rrukMessage.ok ? 'text-green' : 'text-red'}`}>{rrukMessage.text}</p>}
     </div>
   );

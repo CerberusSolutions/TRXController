@@ -395,7 +395,7 @@ function registerIpc(): void {
     const p = { ...(patch as Partial<Settings>) };
     // The renderer never carries the password or the RRUK key; only rr:account-set / rruk:key-set change them.
     if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
-    if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey };
+    if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey, tested: settings.get().rruk.tested };
     const next = settings.set(p);
     licenceCache = null;
     repeaterCache = null;
@@ -451,7 +451,8 @@ function registerIpc(): void {
   ipcMain.handle(IPC.rrukKeySet, (_e, key: unknown) => {
     if (!rruk || !settings || typeof key !== 'string') throw new Error('Bad key');
     const k = key.trim();
-    settings.set({ rruk: { ...settings.get().rruk, apiKey: k ? encryptSecret(k) : '' } });
+    // A new key is untested until Test passes; lookups stay off meanwhile.
+    settings.set({ rruk: { ...settings.get().rruk, apiKey: k ? encryptSecret(k) : '', tested: false } });
     rruk.resetFailures();
     return rruk.status();
   });
@@ -537,6 +538,9 @@ function openLog(): void {
     db,
     getSettings: () => settings!.get().rruk,
     decrypt: (cipher) => safeStorage.decryptString(Buffer.from(cipher, 'base64')),
+    setTested: (tested) => {
+      if (settings && settings.get().rruk.tested !== tested) settings.set({ rruk: { ...settings.get().rruk, tested } });
+    },
     // A key from the environment for development only: never in a packaged build, so nobody ships theirs.
     devKey: () => (app.isPackaged ? '' : (process.env['RRUK_KEY'] ?? '').trim()),
     getLocation: () => {

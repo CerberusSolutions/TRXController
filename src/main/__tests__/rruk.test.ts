@@ -93,4 +93,10 @@ describe('RRUK client', () => {
     };
     expect((await searchRruk({ apiKey: 'k', freqMHz: 446.00625 }, ok)).entries).toHaveLength(1);
   });
+
+  it('treats any status but 200 as a refusal, with the server\'s message', () => {
+    expect(() => parseRrukResponse({ success: true, data: [] }, 503)).toThrow(/HTTP 503/);
+    expect(() => parseRrukResponse({ success: false, error: 'Access denied: This API key is locked to another IP address.' }, 403)).toThrow(/locked to another IP address/);
+    expect(() => parseRrukResponse({ success: false, message: 'Too many requests' }, 429)).toThrow(/Too many requests/);
+  });
 });

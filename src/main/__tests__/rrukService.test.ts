@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LogDb } from '../log/db';
-import { RrukService } from '../identities/rrukService';
+import { RRUK_HALT_MS, RRUK_OFFLINE_PAUSE_MS, RRUK_UNTESTED, RrukService, haltFor } from '../identities/rrukService';
+import { RrukError } from '../identities/rruk';
 import type { FetchLike } from '../identities/rruk';
 import type { RrukSettings } from '../../shared/ipc';
 
@@ -14,20 +15,24 @@ function fake(calls: string[], reply: (url: URL) => { status: number; body: unkn
   }) as FetchLike;
 }
 
-function make(over: Partial<RrukSettings> = {}, opts: { devKey?: string; calls?: string[]; reply?: (url: URL) => { status: number; body: unknown }; location?: { lat: number | null; lon: number | null; radiusKm: number | null } } = {}) {
+function make(over: Partial<RrukSettings> = {}, opts: { devKey?: string; calls?: string[]; reply?: (url: URL) => { status: number; body: unknown }; location?: { lat: number | null; lon: number | null; radiusKm: number | null }; now?: () => number } = {}) {
   const db = new LogDb(':memory:');
-  const settings: RrukSettings = { apiKey: 'enc:secret', postcode: '', ...over };
+  const settings: RrukSettings = { apiKey: 'enc:secret', postcode: '', tested: true, ...over };
   let changes = 0;
   const calls = opts.calls ?? [];
   const svc = new RrukService({
     db,
     getSettings: () => settings,
     decrypt: (c) => c.replace(/^enc:/, ''),
+    setTested: (t) => {
+      settings.tested = t;
+    },
     devKey: () => opts.devKey ?? '',
     getLocation: () => opts.location ?? { lat: 51.8438, lon: -0.9183, radiusKm: 16 },
     fetchImpl: fake(calls, opts.reply ?? (() => ({ status: 200, body: { success: true, user: 'steve', count: 1, data: [ENTRY] } }))),
     onChange: () => changes++,
     spacingMs: 5,
+    ...(opts.now ? { now: opts.now } : {}),
   });
   return { db, svc, settings, calls, changes: () => changes };
 }
@@ -88,17 +93,78 @@ describe('RrukService', { timeout: 20_000 }, () => {
     expect(svc.status().cachedFreqs).toBe(0);
   });
 
-  it('backs off a failed frequency and empties the queue when the key is rejected', async () => {
-    const { svc, calls } = make({}, { reply: () => ({ status: 403, body: { success: false, error: 'Invalid API key' } }) });
+  it('stops asking altogether when the key is rejected, until the key changes', async () => {
+    const { svc, calls } = make({}, { reply: () => ({ status: 401, body: { success: false, error: 'Invalid API key' } }) });
     svc.request(145_500_000);
     svc.request(145_512_500);
     await settled(svc, 145_500_000, 145_512_500);
     expect(calls).toHaveLength(1);
     expect(svc.info(145_500_000)?.error).toBe('Invalid API key');
     expect(svc.status().lastError).toBe('Invalid API key');
-    expect(svc.request(145_500_000)).toBe(false);
-    expect(svc.request(145_500_000, true)).toBe(true);
+    expect(svc.status().halted).toEqual({ kind: 'key', message: 'Invalid API key', until: null });
+    // A frequency never asked about, and a forced ask, both stay unsent: the key is wrong for all of them.
+    expect(svc.request(453_437_500)).toBe(false);
+    expect(svc.request(453_437_500, true)).toBe(false);
+    expect(svc.info(453_437_500)?.error).toBe('Invalid API key');
+    expect(calls).toHaveLength(1);
+    // A new key (or a passed test) lifts it.
+    // The rejection un-tests the key: even after the halt is lifted nothing runs until a Test passes.
+    expect(svc.status().tested).toBe(false);
+    svc.resetFailures();
+    expect(svc.status().halted).toBeNull();
+    expect(svc.request(453_437_500)).toBe(false);
+    expect(svc.info(453_437_500)?.error).toBe(RRUK_UNTESTED);
     svc.dispose();
+  });
+
+  it('never looks anything up until the key has passed a Test', async () => {
+    const { svc, calls, settings } = make({ tested: false });
+    expect(svc.enabled).toBe(false);
+    expect(svc.status()).toMatchObject({ hasKey: true, located: true, tested: false, enabled: false });
+    expect(svc.request(145_500_000)).toBe(false);
+    expect(svc.info(145_500_000)).toMatchObject({ entries: [], pending: false, error: RRUK_UNTESTED });
+    await svc.test();
+    expect(settings.tested).toBe(true);
+    expect(svc.enabled).toBe(true);
+    expect(svc.request(145_500_000)).toBe(true);
+    await settled(svc, 145_500_000);
+    expect(calls).toHaveLength(2);
+    svc.dispose();
+  });
+
+  it('a Test that the server refuses for the key leaves it untested', async () => {
+    const { svc, settings } = make({}, { reply: () => ({ status: 401, body: { success: false, error: 'Invalid API key' } }) });
+    await expect(svc.test()).rejects.toThrow('Invalid API key');
+    expect(settings.tested).toBe(false);
+    expect(svc.enabled).toBe(false);
+    svc.dispose();
+  });
+
+  it('pauses for a while after a rate limit or a locked address, then resumes by itself', async () => {
+    let t = 1_000_000;
+    const { svc, calls } = make({}, { now: () => t, reply: () => ({ status: 403, body: { success: false, error: 'Access denied: This API key is locked to another IP address.' } }) });
+    svc.request(145_500_000);
+    await settled(svc, 145_500_000);
+    expect(calls).toHaveLength(1);
+    expect(svc.status().halted).toEqual({ kind: 'limit', message: 'Access denied: This API key is locked to another IP address.', until: t + RRUK_HALT_MS });
+    expect(svc.request(145_512_500)).toBe(false);
+    t += RRUK_HALT_MS;
+    expect(svc.status().halted).toBeNull();
+    expect(svc.request(145_512_500)).toBe(true);
+    svc.dispose();
+  });
+
+  it('classifies the server\'s refusals', () => {
+    const now = 5000;
+    expect(haltFor(new RrukError('Invalid API key', 401), now)).toEqual({ kind: 'key', message: 'Invalid API key', until: null });
+    expect(haltFor(new RrukError('API key not authorised', 200), now).kind).toBe('key');
+    expect(haltFor(new RrukError('IP address locked', 200), now)).toEqual({ kind: 'limit', message: 'IP address locked', until: now + RRUK_HALT_MS });
+    // Seen in the log on 25 Sep 2026: names the key, but the fix is the address in the RRUK dashboard, so it retries.
+    expect(haltFor(new RrukError('Access denied: This API key is locked to another IP address.', 403), now).kind).toBe('limit');
+    expect(haltFor(new RrukError('Too many geo locations', 200), now).kind).toBe('limit');
+    expect(haltFor(new RrukError('RRUK answered HTTP 429 with no JSON', 429), now).kind).toBe('limit');
+    expect(haltFor(new RrukError('RRUK answered HTTP 503 with no JSON', 503), now)).toEqual({ kind: 'refused', message: 'RRUK answered HTTP 503 with no JSON', until: now + RRUK_HALT_MS });
+    expect(haltFor(new RrukError('RRUK unreachable: ECONNRESET'), now)).toEqual({ kind: 'offline', message: 'RRUK unreachable: ECONNRESET', until: now + RRUK_OFFLINE_PAUSE_MS });
   });
 
   it('test() asks about PMR446 channel 1 and reports the account', async () => {
