@@ -234,13 +234,15 @@ function RrukForm() {
       <p className="text-[11px] text-ink-3">
         {rruk.enabled ? (
           <>
-            Lookups on. Cached: <span className="font-mono text-ink-2">{rruk.cachedFreqs}</span> frequencies.{' '}
+            <span className="text-green">✓ Key tested.</span> Lookups on. Cached: <span className="font-mono text-ink-2">{rruk.cachedFreqs}</span> frequencies.{' '}
             <button className="underline decoration-ink-3/40 underline-offset-2" onClick={() => void clearRrukCache()}>
               clear
             </button>
           </>
         ) : !rruk.hasKey && !rruk.devKey ? (
-          'Lookups run once a key is saved.'
+          'Lookups run once a key is saved and tested.'
+        ) : !rruk.tested ? (
+          <span className="text-amber">Key not tested yet: press Test. Lookups stay off until the key gets a tick.</span>
         ) : (
           'Lookups run once a postcode or a location is set.'
         )}

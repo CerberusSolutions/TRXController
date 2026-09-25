@@ -267,7 +267,7 @@ export default function HelpDialog() {
                   </p>
                   <p className="mt-2">
                     <span className="text-ink-3">Then: </span>
-                    Generate an API key in your RRUK account dashboard and enter it under Data › RadioReference UK, then press Test. Lookups need a
+                    Generate an API key in your RRUK account dashboard and enter it under Data › RadioReference UK, then press Test: lookups run only once the key has passed a test. Lookups need a
                     location (or a postcode) under Data, and use the radius as the search range. The key is yours alone and is stored encrypted.
                   </p>
                 </li>

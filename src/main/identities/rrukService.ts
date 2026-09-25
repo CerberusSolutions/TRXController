@@ -20,6 +20,8 @@ export const RRUK_CALL_SPACING_MS = 1200;
 export const RRUK_HALT_MS = 15 * 60 * 1000;
 /** After the server could not be reached at all, ask nothing for this long. */
 export const RRUK_OFFLINE_PAUSE_MS = 60 * 1000;
+/** What the main window says while the key has not passed a Test. */
+export const RRUK_UNTESTED = 'API key not tested: open Data and press Test';
 
 /**
  * What a failed call means for every other frequency. A refusal from the server (it answered, `success` false or
@@ -43,6 +45,8 @@ export interface RrukServiceOptions {
   getSettings: () => RrukSettings;
   /** Decrypt the stored key; throws or returns '' if it cannot. */
   decrypt: (cipher: string) => string;
+  /** Record whether the key in use has passed a Test (main keeps it in the settings). */
+  setTested?: (tested: boolean) => void;
   /** A key from the environment for development builds only; '' in a packaged app. */
   devKey?: () => string;
   getLocation?: () => { lat: number | null; lon: number | null; radiusKm: number | null };
@@ -57,6 +61,7 @@ export class RrukService {
   private readonly db: LogDb;
   private readonly getSettings: () => RrukSettings;
   private readonly decrypt: (cipher: string) => string;
+  private readonly setTested: (tested: boolean) => void;
   private readonly devKey: () => string;
   private readonly getLocation: () => { lat: number | null; lon: number | null; radiusKm: number | null };
   private readonly fetchImpl: FetchLike | undefined;
@@ -77,6 +82,7 @@ export class RrukService {
     this.db = opts.db;
     this.getSettings = opts.getSettings;
     this.decrypt = opts.decrypt;
+    this.setTested = opts.setTested ?? (() => {});
     this.devKey = opts.devKey ?? (() => '');
     this.getLocation = opts.getLocation ?? (() => ({ lat: null, lon: null, radiusKm: null }));
     this.fetchImpl = opts.fetchImpl;
@@ -110,9 +116,9 @@ export class RrukService {
     return null;
   }
 
-  /** Lookups run only with a key and somewhere to search from. */
+  /** Lookups run only with a key that has passed a Test and somewhere to search from. */
   get enabled(): boolean {
-    return this.apiKey() !== null && this.where() !== null;
+    return this.apiKey() !== null && this.getSettings().tested && this.where() !== null;
   }
 
   /** After the key or location changes, let every frequency be tried again. */
@@ -135,6 +141,7 @@ export class RrukService {
       devKey: this.getSettings().apiKey === '' && this.devKey() !== '',
       postcode: this.getSettings().postcode,
       located: this.where() !== null,
+      tested: this.apiKey() !== null && this.getSettings().tested,
       enabled: this.enabled,
       cachedFreqs: this.db.rrukStats().freqs,
       lastError: this.lastError,
@@ -155,14 +162,26 @@ export class RrukService {
     const key = this.apiKey();
     if (!key) throw new RrukError('Enter your RRUK API key first');
     const w = this.where();
-    const r = await searchRruk({ apiKey: key, freqMHz: 446.00625, ...(w ?? { rangeMiles: RRUK_MAX_RANGE_MILES }) }, this.fetchImpl);
+    let r: RrukResult;
+    try {
+      r = await searchRruk({ apiKey: key, freqMHz: 446.00625, ...(w ?? { rangeMiles: RRUK_MAX_RANGE_MILES }) }, this.fetchImpl);
+    } catch (e) {
+      // A refusal about the key un-tests it (a limit or an outage says nothing about the key itself).
+      if (haltFor(e, this.now()).kind === 'key') this.setTested(false);
+      throw e;
+    }
+    this.setTested(true);
     this.resetFailures();
     return r;
   }
 
   /** What the cache holds for `hz` for the current location; null when RRUK is not set up. Never touches the network. */
   info(hz: number): RrukInfo | null {
-    if (!this.enabled) return null;
+    if (!this.enabled) {
+      // A key that is set up but untested (or just rejected) is said so on every frequency, so the main window shows why nothing is looked up.
+      if (this.apiKey() !== null && this.where() !== null) return { frequencyHz: hz, entries: [], fetchedAt: null, pending: false, error: this.halted()?.message ?? RRUK_UNTESTED };
+      return null;
+    }
     const w = this.where()!;
     const cached = this.db.rrukGetFreq(hz);
     const pending = this.inFlight === hz || this.queue.includes(hz);
@@ -231,6 +250,8 @@ export class RrukService {
       // A refusal is about the key, the address or the rate, not the frequency: stop asking (see haltFor).
       this.halt = haltFor(e, this.now());
       this.queue.length = 0;
+      // A rejected key is no longer a tested one: nothing more is sent until a Test passes again.
+      if (this.halt.kind === 'key') this.setTested(false);
       this.log(`${(hz / 1e6).toFixed(4)} MHz failed: ${message}; lookups paused (${this.halt.kind}${this.halt.until === null ? ' until the key is changed' : ` for ${Math.round((this.halt.until - this.now()) / 60000)} min`})`);
     } finally {
       this.inFlight = null;

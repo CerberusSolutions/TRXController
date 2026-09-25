@@ -6,7 +6,7 @@ import { normaliseUnits } from '../shared/geo';
 import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
-export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '' };
+export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '', tested: false };
 export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
@@ -78,6 +78,7 @@ function sanitizeRruk(r: unknown): RrukSettings {
   return {
     apiKey: typeof o['apiKey'] === 'string' ? o['apiKey'] : '',
     postcode: typeof o['postcode'] === 'string' ? o['postcode'].trim().toUpperCase().slice(0, 10) : '',
+    tested: o['tested'] === true,
   };
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { LogDb } from '../log/db';
-import { RRUK_HALT_MS, RRUK_OFFLINE_PAUSE_MS, RrukService, haltFor } from '../identities/rrukService';
+import { RRUK_HALT_MS, RRUK_OFFLINE_PAUSE_MS, RRUK_UNTESTED, RrukService, haltFor } from '../identities/rrukService';
 import { RrukError } from '../identities/rruk';
 import type { FetchLike } from '../identities/rruk';
 import type { RrukSettings } from '../../shared/ipc';
@@ -17,13 +17,16 @@ function fake(calls: string[], reply: (url: URL) => { status: number; body: unkn
 
 function make(over: Partial<RrukSettings> = {}, opts: { devKey?: string; calls?: string[]; reply?: (url: URL) => { status: number; body: unknown }; location?: { lat: number | null; lon: number | null; radiusKm: number | null }; now?: () => number } = {}) {
   const db = new LogDb(':memory:');
-  const settings: RrukSettings = { apiKey: 'enc:secret', postcode: '', ...over };
+  const settings: RrukSettings = { apiKey: 'enc:secret', postcode: '', tested: true, ...over };
   let changes = 0;
   const calls = opts.calls ?? [];
   const svc = new RrukService({
     db,
     getSettings: () => settings,
     decrypt: (c) => c.replace(/^enc:/, ''),
+    setTested: (t) => {
+      settings.tested = t;
+    },
     devKey: () => opts.devKey ?? '',
     getLocation: () => opts.location ?? { lat: 51.8438, lon: -0.9183, radiusKm: 16 },
     fetchImpl: fake(calls, opts.reply ?? (() => ({ status: 200, body: { success: true, user: 'steve', count: 1, data: [ENTRY] } }))),
@@ -105,9 +108,35 @@ describe('RrukService', { timeout: 20_000 }, () => {
     expect(svc.info(453_437_500)?.error).toBe('Invalid API key');
     expect(calls).toHaveLength(1);
     // A new key (or a passed test) lifts it.
+    // The rejection un-tests the key: even after the halt is lifted nothing runs until a Test passes.
+    expect(svc.status().tested).toBe(false);
     svc.resetFailures();
     expect(svc.status().halted).toBeNull();
-    expect(svc.request(453_437_500)).toBe(true);
+    expect(svc.request(453_437_500)).toBe(false);
+    expect(svc.info(453_437_500)?.error).toBe(RRUK_UNTESTED);
+    svc.dispose();
+  });
+
+  it('never looks anything up until the key has passed a Test', async () => {
+    const { svc, calls, settings } = make({ tested: false });
+    expect(svc.enabled).toBe(false);
+    expect(svc.status()).toMatchObject({ hasKey: true, located: true, tested: false, enabled: false });
+    expect(svc.request(145_500_000)).toBe(false);
+    expect(svc.info(145_500_000)).toMatchObject({ entries: [], pending: false, error: RRUK_UNTESTED });
+    await svc.test();
+    expect(settings.tested).toBe(true);
+    expect(svc.enabled).toBe(true);
+    expect(svc.request(145_500_000)).toBe(true);
+    await settled(svc, 145_500_000);
+    expect(calls).toHaveLength(2);
+    svc.dispose();
+  });
+
+  it('a Test that the server refuses for the key leaves it untested', async () => {
+    const { svc, settings } = make({}, { reply: () => ({ status: 401, body: { success: false, error: 'Invalid API key' } }) });
+    await expect(svc.test()).rejects.toThrow('Invalid API key');
+    expect(settings.tested).toBe(false);
+    expect(svc.enabled).toBe(false);
     svc.dispose();
   });
 

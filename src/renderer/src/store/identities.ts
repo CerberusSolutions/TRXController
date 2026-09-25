@@ -44,7 +44,7 @@ export const useIdentities = create<IdentityState>((set) => ({
   wtrResult: null,
   repeatersImporting: false,
   repeatersResult: null,
-  settings: { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' }, rruk: { apiKey: '', postcode: '' }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) },
+  settings: { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' }, rruk: { apiKey: '', postcode: '', tested: false }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) },
   rr: null,
   rrBusy: false,
   rrMessage: null,
@@ -76,10 +76,10 @@ export const useIdentities = create<IdentityState>((set) => ({
     set({ rrukBusy: true, rrukMessage: null });
     try {
       const r = await window.trx.rrukTest();
-      set({ rrukMessage: { ok: true, text: `Key accepted${r.user ? ` for ${r.user}` : ''}; PMR446 channel 1 returned ${r.entries} ${r.entries === 1 ? 'entry' : 'entries'}.` } });
+      set({ rrukMessage: { ok: true, text: `✓ Key accepted${r.user ? ` for ${r.user}` : ''}; PMR446 channel 1 returned ${r.entries} ${r.entries === 1 ? 'entry' : 'entries'}. Lookups are on.` } });
       set({ rruk: await window.trx.rrukStatus() });
     } catch (e) {
-      set({ rrukMessage: { ok: false, text: ipcText(e) } });
+      set({ rrukMessage: { ok: false, text: ipcText(e) }, rruk: (await window.trx.rrukStatus?.()) ?? null });
     } finally {
       set({ rrukBusy: false });
     }

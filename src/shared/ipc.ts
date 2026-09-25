@@ -372,6 +372,11 @@ export interface RrukSettings {
   apiKey: string;
   /** UK postcode (full or outward) to search from; blank = use the location's coordinates. */
   postcode: string;
+  /**
+   * The key has passed a Test since it was saved. Lookups run only while this is set: saving a key clears it, a
+   * passed Test sets it, and a refusal about the key clears it again, so a wrong key is never sent more than once.
+   */
+  tested: boolean;
 }
 
 /**
@@ -394,6 +399,8 @@ export interface RrukStatus {
   postcode: string;
   /** A postcode or coordinates are set, so there is somewhere to search from. */
   located: boolean;
+  /** The key in use has passed a Test; lookups never run without it. */
+  tested: boolean;
   enabled: boolean;
   cachedFreqs: number;
   lastError: string | null;
