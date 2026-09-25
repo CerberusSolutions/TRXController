@@ -252,7 +252,7 @@ function RrukForm() {
             ? 'Lookups are paused until you enter the correct API key (from your RRUK dashboard) and Test it.'
             : rruk.halted.kind === 'offline'
               ? 'RRUK could not be reached; lookups pause for a minute.'
-              : `Lookups pause until ${rruk.halted.until ? new Date(rruk.halted.until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'later'}. Put right what it names in your RRUK dashboard (your IP address, for instance), then Test to resume sooner.`}
+              : `Lookups pause until ${rruk.halted.until ? new Date(rruk.halted.until).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }) : 'later'}. Users cannot clear this themselves: contact RRUK support with the message above, then Test to resume sooner once they have.`}
         </p>
       ) : (
         rruk.lastError && <p className="text-xs text-red">Last lookup failed: {rruk.lastError}</p>
