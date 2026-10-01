@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { encodeFrame, Key } from '@trxcontroller/rcip';
-import { ScannerSession } from '../scanner/session';
+import { CLOCK_TOLERANCE_S, ScannerSession } from '../scanner/session';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import { FakeTransport, STATUS_DATA, defaultHandler, factoryFor } from './fakeTransport';
 
@@ -16,7 +16,84 @@ function waitFor(pred: () => boolean, ms = 500): Promise<void> {
   });
 }
 
+/** An `a` reply whose recording header starts at `d` (the scanner's clock, local time, little-endian stm). */
+function activeReply(d: Date): Uint8Array {
+  const h = new Uint8Array(320);
+  const dv = new DataView(h.buffer);
+  const stm = [d.getSeconds(), d.getMinutes(), d.getHours(), d.getDate(), d.getMonth(), d.getFullYear() - 1900, d.getDay(), 0, 0];
+  stm.forEach((v, i) => dv.setInt16(25 + i * 2, v, true));
+  [...'DMR test'].forEach((c, i) => (h[43 + i] = c.charCodeAt(0)));
+  dv.setUint32(152, 456_025_000, false);
+  return encodeFrame('a', [0x01, 0x40, ...h]);
+}
+
+/** The nine int16 fields of a `t` frame's data. */
+function clockFields(frame: Uint8Array, little: boolean): number[] {
+  const data = frame.subarray(2, 2 + 18);
+  const dv = new DataView(data.buffer, data.byteOffset, 18);
+  return Array.from({ length: 9 }, (_, i) => dv.getInt16(i * 2, little));
+}
+
 describe('ScannerSession', () => {
+  it('sets the clock from the PC on connect when asked, little-endian first', async () => {
+    const t = new FakeTransport();
+    const pc = new Date(2026, 9, 1, 12, 34, 56);
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 1000, clockOnConnect: () => true, now: () => pc });
+    await s.connect('COM7');
+    expect(t.commands().slice(0, 2)).toEqual(['V', 't']);
+    expect(clockFields(t.written[1]!, true)).toEqual([56, 34, 12, 1, 9, 126, 4, 273, 0]);
+    expect(s.getSnapshot().clock).toMatchObject({ sentAt: pc.getTime(), order: 'le', verified: null });
+    await s.disconnect();
+  });
+
+  it('sends the time as plain numbers, 24-hour, whatever the locale shows', async () => {
+    // 18:39:07 on 1 Oct 2026: no "6:39 pm", no "18.39" or "18,39"; hour 18, minute 39, second 7.
+    const t = new FakeTransport();
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 1000, clockOnConnect: () => true, now: () => new Date(2026, 9, 1, 18, 39, 7) });
+    await s.connect('COM7');
+    expect(clockFields(t.written[1]!, true).slice(0, 3)).toEqual([7, 39, 18]);
+    await s.disconnect();
+  });
+
+  it('leaves the clock alone when the tick is off', async () => {
+    const t = new FakeTransport();
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 1000, clockOnConnect: () => false });
+    await s.connect('COM7');
+    expect(t.commands()).not.toContain('t');
+    expect(s.getSnapshot().clock.sentAt).toBeNull();
+    await s.disconnect();
+  });
+
+  it('confirms the clock from the next transmission, and retries big-endian when it reads far off', async () => {
+    const t = new FakeTransport();
+    let pc = new Date(2026, 9, 1, 12, 0, 0);
+    let scanner = new Date(2026, 9, 1, 12, 0, 3); // set correctly: the first transmission after the send reads 3 s later
+    t.handler = (cmd) => (cmd.codeChar === 'a' ? activeReply(scanner) : defaultHandler(cmd));
+    const s = new ScannerSession(factoryFor(t), { pollIntervalMs: 5, activeEveryNCycles: 1, now: () => pc });
+    await s.connect('COM7');
+    await s.setClock();
+    pc = new Date(pc.getTime() + 5000);
+    await waitFor(() => s.getSnapshot().clock.verified !== null);
+    expect(s.getSnapshot().clock).toMatchObject({ order: 'le', verified: true, offsetS: -2 });
+    expect(s.getSnapshot().clock.scannerTime).toBe('2026-10-01T12:00:03');
+
+    // A second send the scanner took the wrong way round: a new transmission reads hours out, so big-endian is tried.
+    scanner = new Date(2026, 9, 1, 3, 15, 0);
+    await s.setClock();
+    pc = new Date(pc.getTime() + 5000);
+    await waitFor(() => s.getSnapshot().clock.order === 'be');
+    const be = t.written.filter((w) => String.fromCharCode(w[1]!) === 't')[2]!;
+    expect(clockFields(be, false)[2]).toBe(12);
+    expect(t.commands().filter((c) => c === 't')).toHaveLength(3);
+    // Still out after that: reported as not set, with what the scanner read.
+    scanner = new Date(2026, 9, 1, 3, 16, 0);
+    pc = new Date(pc.getTime() + 5000);
+    await waitFor(() => s.getSnapshot().clock.verified !== null);
+    expect(s.getSnapshot().clock.verified).toBe(false);
+    expect(Math.abs(s.getSnapshot().clock.offsetS!)).toBeGreaterThan(CLOCK_TOLERANCE_S);
+    await s.disconnect();
+  });
+
   it('connects, reads the version, and starts polling L and A', async () => {
     const t = new FakeTransport();
     const snaps: ScannerSnapshot[] = [];

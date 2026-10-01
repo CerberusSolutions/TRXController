@@ -31,7 +31,25 @@ export interface LinkStats {
   lastRttMs: number | null;
 }
 
+/**
+ * The scanner's clock as set from this PC (`t` Clock Set, no reply). The spec leaves the byte order of its nine
+ * 16-bit fields unstated, so the first send is little-endian (like the frequency field and the recording
+ * header's time) and the next transmission's recording header, which carries the scanner's clock, confirms it:
+ * within tolerance it is `verified`; far off, the send is repeated big-endian once; off again, `verified` is false.
+ */
+export interface ClockStatus {
+  /** When the clock was last sent this connection (epoch ms), null if never. */
+  sentAt: number | null;
+  order: 'le' | 'be';
+  /** null until a transmission after the send shows the scanner's time. */
+  verified: boolean | null;
+  /** The scanner's clock as the last transmission reported it (local time, ISO) and how far it was from the PC's. */
+  scannerTime: string | null;
+  offsetS: number | null;
+}
+
 export interface ScannerSnapshot {
+  clock: ClockStatus;
   link: {
     status: LinkStatus;
     port: string | null;
@@ -461,6 +479,8 @@ export interface Settings {
   units: Units;
   /** Seconds the scanner may sit on one carrier in Scan mode before ► is pressed for it; null = never. */
   scanTimeoutS: number | null;
+  /** Set the scanner's clock from this PC each time it connects (Data dialog "Scanner clock"). */
+  clockSync: boolean;
   /** Serial port of the last successful connection, reopened at launch. */
   port: string | null;
   /** False after the user disconnects, so the app stops reconnecting on its own. */
@@ -536,6 +556,7 @@ export const IPC = {
   sendKey: 'scanner:send-key',
   tune: 'scanner:tune',
   resumeScan: 'scanner:resume-scan',
+  clockSet: 'scanner:clock-set',
   getSnapshot: 'scanner:get-snapshot',
   snapshot: 'scanner:snapshot',
   ccdump: 'scanner:ccdump',

@@ -7,7 +7,7 @@ import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
 export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '', tested: false };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, clockSync: true, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -45,6 +45,7 @@ export function sanitize(s: Settings): Settings {
     radiusKm: num(s.radiusKm, 1, 5000),
     units: normaliseUnits(s.units),
     scanTimeoutS: typeof s.scanTimeoutS === 'number' && Number.isFinite(s.scanTimeoutS) && s.scanTimeoutS >= 3 && s.scanTimeoutS <= 600 ? Math.round(s.scanTimeoutS) : null,
+    clockSync: s.clockSync !== false,
     port: typeof s.port === 'string' && s.port.trim() !== '' ? s.port.trim() : null,
     autoConnect: s.autoConnect !== false,
     window: sanitizeWindow(s.window),

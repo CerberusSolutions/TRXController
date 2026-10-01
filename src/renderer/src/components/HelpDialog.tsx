@@ -151,6 +151,11 @@ export default function HelpDialog() {
                   Press <b className="text-ink">Connect</b>. The port is remembered and reopened next time the app starts, and again if the scanner is
                   unplugged and plugged back in. <b className="text-ink">Disconnect</b> switches that off until you connect again.
                 </li>
+                <li>
+                  The scanner's clock is set from this PC each time it connects, so recordings and the log agree on the time. Untick that under Data ›{' '}
+                  <b className="text-ink">Scanner clock</b> if you would rather it were left alone; <b className="text-ink">Set clock now</b> sends it on demand. The
+                  next transmission confirms the scanner took it.
+                </li>
               </ol>
             </Section>
 

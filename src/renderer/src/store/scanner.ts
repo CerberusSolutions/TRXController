@@ -6,7 +6,8 @@ import { DEFAULT_LOOKUPS } from '../../../shared/sources';
 
 function emptySnapshot(): ScannerSnapshot {
   return {
-    link: { status: 'disconnected', port: null, error: null, stall: null },
+    clock: { sentAt: null, order: 'le', verified: null, scannerTime: null, offsetS: null },
+  link: { status: 'disconnected', port: null, error: null, stall: null },
     power: null,
     version: null,
     status: null,

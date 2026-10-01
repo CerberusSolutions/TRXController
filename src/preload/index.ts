@@ -26,6 +26,7 @@ import {
   type RrukStatus,
   type RrukInfo,
   type LookupMode,
+  type ClockStatus,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
@@ -49,6 +50,8 @@ const api = {
   /** Tune to `hz` through the menus; resolves to the frequency the scanner settled on (its raster may snap the entry). */
   tune: (hz: number): Promise<number> => ipcRenderer.invoke(IPC.tune, hz),
   resumeScan: (): Promise<void> => ipcRenderer.invoke(IPC.resumeScan),
+  /** Send the PC's time to the scanner now; the next transmission confirms it (snapshot.clock). */
+  clockSet: (): Promise<ClockStatus> => ipcRenderer.invoke(IPC.clockSet),
   getSnapshot: (): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot),
   onSnapshot: (cb: (s: ScannerSnapshot) => void): (() => void) => {
     const listener = (_e: unknown, s: ScannerSnapshot): void => cb(s);

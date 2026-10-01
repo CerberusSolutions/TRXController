@@ -169,6 +169,8 @@ const session = new ScannerSession(serialTransportFactory, {
   },
   onCcDump: (line) => broadcast(IPC.ccdump, line),
   log: (msg) => console.log(`[scanner] ${msg}`),
+  // The scanner's clock from this PC on every connect, unless the Data dialog's tick is off.
+  clockOnConnect: () => settings?.get().clockSync !== false,
 });
 
 /** Release check: shortly after launch, then every six hours while the app runs. */
@@ -303,6 +305,7 @@ function registerIpc(): void {
     }
   });
   ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
+  ipcMain.handle(IPC.clockSet, () => session.setClock());
   ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
   ipcMain.handle(IPC.logDay, (_e, from: unknown, to: unknown): DayLog => {
