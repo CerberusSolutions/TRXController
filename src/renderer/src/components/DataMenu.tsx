@@ -211,9 +211,51 @@ function ScanTimeoutForm() {
 function ConfirmedList() {
   const confirmations = useLog((s) => s.confirmations);
   const unconfirm = useLog((s) => s.unconfirm);
-  if (confirmations.length === 0) return <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, or type a name.</p>;
+  const radioNames = useLog((s) => s.radioNames);
+  const unnameRadio = useLog((s) => s.unnameRadio);
+  const radioImport = useLog((s) => s.radioImport);
+  const importRadios = useLog((s) => s.importRadios);
+  const dsd = (
+    <div className="mt-2">
+      <button className="w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink disabled:opacity-50" disabled={radioImport.busy} title="Name every radio DSD+ has an alias for, from its DSDPlus.radios file (in the DSD+ folder); the names apply on any system" onClick={() => void importRadios()}>
+        {radioImport.busy ? 'Importing…' : 'Import DSD+ radio list…'}
+      </button>
+      {radioImport.result && !radioImport.busy && (
+        <p className="mt-1 text-xs text-green">
+          Named {radioImport.result.imported.toLocaleString()} radios from {radioImport.result.file}
+          {radioImport.result.skipped ? `, ${radioImport.result.skipped} lines without an alias skipped` : ''}.
+        </p>
+      )}
+      {radioImport.error && <p className="mt-1 text-xs text-red">{radioImport.error}</p>}
+    </div>
+  );
+  if (confirmations.length === 0 && radioNames.length === 0)
+    return (
+      <>
+        <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, type a name, or name a radio ID (there, or with ✎ beside the hero's Radio ID).</p>
+        {dsd}
+      </>
+    );
   return (
     <div className="mt-1">
+      {radioNames.length > 0 && (
+        <>
+          <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3">Radios</p>
+          <ul className="mb-2 max-h-32 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
+            {radioNames.map((n) => (
+              <li key={n.id} className="flex items-center gap-2">
+                <span className="text-amber-2" title="Radio ID">{n.radioId}</span>
+                <span className="w-24 shrink-0 truncate text-ink-3" title={n.system || 'Any system'}>{n.system || 'any system'}</span>
+                <span className="min-w-0 flex-1 truncate font-sans text-ink" title={`Named ${new Date(n.namedAt).toLocaleString()}`}>{n.name}</span>
+                <button className="shrink-0 text-[10px] text-ink-3 underline decoration-ink-3/40 underline-offset-2 hover:text-red" title="Forget this name: the entries go back to the scanner's alpha tag, else radioid.net" onClick={() => void unnameRadio(n.id)}>
+                  remove
+                </button>
+              </li>
+            ))}
+          </ul>
+          {confirmations.length > 0 && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3">Channels</p>}
+        </>
+      )}
       <ul className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
         {confirmations.map((c) => (
           <li key={c.id} className="flex items-center gap-2">
@@ -228,8 +270,9 @@ function ConfirmedList() {
         ))}
       </ul>
       <p className="mt-1 text-[11px] text-ink-3">
-        {confirmations.length} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone.
+        {[confirmations.length ? `${confirmations.length} channel${confirmations.length === 1 ? '' : 's'}` : '', radioNames.length ? `${radioNames.length} radio${radioNames.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone; a radio name outranks the scanner's alpha tag and radioid.net.
       </p>
+      {dsd}
     </div>
   );
 }

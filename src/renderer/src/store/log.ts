@@ -1,6 +1,7 @@
 import { create } from 'zustand';
-import type { ReceptionRow } from '../../../shared/ipc';
+import type { ImportResult, ReceptionRow } from '../../../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../../../shared/confirm';
+import type { NewRadioName, RadioName } from '../../../shared/radioNames';
 
 /** Rows fetched per page: the first load, and each fetch as the user scrolls towards the bottom. */
 export const PAGE = 500;
@@ -17,6 +18,8 @@ interface LogState {
   loadingMore: boolean;
   /** Identities the user has confirmed by hand, every frequency. */
   confirmations: Confirmation[];
+  /** Names the user has given radio IDs, every system. */
+  radioNames: RadioName[];
   /** Bumped when the log changed wholesale (cleared, renamed by a confirmation): what reads the log by other routes refetches. */
   generation: number;
   setFilter: (f: string) => void;
@@ -27,6 +30,11 @@ interface LogState {
   clear: () => Promise<void>;
   confirm: (c: NewConfirmation) => Promise<void>;
   unconfirm: (id: number) => Promise<void>;
+  nameRadio: (n: NewRadioName) => Promise<void>;
+  unnameRadio: (id: number) => Promise<void>;
+  /** The DSD+ radio list import: in progress, its last result, or why it failed. */
+  radioImport: { busy: boolean; result: ImportResult | null; error: string | null };
+  importRadios: () => Promise<void>;
 }
 
 export const useLog = create<LogState>((set, get) => ({
@@ -37,6 +45,8 @@ export const useLog = create<LogState>((set, get) => ({
   capped: false,
   loadingMore: false,
   confirmations: [],
+  radioNames: [],
+  radioImport: { busy: false, result: null, error: null },
   generation: 0,
 
   setFilter: (filter) => set({ filter }),
@@ -46,8 +56,8 @@ export const useLog = create<LogState>((set, get) => ({
   load: async () => {
     if (!window.trx) return;
     const n = Math.min(MAX_ROWS, Math.max(PAGE, get().rows.length));
-    const [rows, confirmations] = await Promise.all([window.trx.logRecent(n), window.trx.logConfirmations?.() ?? []]);
-    set({ rows, confirmations, loaded: true, exhausted: rows.length < n, capped: false });
+    const [rows, confirmations, radioNames] = await Promise.all([window.trx.logRecent(n), window.trx.logConfirmations?.() ?? [], window.trx.logRadioNames?.() ?? []]);
+    set({ rows, confirmations, radioNames, loaded: true, exhausted: rows.length < n, capped: false });
   },
 
   loadMore: async () => {
@@ -83,6 +93,31 @@ export const useLog = create<LogState>((set, get) => ({
     if (!window.trx) return;
     await window.trx.logUnconfirm(id);
     await get().load();
+  },
+
+  // A radio name is joined into every row it fits, so the log is reloaded rather than patched.
+  nameRadio: async (n) => {
+    if (!window.trx) return;
+    await window.trx.logRadioName(n);
+    await get().load();
+  },
+
+  unnameRadio: async (id) => {
+    if (!window.trx) return;
+    await window.trx.logRadioUnname(id);
+    await get().load();
+  },
+
+  importRadios: async () => {
+    if (!window.trx?.logRadioImport) return;
+    set({ radioImport: { busy: true, result: null, error: null } });
+    try {
+      const result = await window.trx.logRadioImport();
+      set({ radioImport: { busy: false, result, error: null } });
+      if (result) await get().load();
+    } catch (e) {
+      set({ radioImport: { busy: false, result: null, error: (e as Error).message.replace(/^Error invoking remote method '[^']+': (?:Error: )?/, '') } });
+    }
   },
 
   upsert: (row) => {

@@ -332,6 +332,22 @@ captured on 14 Sep 2026.
   (the hero shows it with a CONF pill after the name, so the name never shifts, and "Scanner: X" beneath when the scanner disagrees). Withdrawing
   one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
   The Data dialog lists them with a remove link.
+- Radio names (`src/shared/radioNames.ts`, `radio_names` table): a name of the user's own for a radio ID, since
+  the scanner's Radio ID list is cut to the display's 16 characters ("Chatterley Whitf") and radioid.net knows only
+  amateurs (asked for on 1 Oct 2026). Keyed by radio ID plus `system`: the scanner's system tag on a trunked object
+  (radio IDs are local to a trunked system), '' on a conventional one (`radioNameSystem`), and `pickRadioName`
+  takes the system's entry, else the '' one. Rows are never rewritten: `RADIO_SQL` joins the name into every
+  select as `radio_label`, and `toRow` puts it ahead of the alias and radioid.net in `radioCallsign`
+  (`radioName` '' then). `LogDb.nameRadio` upserts by key (the id is re-read by key: `last_insert_rowid()` does
+  not move on an upsert's update), `unnameRadio`, `radioNames`, `nameRadios` (bulk). IPC `log:radio-name` /
+  `log:radio-unname` / `log:radio-names` / `log:radio-import`; every change broadcasts `log:changed`, and the log
+  store carries `radioNames` beside `confirmations`, which is what the hero (`RadioParam`'s ✎ editor, keyed to
+  `h.systemTag` on a trunked header), `LogTable`'s `RadioNamer` (the row's radio, or one clicked in the traffic
+  list) and the Data dialog's Radios list read. `Import DSD+ radio list` (Data › Confirmed identities) parses
+  DSD+'s `DSDPlus.radios` (`src/shared/dsdRadios.ts`: protocol, network, talkgroup or -2, radio ID, priority,
+  mode, hits, last heard, then the quoted strings, the first non-empty one being the alias) and names every
+  radio with an alias on any system (DSD+ keys by its own network ID, not the scanner's tag). Not in the CSV
+  export, which is one object per frequency and code, not per radio.
 - Code matching: `detectedCode` (`src/shared/rr.ts`) is the reception's tone ("CTCSS 94.8", "DCS 023",
   "NAC 293") else its DMR colour code as "CC 12"; it is what `tone` on a row holds and what the
   lookups' tones are matched against (`rrToneMatches` for RadioReference, CTCSS for repeaters). A

@@ -5,7 +5,7 @@ import { ALPHA_TAG_MAX, EZSCAN_HEADER, LOG_CSV_HEADER, alphaTag, candidatesText,
 const base: ReceptionRow = {
   id: 1, startedAt: Date.UTC(2026, 8, 17, 8, 12, 1), endedAt: Date.UTC(2026, 8, 17, 8, 12, 17), frequencyHz: 453_062_500, mode: 'FM', signalType: 'DMR',
   name: 'University of Buckingham', system: '', scanlist: 'Tune Mode', objectType: 'Search', tgid: 1, radioId: 206, site: '', squelch: 'No Tone',
-  tone: 'CC 13', rssiPeak: 275, hits: 28, calls: 2, radioAlias: '', radioCallsign: null, radioName: null, licensee: 'University of Buckingham', source: 'RRDB', scannerName: '', wtr: 'University of Buckingham', rrName: 'University of Buckingham', rrSystem: '', rpt: '', rruk: 'UNIVERSITY OF BUCKINGHAM',
+  tone: 'CC 13', rssiPeak: 275, hits: 28, calls: 2, radioAlias: '', radioLabel: '', radioCallsign: null, radioName: null, licensee: 'University of Buckingham', source: 'RRDB', scannerName: '', wtr: 'University of Buckingham', rrName: 'University of Buckingham', rrSystem: '', rpt: '', rruk: 'UNIVERSITY OF BUCKINGHAM',
   distanceKm: 3.24, bearingDeg: 47, lat: 51.99, lon: -0.99,
   candidates: [
     { source: 'RRDB', name: 'University of Buckingham', detail: 'Bucks · CC 13 ✓', distanceKm: 3.24, bearingDeg: 47, lat: 51.99, lon: -0.99, match: true },
