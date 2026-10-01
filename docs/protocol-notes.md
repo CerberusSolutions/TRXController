@@ -189,7 +189,8 @@ the same layout (the title is matched on `-...Search...-`); unverified.
 
 Nine 16-bit values: sec, min, hour, mday, month(0-11), year(since 1900), wday, yday,
 isDST. The spec does not state byte order. The library defaults to little-endian
-(matching `stm` and the `A` frequency field). **Unverified.**
+(matching `stm` and the `A` frequency field). **Verified little-endian on the TRX-1e, 1 Oct
+2026**: the app sends it on connect and the scanner's clock followed the PC's. No response.
 
 ## `V` Version
 
