@@ -72,7 +72,7 @@ export default function DebugPanel() {
   const hexText = lcd
     ? [
         ...Array.from({ length: LCD_ROWS }, (_, r) => `${r}  ${toHex(lcd.raw.subarray(r * LCD_COLUMNS, (r + 1) * LCD_COLUMNS))}  |${lcd.lines[r] ?? ''}|`),
-        `icons ${toHex(lcd.icons.raw)}`,
+        `Icons ${toHex(lcd.icons.raw)}`,
       ].join('\n')
     : '';
   const copyHex = (): void => {
@@ -86,7 +86,7 @@ export default function DebugPanel() {
     <section className="flex h-full flex-col">
       <div className="mb-2 flex shrink-0 items-center justify-between">
         <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">Display bytes, 6 × 16 as sent by the scanner</span>
-        <span className="font-mono text-[11px] text-ink-3">{iconText && iconText !== '(none)' ? `icons: ${iconText}` : ''}</span>
+        <span className="font-mono text-[11px] text-ink-3">{iconText && iconText !== '(none)' ? `Icons: ${iconText}` : ''}</span>
       </div>
       {lcd ? (
         <div className="relative">

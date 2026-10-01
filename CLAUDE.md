@@ -209,7 +209,9 @@ captured on 14 Sep 2026.
   radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it. **The scanner's own
   alias wins**: on a trunked talkgroup the display's line 5 carries the alpha tag from the scanner's Radio ID list
   in place of its "RadioID:" line (captured on a P25 system, 1 Oct 2026: `P25 Sites` / `TGRP        psDr` / `UNID` /
-  `USAF Bases UK` / `Radio 7`, the radio ID itself coming from the `a` header). `parseScanScreen` /
+  `USAF Bases UK` / `Radio 7`, the radio ID itself coming from the `a` header; a TRX-2 on a DMR trunked system,
+  1 Oct 2026, alternates line 5 between the alias and `RadioID:       5` and line 3 between the talkgroup name and
+  its bare number, `100`, which `parseScanScreen` takes as the TGID on a TGRP object). `parseScanScreen` /
   `parseSearchScreen` return any free text on line 5 as `SignalDetails.radioAlias`; `holdDetails` keeps it while
   that radio talks and drops it when a "RadioID:" line names another; the hero shows it ahead of radioid.net; the
   tracker stores it as `radio_alias` on the row (`ReceptionRow.radioAlias`), and the row's `radioCallsign` is the
@@ -597,6 +599,9 @@ captured on 14 Sep 2026.
 
 - Frequency display must be large and legible; signal strength and mode likewise.
   These are the things Whistler's own app gets wrong.
+- **Labels are Title Case.** A label, caption, column head, pill or bracketed qualifier the user reads is
+  Title Case ("Icons: …", "TRUNK2 (Control Channel)", "Scanner off" stays as the scanner's own phrase), never all
+  lower case; running prose (help text, tooltips, messages) stays in sentence case. Asked for on 1 Oct 2026.
 - The scanner does not report "which channel" directly. `A` gives the frequency
   (and mode, RSSI); `a` gives object/system/talkgroup alpha tags but only while a
   transmission is in progress. Between transmissions only the LCD text and the

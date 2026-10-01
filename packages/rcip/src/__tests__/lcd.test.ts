@@ -122,6 +122,17 @@ describe('parseScanScreen', () => {
     expect(s!.mode).toBe('');
   });
 
+  it('reads the TRX-2 trunked talkgroup screens: bare TGID on line 3, alias and padded RadioID on line 5', () => {
+    // Captured on a TRX-2 (firmware 5.0) on a DMR trunked system, 1 Oct 2026: line 3 alternates the talkgroup name
+    // with its number, line 5 the alias with the radio ID, the two out of step with each other.
+    const named = parseScanScreen({ lines: ['', 'Trunk DMR', 'TGRP        psDr', 'SOT Council Sec', 'SOT Council', 'Chatterley Whitf'] });
+    expect(named).toMatchObject({ type: 'TGRP', name: 'SOT Council Sec', tgid: null, radioId: null, radioAlias: 'Chatterley Whitf' });
+    const numbered = parseScanScreen({ lines: ['', 'Trunk DMR', 'TGRP        psDr', '100', 'SOT Council', 'RadioID:       5'] });
+    expect(numbered).toMatchObject({ type: 'TGRP', name: null, tgid: 100, radioId: 5, radioAlias: null });
+    // A conventional object may be named by a number: that is still its name.
+    expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', '100', 'DMR   456.025000', ''] })).toMatchObject({ name: '100', tgid: null });
+  });
+
   it('never takes a RadioID, slot or tone line for an alias', () => {
     expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] })!.radioAlias).toBeNull();
     expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'Resound Ayles', 'DMR   456.025000', 'Slot:2  Color: 7'] })!.radioAlias).toBeNull();
@@ -231,5 +242,7 @@ describe('parseLcdIcons', () => {
   it('describes active icons', () => {
     expect(describeIcons(parseLcdIcons(0, 0, 0))).toBe('(none)');
     expect(describeIcons(parseLcdIcons(0x42, 0x01, 0x04))).toBe('RSSI 2/5 EXT Fn SIG FM');
+    // Trunk2 (icons3 bit 4) is named for what it means, in Title Case like every label.
+    expect(describeIcons(parseLcdIcons(0x4c, 0x00, 0x1d))).toContain('TRUNK2 (Control Channel)');
   });
 });
