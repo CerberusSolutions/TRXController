@@ -34,7 +34,12 @@ npm run build && npm start    # run the built app
 - **DMR user database**: download the user export from radioid.net
   (<https://radioid.net/static/user.csv>), then Data > Import. A radio ID you have given an alpha tag on
   the scanner itself (the Radio ID list of a trunked system in EZ Scan) shows that tag first, in the
-  hero and the log, since the scanner's own word outranks the database.
+  hero and the log, since the scanner's own word outranks the database. A name of your own outranks
+  both: ✎ beside the hero's Radio ID, or name the radio in an unfolded log entry (click a radio ID in
+  its traffic list to name that one). The scanner's list is cut to 16 characters; here "Chatterley
+  Whitfield Radio User 1" fits. On a trunked system the name is keyed to the system (radio 5 on one
+  system is not radio 5 on another); on a conventional channel it applies everywhere. Radios already
+  named in DSD+ come in with Data > Import DSD+ radio list (its `DSDPlus.radios` file).
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom
   (<https://static.ofcom.org.uk/static/radiolicensing/html/register/WTR.csv>), set your
   location in Data, then Data > Import WTR CSV. Heard frequencies then show the nearest licensees.
@@ -99,7 +104,8 @@ or type a name none of them offer. The confirmation is keyed to the frequency an
 code the row showed (and the talkgroup on a trunked object), so co-channel users stay apart. It
 outranks every lookup and the scanner's own programming: every log entry it fits is renamed
 with a green **CONF** pill, new entries take it as they arrive, and the hero shows it while the
-scanner is on the frequency. **remove** withdraws it. Data > Confirmed identities lists them all.
+scanner is on the frequency. **remove** withdraws it. Data > Confirmed identities lists them all,
+and the radio IDs you have named, each with a remove link.
 
 Codes count: a candidate whose tone or DMR colour code matches the one the scanner shows ("CC 12",
 "CTCSS 94.8", "NAC 293") is listed first and names the row whatever the lookup order; one whose code

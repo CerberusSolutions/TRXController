@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
@@ -13,6 +13,8 @@ import { readRepeaterCsv } from './identities/repeaters';
 import { MIN_WINDOW, SettingsStore } from './settings';
 import { DEFAULT_LOOKUPS, lookupEnabled, type LookupPref } from '../shared/sources';
 import type { NewConfirmation } from '../shared/confirm';
+import type { NewRadioName } from '../shared/radioNames';
+import { parseDsdRadios } from '../shared/dsdRadios';
 import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
@@ -111,6 +113,17 @@ function enrich(s: ScannerSnapshot): ScannerSnapshot {
 function confirmedFor(s: ScannerSnapshot): ScannerSnapshot['confirmed'] {
   const d = describeSnapshot(s);
   return db!.confirmationFor(s.status!.frequencyHz, d.tone, d.tgid);
+}
+
+/** A radio name as the renderer sent it, checked field by field. */
+function sanitizeRadioName(v: unknown): NewRadioName {
+  if (typeof v !== 'object' || v === null) throw new Error('Bad radio name');
+  const o = v as Record<string, unknown>;
+  const radioId = o['radioId'];
+  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
+  if (typeof radioId !== 'number' || !Number.isInteger(radioId) || radioId < 0) throw new Error('Bad radio ID');
+  if (!name) throw new Error('A radio name needs a name');
+  return { radioId, system: typeof o['system'] === 'string' ? o['system'].trim() : '', name };
 }
 
 /** A confirmation as the renderer sent it, checked field by field. */
@@ -335,6 +348,42 @@ function registerIpc(): void {
     broadcast(IPC.snapshot, enrich(session.getSnapshot()));
     broadcast(IPC.logChanged, null);
     return saved;
+  });
+  ipcMain.handle(IPC.logRadioNames, () => db?.radioNames() ?? []);
+  ipcMain.handle(IPC.logRadioName, (_e, n: unknown) => {
+    if (!db) throw new Error('No log');
+    const saved = db.nameRadio(sanitizeRadioName(n));
+    // Every row joins the name in, so every window's log reloads; the hero reads the list from the store.
+    broadcast(IPC.logChanged, null);
+    return saved;
+  });
+  ipcMain.handle(IPC.logRadioImport, async (): Promise<ImportResult | null> => {
+    if (!db) throw new Error('No log');
+    const res = await dialog.showOpenDialog({
+      title: 'Import DSD+ radio list (DSDPlus.radios)',
+      filters: [
+        { name: 'DSD+ radio list', extensions: ['radios', 'txt', 'csv'] },
+        { name: 'All files', extensions: ['*'] },
+      ],
+      properties: ['openFile'],
+    });
+    const file = res.filePaths[0];
+    if (res.canceled || !file) return null;
+    const { radios, skipped } = parseDsdRadios(await readFile(file, 'utf8'));
+    if (radios.length === 0) throw new Error('No radio entries found in that file');
+    const named = radios.filter((r) => r.alias !== '');
+    // DSD+ keys radios by its own network ID, not the scanner's system tag, so the names apply on any system; a
+    // name given from the log on one system still wins there.
+    const imported = db.nameRadios(named.map((r) => ({ radioId: r.radioId, system: '', name: r.alias })));
+    const name = file.split(/[\\/]/).pop() ?? file;
+    console.log(`[log] imported ${imported} radio names from ${file} (${radios.length - named.length} radios without an alias, ${skipped} other lines skipped)`);
+    broadcast(IPC.logChanged, null);
+    return { imported, skipped: radios.length - named.length + skipped, file: name };
+  });
+  ipcMain.handle(IPC.logRadioUnname, (_e, id: unknown) => {
+    if (!db || typeof id !== 'number') throw new Error('Bad radio name');
+    db.unnameRadio(id);
+    broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.logUnconfirm, (_e, id: unknown) => {
     if (!db || typeof id !== 'number') throw new Error('Bad confirmation');

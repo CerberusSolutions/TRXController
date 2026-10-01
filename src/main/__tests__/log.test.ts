@@ -410,6 +410,39 @@ describe('LogDb', () => {
     db.close();
   });
 
+  it('shows a radio by the name the user gave it, ahead of the scanner\'s alias and radioid.net, keyed to its system', () => {
+    const db = new LogDb(':memory:');
+    db.replaceDmrUsers([{ id: 5, callsign: 'G8XYZ', name: 'Ham Five', city: '', state: '', country: '' }], 'x', 1);
+    const base = { startedAt: 1000, endedAt: null, mode: 'NFM', signalType: 'DG', name: 'SOT Council Sec', system: 'SOT Council', scanlist: 'Trunk DMR', objectType: 'TGRP', tgid: 100, radioId: 5, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 1, calls: 1 };
+    const trunked = db.insert({ ...base, frequencyHz: 166_225_000, radioAlias: 'Chatterley Whitf' });
+    const conv = db.insert({ ...base, frequencyHz: 456_025_000, system: '', objectType: 'CONV', name: 'Shop', radioAlias: '' });
+    // Without a name of the user's: the scanner's alias, else radioid.net.
+    expect(db.get(trunked.id)).toMatchObject({ radioLabel: '', radioCallsign: 'Chatterley Whitf', radioName: '' });
+    expect(db.get(conv.id)).toMatchObject({ radioLabel: '', radioCallsign: 'G8XYZ', radioName: 'Ham Five' });
+    // A name keyed to the system applies there only; one keyed to any system applies everywhere the system one does not.
+    const sys = db.nameRadio({ radioId: 5, system: 'SOT Council', name: 'Chatterley Whitfield Radio User 1' }, 5000);
+    expect(sys).toMatchObject({ radioId: 5, system: 'SOT Council', name: 'Chatterley Whitfield Radio User 1', namedAt: 5000 });
+    expect(db.get(trunked.id)).toMatchObject({ radioLabel: 'Chatterley Whitfield Radio User 1', radioCallsign: 'Chatterley Whitfield Radio User 1', radioName: '', radioAlias: 'Chatterley Whitf' });
+    expect(db.get(conv.id)).toMatchObject({ radioLabel: '', radioCallsign: 'G8XYZ' });
+    db.nameRadio({ radioId: 5, system: '', name: 'Any radio five' });
+    expect(db.get(conv.id)).toMatchObject({ radioLabel: 'Any radio five', radioCallsign: 'Any radio five', radioName: '' });
+    expect(db.get(trunked.id)!.radioLabel).toBe('Chatterley Whitfield Radio User 1');
+    // Renaming replaces the entry with the same key; the paged select carries the name too.
+    const again = db.nameRadio({ radioId: 5, system: 'SOT Council', name: 'CW Radio 1' });
+    expect(again.id).toBe(sys.id);
+    expect(db.radioNames().map((n) => [n.system, n.name])).toEqual([['', 'Any radio five'], ['SOT Council', 'CW Radio 1']]);
+    expect(db.recent().find((r) => r.id === trunked.id)!.radioLabel).toBe('CW Radio 1');
+    // Forgetting the system name drops back to the any-system one, then to the alias.
+    db.unnameRadio(sys.id);
+    expect(db.get(trunked.id)!.radioLabel).toBe('Any radio five');
+    db.unnameRadio(db.radioNames()[0]!.id);
+    expect(db.get(trunked.id)).toMatchObject({ radioLabel: '', radioCallsign: 'Chatterley Whitf' });
+    // A bulk import (a DSD+ list) writes the named ones only.
+    expect(db.nameRadios([{ radioId: 16734046, system: '', name: 'CRO SFS 007' }, { radioId: 16734160, system: '', name: '' }])).toBe(1);
+    expect(db.radioNames()).toHaveLength(1);
+    db.close();
+  });
+
   it('stores the placement and the candidate list with the row', () => {
     const db = new LogDb(':memory:');
     const candidates = [

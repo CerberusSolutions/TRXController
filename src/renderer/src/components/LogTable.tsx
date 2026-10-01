@@ -3,6 +3,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
 import { formatPlace, point, type Units } from "../../../shared/geo";
 import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
+import { pickRadioName, radioNameSystem } from "../../../shared/radioNames";
 import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
@@ -246,7 +247,7 @@ const nameCell: Column = {
   render: (r) => (
     <span
       className="truncate font-sans text-[13px] text-ink"
-      title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (${r.radioAlias ? "the scanner's own alpha tag" : 'radioid.net'})`}
+      title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (${r.radioLabel ? "your name for it" : r.radioAlias ? "the scanner's own alpha tag" : "radioid.net"})`}
     >
       {r.name ||
         (r.radioCallsign ? (
@@ -381,9 +382,11 @@ function fmtStamp(ms: number): string {
  * What has been heard on the row's frequency, by tone / colour code and talkgroup: the users sharing
  * a channel tell apart by code, so this is what to confirm against.
  */
-function Traffic({ r }: { r: ReceptionRow }) {
+function Traffic({ r, onPick }: { r: ReceptionRow; onPick: (radioId: number) => void }) {
   const [groups, setGroups] = useState<TrafficGroup[] | null>(null);
   const rows = useLog((s) => s.rows);
+  const radioNames = useLog((s) => s.radioNames);
+  const system = radioNameSystem(r);
   // Refetched when the log changes (a new reception on the frequency), cheaply: one grouped query.
   const version = useMemo(() => rows.filter((x) => x.frequencyHz === r.frequencyHz).map((x) => `${x.id}:${x.calls}:${x.endedAt}:${x.name}`).join(), [rows, r.frequencyHz]);
   useEffect(() => {
@@ -416,10 +419,22 @@ function Traffic({ r }: { r: ReceptionRow }) {
           <span className="w-32 shrink-0 truncate text-ink-3" title="Last heard">
             {fmtStamp(g.lastAt)}
           </span>
-          <span className="min-w-0 flex-1 truncate text-ink-3" title={g.radioCount ? `${g.radioCount} radio ID${g.radioCount === 1 ? "" : "s"}` : undefined}>
+          <span className="min-w-0 flex-1 truncate text-ink-3" title={g.radioCount ? `${g.radioCount} radio ID${g.radioCount === 1 ? "" : "s"}: click one to give it a name` : undefined}>
             {g.radioCount > 0 && (
               <>
-                RID {g.radioIds.join(", ")}
+                RID{" "}
+                {g.radioIds.map((rid, j) => {
+                  const named = pickRadioName(radioNames, rid, system);
+                  return (
+                    <span key={rid}>
+                      {j > 0 ? ", " : ""}
+                      <button type="button" className="rounded px-0.5 hover:bg-panel hover:text-ink" title={named ? `${named.name} (your name for radio ${rid}): click to change it` : `Name radio ${rid}`} onClick={() => onPick(rid)}>
+                        {rid}
+                        {named ? <span className="font-sans text-[11px] text-ink-2"> {named.name}</span> : null}
+                      </button>
+                    </span>
+                  );
+                })}
                 {g.radioCount > g.radioIds.length ? ` +${g.radioCount - g.radioIds.length}` : ""}
               </>
             )}
@@ -454,6 +469,13 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
   const unconfirm = useLog((s) => s.unconfirm);
   const [other, setOther] = useState("");
   const [busy, setBusy] = useState(false);
+  // Which radio ID the name box below is for: the row's own, or one picked from the traffic list (which also puts the cursor in the box).
+  const [radio, setRadio] = useState<number | null>(r.radioId);
+  const [picks, setPicks] = useState(0);
+  const pick = (rid: number): void => {
+    setRadio(rid);
+    setPicks((n) => n + 1);
+  };
   const key = confirmationKey(r);
   const current: Confirmation | null = pickConfirmation(confirmations, r.frequencyHz, r.tone, r.tgid);
   const isCurrent = (source: string, name: string): boolean => current !== null && current.source === source && current.name === name;
@@ -561,8 +583,75 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
         </button>
         <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{keyText(key)}</span>
       </li>
-      <Traffic r={r} />
+      {radio !== null && <RadioNamer r={r} radioId={radio} busy={busy} run={run} focusKey={picks} />}
+      <Traffic r={r} onPick={pick} />
     </ul>
+  );
+}
+
+/**
+ * Name a radio ID: the scanner's own Radio ID list is cut to 16 characters and radioid.net knows only amateurs,
+ * so this is where "Chatterley Whitfield Radio User 1" goes. Keyed to the trunked system the ID belongs to
+ * ('' on a conventional object, where DMR radio IDs are global), and shown ahead of both from then on.
+ */
+function RadioNamer({ r, radioId, busy, run, focusKey }: { r: ReceptionRow; radioId: number; busy: boolean; run: (task: Promise<void>) => Promise<void>; focusKey: number }) {
+  const radioNames = useLog((s) => s.radioNames);
+  const nameRadio = useLog((s) => s.nameRadio);
+  const unnameRadio = useLog((s) => s.unnameRadio);
+  const system = radioNameSystem(r);
+  const current = pickRadioName(radioNames, radioId, system);
+  const [text, setText] = useState(current?.name ?? "");
+  const input = useRef<HTMLInputElement>(null);
+  // A different radio picked from the traffic list, or a name saved elsewhere, refills the box.
+  useEffect(() => setText(current?.name ?? ""), [radioId, current?.name]);
+  // A click on a radio ID in the traffic list puts the cursor here (never on unfolding, which would scroll the table).
+  useEffect(() => {
+    if (focusKey > 0) input.current?.select();
+  }, [focusKey, radioId]);
+  const btn = "shrink-0 rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink disabled:opacity-40";
+  const where = system ? `on ${system}` : "on any system";
+  // What the radio is known as without a name of yours: the scanner's own alpha tag, else radioid.net (the row's own radio only).
+  const known = radioId === r.radioId ? (r.radioAlias ? `scanner: ${r.radioAlias}` : !r.radioLabel && r.radioCallsign ? `radioid.net: ${r.radioCallsign}${r.radioName ? " " + r.radioName : ""}` : "") : "";
+  const save = (): void => {
+    const name = text.trim();
+    if (!name || (current && current.system === system && current.name === name)) return;
+    void run(nameRadio({ radioId, system, name }));
+  };
+  return (
+    <li className="flex min-w-0 items-center gap-2 py-px">
+      <span className={`w-9 shrink-0 rounded px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider ${SOURCE_PILL.RID}`} title="Radio ID">
+        RID
+      </span>
+      <span className="shrink-0 text-ink-2" title={`Radio ID ${radioId} ${where}`}>
+        {radioId}
+      </span>
+      <input
+        ref={input}
+        className="w-56 rounded border border-edge bg-panel px-1.5 py-px font-sans text-[11px] text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+        placeholder="Name this radio…"
+        value={text}
+        disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setText(current?.name ?? "");
+        }}
+      />
+      <button type="button" className={btn} disabled={busy || !text.trim() || (!!current && current.system === system && current.name === text.trim())} title={`Give radio ${radioId} ${where} this name. The hero, every log entry and the traffic list show it ahead of the scanner's own alpha tag and radioid.net`} onClick={save}>
+        name
+      </button>
+      {current && (
+        <>
+          <span className="shrink-0 font-sans text-[10px] font-bold text-green" title={`Named ${new Date(current.namedAt).toLocaleString()} ${current.system ? `on ${current.system}` : "on any system"}`}>
+            ✓ named
+          </span>
+          <button type="button" className={btn} disabled={busy} title="Forget this name: the entries go back to the scanner's alpha tag, else radioid.net" onClick={() => void run(unnameRadio(current.id))}>
+            remove
+          </button>
+        </>
+      )}
+      <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{[where, known].filter(Boolean).join(" · ")}</span>
+    </li>
   );
 }
 

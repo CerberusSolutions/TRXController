@@ -184,7 +184,9 @@ export interface ReceptionRow {
    * row's `radioCallsign` is this when set, and `radioName` is then ''.
    */
   radioAlias: string;
-  /** Callsign for radioId: the scanner's own alias when it showed one, else from the imported DMR user database. */
+  /** The name the user gave this radio ID (Data › Confirmed identities › Radios), '' when none: ahead of the alias and radioid.net in `radioCallsign`. */
+  radioLabel: string;
+  /** Callsign for radioId: the user's own name for it, else the scanner's alias when it showed one, else from the imported DMR user database. */
   radioCallsign: string | null;
   /** Name for radioId from the imported DMR user database, if known and no scanner alias stands in front of it. */
   radioName: string | null;
@@ -575,6 +577,10 @@ export const IPC = {
   logConfirm: 'log:confirm',
   logUnconfirm: 'log:unconfirm',
   logConfirmations: 'log:confirmations',
+  logRadioName: 'log:radio-name',
+  logRadioUnname: 'log:radio-unname',
+  logRadioNames: 'log:radio-names',
+  logRadioImport: 'log:radio-import',
   logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',

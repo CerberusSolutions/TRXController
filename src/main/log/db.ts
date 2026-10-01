@@ -6,12 +6,13 @@ import { DatabaseSync } from 'node:sqlite';
 import type { DayLog, DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater, RepeaterMatch, RrukEntry, TrafficGroup, WtrLicence, WtrMatch } from '../../shared/ipc';
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
+import type { NewRadioName, RadioName } from '../../shared/radioNames';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel } from '@trxcontroller/rcip';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias'> & { radioAlias?: string };
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias' | 'radioLabel'> & { radioAlias?: string };
 
 /** How far a heard frequency may be from a licensed one to count as the same channel. */
 export const WTR_TOLERANCE_HZ = 3_125;
@@ -19,9 +20,16 @@ export const WTR_TOLERANCE_HZ = 3_125;
 /** Newest activity first: open rows, then by last-heard, then by start. */
 const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.started_at DESC, r.id DESC';
 
+/**
+ * What a row shows for its radio ID: the user's own name for it (keyed to the row's system, else to any
+ * system), else the scanner's alias, else radioid.net's callsign; radioid.net's name only behind its callsign.
+ */
+const RADIO_SQL = `(SELECT n.name FROM radio_names n WHERE n.radio_id = r.radio_id AND (n.system = r.system OR n.system = '') ORDER BY n.system = '' LIMIT 1) AS radio_label,
+  COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name`;
+
 const ROW_SQL = `SELECT r.*,
   (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-  COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
+  ${RADIO_SQL}
   FROM receptions r LEFT JOIN dmr_users u ON u.id = r.radio_id`;
 
 export class LogDb {
@@ -134,6 +142,14 @@ export class LogDb {
         confirmed_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS confirmations_freq ON confirmations(frequency_hz);
+      CREATE TABLE IF NOT EXISTS radio_names (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        radio_id INTEGER NOT NULL,
+        system   TEXT NOT NULL DEFAULT '',
+        name     TEXT NOT NULL,
+        named_at INTEGER NOT NULL,
+        UNIQUE (radio_id, system)
+      );
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
         tg_dec   INTEGER NOT NULL,
@@ -309,6 +325,60 @@ export class LogDb {
     return changed;
   }
 
+  // --- Radio names -----------------------------------------------------------
+
+  /**
+   * Name a radio ID (on one trunked system, or on any with system ''), replacing an earlier name with the
+   * same key. Rows are not rewritten: every select joins the name in, so the whole log follows at once.
+   */
+  nameRadio(n: NewRadioName, now = Date.now()): RadioName {
+    this.db
+      .prepare(
+        `INSERT INTO radio_names (radio_id, system, name, named_at) VALUES (?, ?, ?, ?)
+         ON CONFLICT (radio_id, system) DO UPDATE SET name = excluded.name, named_at = excluded.named_at`,
+      )
+      .run(n.radioId, n.system, n.name, now);
+    // last_insert_rowid() does not move on the update half of an upsert, so the row is found by its key.
+    const id = Number((this.db.prepare('SELECT id FROM radio_names WHERE radio_id = ? AND system = ?').get(n.radioId, n.system) as { id: number }).id);
+    return this.radioName(id)!;
+  }
+
+  /** Name several radios in one transaction (a DSD+ radio list); returns how many were written. */
+  nameRadios(list: Iterable<NewRadioName>, now = Date.now()): number {
+    const ins = this.db.prepare(
+      `INSERT INTO radio_names (radio_id, system, name, named_at) VALUES (?, ?, ?, ?)
+       ON CONFLICT (radio_id, system) DO UPDATE SET name = excluded.name, named_at = excluded.named_at`,
+    );
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      for (const r of list) {
+        if (!r.name) continue;
+        ins.run(r.radioId, r.system, r.name, now);
+        n++;
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  /** Forget a radio name; the rows go back to the scanner's alias, else radioid.net. */
+  unnameRadio(id: number): void {
+    this.db.prepare('DELETE FROM radio_names WHERE id = ?').run(id);
+  }
+
+  radioName(id: number): RadioName | null {
+    const r = this.db.prepare('SELECT * FROM radio_names WHERE id = ?').get(id) as unknown as RawRadioName | undefined;
+    return r ? toRadioName(r) : null;
+  }
+
+  radioNames(): RadioName[] {
+    return (this.db.prepare('SELECT * FROM radio_names ORDER BY system, radio_id').all() as unknown as RawRadioName[]).map(toRadioName);
+  }
+
   // --- Traffic analysis ----------------------------------------------------
 
   /** What has been heard on `hz`, grouped by tone / colour code and talkgroup, busiest first. */
@@ -358,7 +428,7 @@ export class LogDb {
     const page = `SELECT * FROM receptions ${where} ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
     const sql = `SELECT r.*,
       (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-      COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
+      ${RADIO_SQL}
       FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
     const rows = before ? this.db.prepare(sql).all(before.endedAt, before.startedAt, before.id, limit) : this.db.prepare(sql).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
@@ -376,7 +446,7 @@ export class LogDb {
       ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
     const sql = `SELECT r.*,
       (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-      COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
+      ${RADIO_SQL}
       FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
     const rows = (this.db.prepare(sql).all(to, now, from, limit + 1) as unknown as Raw[]).map(toRow);
     const truncated = rows.length > limit;
@@ -815,8 +885,21 @@ interface Raw {
   calls: number;
   hits: number;
   radio_alias?: string | null;
+  radio_label?: string | null;
   radio_callsign: string | null;
   radio_name: string | null;
+}
+
+interface RawRadioName {
+  id: number;
+  radio_id: number;
+  system: string;
+  name: string;
+  named_at: number;
+}
+
+function toRadioName(r: RawRadioName): RadioName {
+  return { id: Number(r.id), radioId: Number(r.radio_id), system: r.system, name: r.name, namedAt: Number(r.named_at) };
 }
 
 function parseCandidates(json: string | null | undefined): ReceptionRow['candidates'] {
@@ -862,7 +945,9 @@ function toRow(r: Raw): ReceptionRow {
     calls: Number(r.calls),
     hits: Number(r.hits),
     radioAlias: r.radio_alias ?? '',
-    radioCallsign: r.radio_callsign ?? null,
-    radioName: r.radio_name ?? null,
+    radioLabel: r.radio_label ?? '',
+    // The user's own name for the radio stands in front of the alias and the callsign, and hides radioid.net's name.
+    radioCallsign: r.radio_label || (r.radio_callsign ?? null),
+    radioName: r.radio_label ? '' : (r.radio_name ?? null),
   };
 }

@@ -5,7 +5,10 @@ import { formatPlace } from '../../../shared/geo';
 import { candidatesFor } from '../../../shared/listed';
 import { detectedCode } from '../../../shared/rr';
 import { useIdentities } from '../store/identities';
+import { useLog } from '../store/log';
 import { useScanner } from '../store/scanner';
+import { pickRadioName } from '../../../shared/radioNames';
+import { useEffect, useState } from 'react';
 import SignalMeter from './SignalMeter';
 
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
@@ -46,6 +49,80 @@ function Param({ label, value, title, minCh, flex }: { label: string; value: str
       <span className={`font-mono text-sm text-ink-2 ${flex ? 'truncate' : ''}`} style={minCh ? { minWidth: `${minCh}ch` } : undefined}>
         {value}
       </span>
+    </div>
+  );
+}
+
+/**
+ * The Radio ID parameter with a pencil: the name the user gave the radio (Data › Confirmed identities › Radios)
+ * ahead of the scanner's own alpha tag and radioid.net, and a box to give it one without leaving the hero.
+ */
+function RadioParam({ radioId, system, alias, user, location }: { radioId: number | null; system: string; alias: string | null; user: { callsign: string; name: string } | null; location: string }) {
+  const radioNames = useLog((s) => s.radioNames);
+  const nameRadio = useLog((s) => s.nameRadio);
+  const named = pickRadioName(radioNames, radioId, system);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  // The scanner moving to another radio closes the box: a name typed for one must never land on the next.
+  useEffect(() => setEditing(false), [radioId, system]);
+  const userText = user ? `${user.callsign}${user.name ? ' ' + user.name : ''}` : null;
+  const value = named ? [named.name, alias].filter(Boolean).join(' · ') : alias ? [alias, userText].filter(Boolean).join(' · ') : user ? [userText, location].filter(Boolean).join(' · ') : radioId !== null ? formatId(radioId) : null;
+  const title = [
+    radioId !== null ? formatId(radioId) : '',
+    named ? `${named.name} is your name for this radio${named.system ? ` on ${named.system}` : ''}` : '',
+    alias ? `${alias} is the scanner's own alpha tag for it` : '',
+    userText ? `radioid.net: ${userText}${location ? ' · ' + location : ''}` : '',
+    !named && !alias && !user ? 'Radio ID (import the radioid.net database to resolve callsigns)' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  if (!value) return null;
+  const save = (): void => {
+    const name = text.trim();
+    if (name && radioId !== null) void nameRadio({ radioId, system, name });
+    setEditing(false);
+  };
+  return (
+    <div className="flex min-w-[6rem] max-w-[26rem] shrink items-end gap-1 whitespace-nowrap" title={editing ? undefined : title}>
+      {editing && radioId !== null ? (
+        <div className="flex min-w-0 flex-col">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Radio ID {formatId(radioId)}{system ? ` on ${system}` : ''}</span>
+          <input
+            autoFocus
+            className="w-56 rounded border border-edge bg-panel px-1.5 py-px font-sans text-[12px] text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+            placeholder="Name this radio…"
+            value={text}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') setEditing(false);
+              e.stopPropagation();
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Radio ID</span>
+            <span className="truncate font-mono text-sm text-ink-2">{value}</span>
+          </div>
+          {radioId !== null && (
+            <button
+              type="button"
+              className="shrink-0 rounded px-1 text-[11px] leading-5 text-ink-3 hover:bg-panel-2 hover:text-ink"
+              title={named ? `Change your name for radio ${formatId(radioId)}` : `Give radio ${formatId(radioId)} a name of your own (shown ahead of the scanner's alpha tag and radioid.net)`}
+              onClick={() => {
+                setText(named?.name ?? '');
+                setEditing(true);
+              }}
+            >
+              ✎
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -104,24 +181,8 @@ export default function FrequencyHero() {
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
       {(radioId !== null || radioAlias) && (
-        <Param
-          label="Radio ID"
-          value={
-            radioAlias
-              ? [radioAlias, radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : null].filter(Boolean).join(' · ')
-              : radioUser
-                ? [`${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}`, location].filter(Boolean).join(' · ')
-                : formatId(radioId!)
-          }
-          title={
-            radioAlias
-              ? `${radioId !== null ? formatId(radioId) + ' · ' : ''}${radioAlias} is the scanner's own alpha tag for this radio${radioUser ? ` · radioid.net: ${radioUser.callsign} ${radioUser.name}` : ''}`
-              : radioUser
-                ? `${formatId(radioId!)} · ${radioUser.callsign} ${radioUser.name}${location ? ' · ' + location : ''}`
-                : 'Radio ID (import the radioid.net database to resolve callsigns)'
-          }
-          flex={!!radioUser || !!radioAlias}
-        />
+        // Radio IDs are local to a trunked system, so a name is keyed to the system tag there and to nothing on a conventional object.
+        <RadioParam radioId={radioId} system={h && h.recordingType === 1 ? h.systemTag : ''} alias={radioAlias} user={radioUser} location={location} />
       )}
       {slotText && <Param label="Slot" value={slotText} title="DMR time slot and colour code" />}
     </>

@@ -261,6 +261,23 @@ export default function HelpDialog() {
                 ))}
                 <li className="rounded-lg border border-edge bg-panel-2 p-3">
                   <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold text-ink">Your own radio names</span>
+                    <span className="shrink-0 font-mono text-[11px] text-ink-3">DSDPlus.radios · optional</span>
+                  </div>
+                  <p className="mt-1 text-ink-3">
+                    The scanner's own Radio ID list is cut to 16 characters and radioid.net knows only amateurs, so a radio ID can be given a name of your
+                    own: ✎ beside the hero's Radio ID, or unfold a log entry and name the radio there (click a radio ID in its traffic list to name
+                    that one). On a trunked system the name is keyed to the system; on a conventional channel it applies everywhere. It is shown ahead of
+                    the scanner's alpha tag and radioid.net in the hero, the log and the traffic list.
+                  </p>
+                  <p className="mt-2">
+                    <span className="text-ink-3">Then: </span>
+                    Already named radios in DSD+? Data › Confirmed identities › <b className="text-ink">Import DSD+ radio list</b> reads its DSDPlus.radios file (in the DSD+
+                    folder) and names every radio it has an alias for. Data › Confirmed identities lists them with a remove link.
+                  </p>
+                </li>
+                <li className="rounded-lg border border-edge bg-panel-2 p-3">
+                  <div className="flex items-baseline justify-between gap-3">
                     <span className="font-semibold text-ink">RadioReference UK (online)</span>
                     <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://radioreferenceuk.co.uk/" target="_blank" rel="noreferrer">
                       radioreferenceuk.co.uk

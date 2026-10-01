@@ -29,6 +29,7 @@ import {
   type ClockStatus,
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
+import type { NewRadioName, RadioName } from '../shared/radioNames';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -74,6 +75,12 @@ const api = {
   logConfirm: (c: NewConfirmation): Promise<Confirmation> => ipcRenderer.invoke(IPC.logConfirm, c),
   logUnconfirm: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logUnconfirm, id),
   logConfirmations: (): Promise<Confirmation[]> => ipcRenderer.invoke(IPC.logConfirmations),
+  /** Give a radio ID (on one trunked system, or any) a name of your own; every row and the hero show it ahead of the scanner's alias and radioid.net. */
+  logRadioName: (n: NewRadioName): Promise<RadioName> => ipcRenderer.invoke(IPC.logRadioName, n),
+  logRadioUnname: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logRadioUnname, id),
+  logRadioNames: (): Promise<RadioName[]> => ipcRenderer.invoke(IPC.logRadioNames),
+  /** Pick a DSD+ radio list (DSDPlus.radios) and name every radio it carries an alias for, on any system. */
+  logRadioImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.logRadioImport),
   /** What has been heard on a frequency, grouped by tone / colour code and talkgroup. */
   logTraffic: (hz: number): Promise<TrafficGroup[]> => ipcRenderer.invoke(IPC.logTraffic, hz),
   onLogUpsert: (cb: (row: ReceptionRow) => void): (() => void) => {
