@@ -16,6 +16,7 @@ function snap(over: { rf?: boolean; hz?: number; lcd?: string[] }): ScannerSnaps
   const hz = over.hz ?? 145_637_500;
   data[11] = hz & 0xff; data[12] = (hz >> 8) & 0xff; data[13] = (hz >> 16) & 0xff; data[14] = (hz >>> 24) & 0xff;
   return {
+    clock: { sentAt: null, order: 'le', verified: null, scannerTime: null, offsetS: null },
     link: { status: 'connected', port: 'COM7', error: null, stall: null },
     power: null,
     version: null,

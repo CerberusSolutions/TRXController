@@ -18,8 +18,9 @@ import {
   type Lcd,
   type Status,
   type Version,
+  setClockFromDate,
 } from '@trxcontroller/rcip';
-import type { LinkStatus, ScannerSnapshot } from '../../shared/ipc';
+import type { LinkStatus, ScannerSnapshot, ClockStatus } from '../../shared/ipc';
 import { ScannerLink } from './link';
 import { resumeScan as resumeScanMacro, tuneTo as tuneToMacro, type MacroHost } from './macros';
 import type { Transport, TransportFactory } from './transport';
@@ -38,7 +39,16 @@ export interface SessionOptions {
   onSnapshot?: (s: ScannerSnapshot) => void;
   onCcDump?: (line: string) => void;
   log?: (msg: string) => void;
+  /** Asked once per connection: set the scanner's clock from this PC as soon as it answers? */
+  clockOnConnect?: () => boolean;
+  /** The PC's clock (tests). */
+  now?: () => Date;
 }
+
+/** How far the scanner's clock may sit from the PC's, as read off a transmission's recording header, and still count as set. */
+export const CLOCK_TOLERANCE_S = 120;
+
+const noClock = (): ClockStatus => ({ sentAt: null, order: 'le', verified: null, scannerTime: null, offsetS: null });
 
 export class ScannerSession {
   private link: ScannerLink | null = null;
@@ -103,7 +113,49 @@ export class ScannerSession {
     }
     this.snapshot = { ...this.snapshot, version: safe(() => parseVersion(v.data)) ?? null };
     this.setLink('connected', path, null);
+    if (this.opts.clockOnConnect?.()) await this.setClock().catch((e: unknown) => this.opts.log?.(`clock set failed: ${(e as Error).message}`));
     this.startPolling();
+  }
+
+  /**
+   * Send the PC's time to the scanner (`t`, no reply). The byte order is unverified in the spec, so the send is
+   * recorded and the next transmission's recording header, which carries the scanner's clock, checks it
+   * (`checkClock`): a reading far off after a little-endian send is retried big-endian once.
+   */
+  async setClock(order: 'le' | 'be' = 'le'): Promise<ClockStatus> {
+    if (!this.link) throw new Error('Not connected');
+    const d = (this.opts.now ?? (() => new Date()))();
+    await this.link.send(setClockFromDate(d, { byteOrder: order }));
+    this.clockRetried = order === 'be';
+    this.lastStm = this.snapshot.active?.header?.startTime.iso ?? null;
+    this.snapshot = { ...this.snapshot, clock: { sentAt: d.getTime(), order, verified: null, scannerTime: null, offsetS: null }, updatedAt: Date.now() };
+    this.opts.log?.(`clock set to ${d.toISOString()} (${order === 'le' ? 'little' : 'big'}-endian)`);
+    this.publish();
+    return this.snapshot.clock;
+  }
+
+  private clockRetried = false;
+  private lastStm: string | null = null;
+
+  /** A new transmission after a clock set: its recording header's start time is the scanner's clock. */
+  private checkClock(active: ActiveChannel | null): ClockStatus {
+    const c = this.snapshot.clock;
+    const iso = active?.header?.startTime.iso ?? null;
+    if (c.sentAt === null || c.verified !== null || !iso || iso === this.lastStm) return c;
+    this.lastStm = iso;
+    const now = (this.opts.now ?? (() => new Date()))();
+    // A transmission already running when the clock was sent still carries the old time: wait for the next.
+    if (now.getTime() < c.sentAt + 1000) return c;
+    const offsetS = (new Date(iso).getTime() - now.getTime()) / 1000;
+    if (!Number.isFinite(offsetS)) return c;
+    const ok = Math.abs(offsetS) <= CLOCK_TOLERANCE_S;
+    this.opts.log?.(`scanner clock reads ${iso}, ${offsetS >= 0 ? '+' : ''}${offsetS.toFixed(0)} s from the PC: ${ok ? 'set' : c.order === 'le' && !this.clockRetried ? 'retrying big-endian' : 'not set'}`);
+    if (!ok && c.order === 'le' && !this.clockRetried) {
+      this.clockRetried = true;
+      void this.setClock('be').catch(() => undefined);
+      return c;
+    }
+    return { ...c, verified: ok, scannerTime: iso, offsetS };
   }
 
   async disconnect(publish = true): Promise<void> {
@@ -218,6 +270,7 @@ export class ScannerSession {
         lcd,
         status,
         active,
+        clock: this.checkClock(active),
         stats: { ...link.stats },
         updatedAt: Date.now(),
       };
@@ -247,7 +300,7 @@ export class ScannerSession {
       }
       case 'a': {
         const active = safe(() => parseActiveChannel(frame.data));
-        if (active) { next.active = active; changed = true; }
+        if (active) { next.active = active; next.clock = this.checkClock(active); changed = true; }
         break;
       }
       case 'P':
@@ -310,6 +363,7 @@ export class ScannerSession {
 
 export function emptySnapshot(): ScannerSnapshot {
   return {
+    clock: noClock(),
     link: { status: 'disconnected', port: null, error: null, stall: null },
     power: null,
     version: null,

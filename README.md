@@ -134,6 +134,11 @@ Data > Scan timeout stops a dead carrier or a stuck beacon eating the session: a
 number of seconds on one carrier in Scan mode the app presses ► for you and scanning resumes.
 Searches and Tune Mode are never nudged.
 
+Data > Scanner clock sets the scanner's clock from the PC each time it connects (untick to leave it
+alone), or on demand with **Set clock now**; the next transmission's time stamp confirms the scanner
+took it. The protocol's Clock Set command gives no reply and does not state its byte order, so the app
+checks, and tries the other order once if the first reading is far out.
+
 ## Windows installer
 
 ```

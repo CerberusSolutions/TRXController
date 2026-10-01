@@ -427,6 +427,18 @@ captured on 14 Sep 2026.
   changes). Wired in main's `onSnapshot`; a nudge is logged as `[scan] … held for N s: resuming`.
   Searches and Tune Mode are left alone: sitting on a signal is what they are for.
 
+## Scanner clock
+
+- `settings.clockSync` (Data dialog "Scanner clock", default on) sends the PC's time to the scanner (`t` Clock Set,
+  `setClockFromDate`, no reply) as soon as it answers the version request on each connect (`SessionOptions.clockOnConnect`),
+  and "Set clock now" (`scanner:clock-set` IPC, `ScannerSession.setClock`) sends it on demand. The spec leaves the byte
+  order of the nine 16-bit fields unstated, so the first send is little-endian and `checkClock` reads the scanner's clock
+  back off the next transmission's recording header (its start time is the scanner's local time): within
+  `CLOCK_TOLERANCE_S` (120 s) it is `verified`; far off after a little-endian send, the send is repeated big-endian once;
+  off again, `verified` is false and the dialog asks for a report. A transmission already running when the clock was sent
+  carries the old time, so only a new header (a changed start time) after the send counts. `ScannerSnapshot.clock`
+  (`ClockStatus`) carries it all; the dialog shows the state in words. Not yet tried on hardware (1 Oct 2026).
+
 ## Band tab (channel occupancy)
 
 - `src/renderer/src/store/band.ts` accumulates one bin per frequency the scanner visits
