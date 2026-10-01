@@ -34,7 +34,7 @@ const row = (o: Partial<ReceptionRow>): ReceptionRow => ({
   rssiPeak: 0,
   calls: 1,
   hits: 1,
-  radioCallsign: null,
+  radioAlias: '', radioCallsign: null,
   radioName: null,
   ...o,
 });

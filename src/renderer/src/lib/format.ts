@@ -125,7 +125,7 @@ export function holdDetails(prev: HeldDetails | null, s: ScannerSnapshot, now = 
   const kept = prev && prev.frequencyHz === status.frequencyHz ? prev : null;
   if (!live) return kept && now - kept.liveAt < HOLD_GRACE_MS ? kept : null;
   const fresh = signalDetails(s.lcd, status);
-  const base: HeldDetails = kept ?? { frequencyHz: status.frequencyHz, liveAt: now, tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null, radioUser: null };
+  const base: HeldDetails = kept ?? { frequencyHz: status.frequencyHz, liveAt: now, tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null, radioAlias: null, radioUser: null };
   const radioId = fresh?.radioId ?? base.radioId;
   const radioUser = s.radioUser && s.radioUser.id === radioId ? s.radioUser : base.radioUser && base.radioUser.id === radioId ? base.radioUser : null;
   if (!fresh) return { ...base, liveAt: now, radioUser };
@@ -139,5 +139,8 @@ export function holdDetails(prev: HeldDetails | null, s: ScannerSnapshot, now = 
     colorCode: fresh.colorCode ?? base.colorCode,
     detectedTone: fresh.detectedTone ?? base.detectedTone,
     toneFlag: fresh.toneFlag ?? base.toneFlag,
+    // The scanner's alias for the radio replaces its "RadioID:" line, so it is kept while that radio talks and
+    // dropped when a "RadioID:" line names a different one.
+    radioAlias: fresh.radioAlias ?? (fresh.radioId !== null && fresh.radioId !== base.radioId ? null : base.radioAlias),
   };
 }

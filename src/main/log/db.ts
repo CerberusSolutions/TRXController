@@ -11,7 +11,7 @@ import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel } from '@trxcontroller/rcip';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName'>;
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias'> & { radioAlias?: string };
 
 /** How far a heard frequency may be from a licensed one to count as the same channel. */
 export const WTR_TOLERANCE_HZ = 3_125;
@@ -21,7 +21,7 @@ const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.st
 
 const ROW_SQL = `SELECT r.*,
   (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-  u.callsign AS radio_callsign, u.name AS radio_name
+  COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
   FROM receptions r LEFT JOIN dmr_users u ON u.id = r.radio_id`;
 
 export class LogDb {
@@ -168,6 +168,7 @@ export class LogDb {
     if (!cols.includes('candidates')) this.db.exec("ALTER TABLE receptions ADD COLUMN candidates TEXT NOT NULL DEFAULT '[]'");
     if (!cols.includes('lat')) this.db.exec('ALTER TABLE receptions ADD COLUMN lat REAL');
     if (!cols.includes('lon')) this.db.exec('ALTER TABLE receptions ADD COLUMN lon REAL');
+    if (!cols.includes('radio_alias')) this.db.exec("ALTER TABLE receptions ADD COLUMN radio_alias TEXT NOT NULL DEFAULT ''");
     const ccols = (this.db.prepare('PRAGMA table_info(confirmations)').all() as { name: string }[]).map((c) => c.name);
     if (!ccols.includes('lat')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lat REAL');
     if (!ccols.includes('lon')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lon REAL');
@@ -178,14 +179,14 @@ export class LogDb {
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
            object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rruk,
-           distance_km, bearing_deg, lat, lon, candidates, rssi_peak, calls)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           distance_km, bearing_deg, lat, lon, candidates, rssi_peak, calls, radio_alias)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
         r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
         r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '',
-        r.distanceKm ?? null, r.bearingDeg ?? null, r.lat ?? null, r.lon ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1,
+        r.distanceKm ?? null, r.bearingDeg ?? null, r.lat ?? null, r.lon ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1, r.radioAlias ?? '',
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -199,6 +200,7 @@ export class LogDb {
       tgid: 'tgid', radioId: 'radio_id', site: 'site', squelch: 'squelch', tone: 'tone', licensee: 'licensee', source: 'source',
       scannerName: 'scanner_name', wtr: 'wtr', rrName: 'rr_name', rrSystem: 'rr_system', rpt: 'rpt', rruk: 'rruk',
       distanceKm: 'distance_km', bearingDeg: 'bearing_deg', lat: 'lat', lon: 'lon', candidates: 'candidates', rssiPeak: 'rssi_peak', calls: 'calls',
+      radioAlias: 'radio_alias',
     };
     for (const [k, v] of Object.entries(r)) {
       const col = map[k];
@@ -356,7 +358,7 @@ export class LogDb {
     const page = `SELECT * FROM receptions ${where} ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
     const sql = `SELECT r.*,
       (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-      u.callsign AS radio_callsign, u.name AS radio_name
+      COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
       FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
     const rows = before ? this.db.prepare(sql).all(before.endedAt, before.startedAt, before.id, limit) : this.db.prepare(sql).all(limit);
     return (rows as unknown as Raw[]).map(toRow);
@@ -374,7 +376,7 @@ export class LogDb {
       ORDER BY COALESCE(ended_at, 9223372036854775807) DESC, started_at DESC, id DESC LIMIT ?`;
     const sql = `SELECT r.*,
       (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
-      u.callsign AS radio_callsign, u.name AS radio_name
+      COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name
       FROM (${page}) r LEFT JOIN dmr_users u ON u.id = r.radio_id ${ORDER_SQL}`;
     const rows = (this.db.prepare(sql).all(to, now, from, limit + 1) as unknown as Raw[]).map(toRow);
     const truncated = rows.length > limit;
@@ -812,6 +814,7 @@ interface Raw {
   rssi_peak: number;
   calls: number;
   hits: number;
+  radio_alias?: string | null;
   radio_callsign: string | null;
   radio_name: string | null;
 }
@@ -858,6 +861,7 @@ function toRow(r: Raw): ReceptionRow {
     rssiPeak: Number(r.rssi_peak),
     calls: Number(r.calls),
     hits: Number(r.hits),
+    radioAlias: r.radio_alias ?? '',
     radioCallsign: r.radio_callsign ?? null,
     radioName: r.radio_name ?? null,
   };

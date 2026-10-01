@@ -203,7 +203,15 @@ captured on 14 Sep 2026.
   and `calls` move on, peak RSSI is the max. One conversation, one row. Rows are ordered
   by last activity, open rows first. Clearing the log resets the merge memory.
 - DMR radio IDs resolve to callsign/name via the `dmr_users` table, imported from the
-  radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it.
+  radioid.net CSV/JSON export (Data menu). Snapshots carry `radioUser`; log rows join it. **The scanner's own
+  alias wins**: on a trunked talkgroup the display's line 5 carries the alpha tag from the scanner's Radio ID list
+  in place of its "RadioID:" line (captured on a P25 system, 1 Oct 2026: `P25 Sites` / `TGRP        psDr` / `UNID` /
+  `USAF Bases UK` / `Radio 7`, the radio ID itself coming from the `a` header). `parseScanScreen` /
+  `parseSearchScreen` return any free text on line 5 as `SignalDetails.radioAlias`; `holdDetails` keeps it while
+  that radio talks and drops it when a "RadioID:" line names another; the hero shows it ahead of radioid.net; the
+  tracker stores it as `radio_alias` on the row (`ReceptionRow.radioAlias`), and the row's `radioCallsign` is the
+  alias when set (`COALESCE` in the selects, `radioName` then ''), so the log, the Name column and the tooltips show
+  the scanner's word first.
 - Ofcom Wireless Telegraphy Register: `Data > Import WTR CSV` streams the export and keeps
   25-1300 MHz, Live, channel width <= 200 kHz (drops fixed links, radar, AIS, satellite),
   collapsing the T (base transmits) and R (base receives) rows and duplicates of the same

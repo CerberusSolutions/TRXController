@@ -36,7 +36,7 @@ const DATA_SOURCES = [
     size: 'about 20 MB',
     url: 'https://radioid.net/static/user.csv',
     then: 'Data › Import radioid.net CSV or JSON….',
-    gives: 'Turns a DMR radio ID into a callsign and name on amateur DMR transmissions.',
+    gives: 'Turns a DMR radio ID into a callsign and name on amateur DMR transmissions. A radio ID with an alpha tag on the scanner\'s own Radio ID list shows that tag instead.',
   },
 ] as const;
 

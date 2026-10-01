@@ -178,9 +178,15 @@ export interface ReceptionRow {
   calls: number;
   /** Number of receptions logged on this frequency, including this one. */
   hits: number;
-  /** Callsign for radioId from the imported DMR user database, if known. */
+  /**
+   * The alpha tag the scanner itself showed for the radio ID (the Radio ID list a user programs on a trunked
+   * system), '' when it showed none. It is the scanner's own word, so it outranks the radioid.net lookup: the
+   * row's `radioCallsign` is this when set, and `radioName` is then ''.
+   */
+  radioAlias: string;
+  /** Callsign for radioId: the scanner's own alias when it showed one, else from the imported DMR user database. */
   radioCallsign: string | null;
-  /** Name for radioId from the imported DMR user database, if known. */
+  /** Name for radioId from the imported DMR user database, if known and no scanner alias stands in front of it. */
   radioName: string | null;
 }
 
