@@ -437,7 +437,8 @@ captured on 14 Sep 2026.
   `CLOCK_TOLERANCE_S` (120 s) it is `verified`; far off after a little-endian send, the send is repeated big-endian once;
   off again, `verified` is false and the dialog asks for a report. A transmission already running when the clock was sent
   carries the old time, so only a new header (a changed start time) after the send counts. `ScannerSnapshot.clock`
-  (`ClockStatus`) carries it all; the dialog shows the state in words. Not yet tried on hardware (1 Oct 2026).
+  (`ClockStatus`) carries it all; the dialog shows the state in words. Verified on the author's TRX-1e, 1 Oct 2026: the
+  little-endian send set the clock, so the big-endian retry is a safety net for other firmware, not the expected path.
 
 ## Band tab (channel occupancy)
 
