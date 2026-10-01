@@ -140,7 +140,8 @@ export function holdDetails(prev: HeldDetails | null, s: ScannerSnapshot, now = 
     detectedTone: fresh.detectedTone ?? base.detectedTone,
     toneFlag: fresh.toneFlag ?? base.toneFlag,
     // The scanner's alias for the radio replaces its "RadioID:" line, so it is kept while that radio talks and
-    // dropped when a "RadioID:" line names a different one.
-    radioAlias: fresh.radioAlias ?? (fresh.radioId !== null && fresh.radioId !== base.radioId ? null : base.radioAlias),
+    // dropped when a "RadioID:" line names a different one. The first "RadioID:" line of the reception names the
+    // radio the alias was shown for (the display alternates the two), so it is kept when no ID was held yet.
+    radioAlias: fresh.radioAlias ?? (fresh.radioId !== null && base.radioId !== null && fresh.radioId !== base.radioId ? null : base.radioAlias),
   };
 }

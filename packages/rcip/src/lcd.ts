@@ -176,6 +176,9 @@ export function parseScanObjectLine(line: string): ScanObjectLine | null {
  * system name / and, when the radio ID is one the user has given an alpha tag on the scanner's
  * Radio ID list, that tag on line 5 in place of the "RadioID:" line ("Radio 7", captured on a
  * TRX-1e on a P25 system, 1 Oct 2026). Any other free text on line 5 is taken as that alias.
+ * A TRX-2 (firmware 5.0, DMR trunked system, 1 Oct 2026) alternates line 3 between the talkgroup
+ * name and the bare talkgroup number ("SOT Council Sec" / "100", no "TGID:" prefix) and line 5
+ * between the alias and "RadioID:       5", so on a TGRP object a line 3 of digits only is the TGID.
  */
 export interface ScanScreen extends SignalDetails {
   scanlist: string;
@@ -188,6 +191,8 @@ export interface ScanScreen extends SignalDetails {
 }
 
 const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
+/** The bare talkgroup number a TRX-2 shows on line 3 of a trunked talkgroup, in turn with its name. */
+const BARE_TGID_RE = /^\d{1,8}$/;
 const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
 const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
 const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
@@ -243,15 +248,18 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
   const l4 = (lcd.lines[4] ?? '').trim();
   const l5 = (lcd.lines[5] ?? '').trim();
   const tg = TGID_RE.exec(l3);
+  const bareTg = obj.type === 'TGRP' && BARE_TGID_RE.test(l3) ? Number(l3) : null;
   const mf = MODE_FREQ_RE.exec(l4);
+  const details = parseSignalDetails([l3, l5]);
   return {
     scanlist: (lcd.lines[1] ?? '').trim(),
     type: obj.type,
     flags: obj.flags,
-    name: tg ? null : l3 || null,
+    name: tg || bareTg !== null ? null : l3 || null,
     mode: mf?.[1] ?? '',
     frequencyText: mf?.[2] ?? '',
-    ...parseSignalDetails([l3, l5]),
+    ...details,
+    tgid: details.tgid ?? bareTg,
     radioAlias: l5 && !isDetailLine(l5) ? l5 : null,
   };
 }
@@ -346,7 +354,7 @@ export function describeIcons(icons: LcdIcons): string {
   if (icons.if) on.push('IF');
   // Trunk2 is lit while the scanner sits on a trunked system's control channel and clear during a voice call
   // (TRX-1e on a P25 site, 1 Oct 2026: icons 4C 00 1D parked on the control channel, 4D 40 0E on a call).
-  if (icons.trunk2) on.push('TRUNK2 (control channel)');
+  if (icons.trunk2) on.push('TRUNK2 (Control Channel)');
   if (icons.pri) on.push('PRI');
   if (icons.trunkS) on.push('TRUNKS');
   return on.length ? on.join(' ') : '(none)';

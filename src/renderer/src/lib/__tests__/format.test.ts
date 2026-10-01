@@ -82,6 +82,18 @@ describe('holdDetails', () => {
     expect(held?.radioId).toBe(16734037);
   });
 
+  it('keeps the alias when the reception\'s first RadioID line follows it (TRX-2 trunked DMR)', () => {
+    // Captured on a TRX-2, 1 Oct 2026: the alias screen came first, then "RadioID:       5" for the same radio.
+    const ALIAS = ['', 'Trunk DMR', 'TGRP        psDr', 'SOT Council Sec', 'SOT Council', 'Chatterley Whitf'];
+    const NUMBER = ['', 'Trunk DMR', 'TGRP        psDr', '100', 'SOT Council', 'RadioID:       5'];
+    let held = holdDetails(null, snap({ lcd: ALIAS, mode: 0x0a }), 1000);
+    expect(held).toMatchObject({ radioAlias: 'Chatterley Whitf', radioId: null, tgid: null });
+    held = holdDetails(held, snap({ lcd: NUMBER, mode: 0x0a }), 1100);
+    expect(held).toMatchObject({ radioAlias: 'Chatterley Whitf', radioId: 5, tgid: 100 });
+    held = holdDetails(held, snap({ lcd: ['', 'Trunk DMR', 'TGRP        psDr', '100', 'SOT Council', 'RadioID:       6'], mode: 0x0a }), 1200);
+    expect(held).toMatchObject({ radioAlias: null, radioId: 6 });
+  });
+
   it('starts afresh when the frequency changes', () => {
     let held = holdDetails(null, snap({ lcd: TG }), 1000);
     held = holdDetails(held, snap({ lcd: RID, hz: 145_650_000 }), 1100);

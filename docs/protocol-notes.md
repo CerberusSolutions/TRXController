@@ -134,6 +134,13 @@ For DMR objects the display alternates between two screens: line 3 `TGID:       
 with line 5 `RadioID:     104`, and line 3 the object name with line 5
 `Slot:2  Color: 7`. Line 4 reads `DMR   456.025000`. `parseScanScreen` handles both.
 
+A trunked talkgroup (TGRP) shows the system name on line 4 instead of the frequency. A TRX-2
+(firmware 5.0) on a DMR trunked system (1 Oct 2026) alternates line 3 between the talkgroup
+name and its bare number (`SOT Council Sec` / `100`, no `TGID:` prefix) and line 5 between the
+scanner's alias for the radio and its number (`Chatterley Whitf` / `RadioID:       5`), the two
+out of step with each other; icons `0D 40 01` / `0D 48 01` (the T icon toggled between the two
+captures). On a TGRP object `parseScanScreen` takes a digits-only line 3 as the TGID.
+
 When the tone lookup finds the transmitter's tone, line 4 shows `Auto  433.225000` and
 line 5 `CTCSS 77.0  S` (the trailing letter is a status flag; `S` observed). The `a`
 header's squelch field is the object's *programmed* setting and does not change.
