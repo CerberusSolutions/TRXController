@@ -344,7 +344,9 @@ export function describeIcons(icons: LcdIcons): string {
   if (icons.pause) on.push('PAUSE');
   if (icons.signalType) on.push(`SIG ${icons.signalTypeName}`);
   if (icons.if) on.push('IF');
-  if (icons.trunk2) on.push('TRUNK2');
+  // Trunk2 is lit while the scanner sits on a trunked system's control channel and clear during a voice call
+  // (TRX-1e on a P25 site, 1 Oct 2026: icons 4C 00 1D parked on the control channel, 4D 40 0E on a call).
+  if (icons.trunk2) on.push('TRUNK2 (control channel)');
   if (icons.pri) on.push('PRI');
   if (icons.trunkS) on.push('TRUNKS');
   return on.length ? on.join(' ') : '(none)';

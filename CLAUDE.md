@@ -95,6 +95,9 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
   one reply leaking out mid-load. `link.stall` in the snapshot marks the silence (with
   `loading` when the last reply came from a menu); the top bar shows "Loading scanlists · N s"
   and the keypad is held so presses are not queued into the scanner.
+- The `L` icon byte's **Trunk2** bit (icons3 bit 4) is lit while the scanner sits on a trunked system's control channel and
+  clear during a voice call (P25 site, 1 Oct 2026: `4C 00 1D` parked on the control channel, `4D 40 0E` on a call); the strip's
+  hover text and the Debug tab say so. **TrunkS** (bit 6) has not been seen lit.
 - The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
   text or icon bytes (checked with `probe --log`): nothing to show for it.
 - Switching the scanner off makes it send its **`P`** power-status reply unprompted (one data byte, 0 = off;

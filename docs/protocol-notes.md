@@ -59,6 +59,11 @@ mode, sq, battL, battH, rssiL, rssiH, zmL, zmH, ledR, ledG, ledB, freq0..freq3, 
 ## `L` Get LCD
 
 6 lines x 16 chars, then icons1/icons2/icons3 bitmaps (see `packages/rcip/src/lcd.ts`).
+
+icons3 bit 4, the spec's "Trunk2 icon", is lit while the scanner sits on a trunked system's
+control channel and clear during a voice call (TRX-1e on a P25 site, 1 Oct 2026: `4C 00 1D`
+parked on the control channel at 417.725 MHz, `4D 40 0E` during a call on a voice channel).
+Bit 6, "TrunkS", has not been seen lit.
 Check boxes are not included in the text. Contrary to the spec, the **menu cursor is**:
 byte `0x93` appears in column 16 of the highlighted menu line (`Lcd.cursorLine`). Other
 bytes at 0x80 and above are scanner-specific glyphs; the library renders unknown ones

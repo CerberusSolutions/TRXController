@@ -25,6 +25,16 @@ function iconStrip(lcd: Lcd | null): string[] {
   return out;
 }
 
+/** What the spec's bare icon names mean, where a capture has shown it; hover text on the strip. */
+const ICON_TITLES: Record<string, string> = {
+  TRUNK2: "Trunk2: locked to a trunked system's control channel (lit while parked on the control channel, clear during a call)",
+  TRUNKS: 'TrunkS: the second trunking icon; named in the protocol, not yet seen lit',
+  IF: 'IF output',
+  PRI: 'Priority',
+  EXT: 'External power',
+  S: 'Squelch open',
+};
+
 /**
  * The scanner's own 6 x 16 display drawn as the TRX draws it: amber backlight, dark segments, the icon
  * strip along the top, the highlighted menu line. Unlit (dark grey, nothing shown) while no scanner is
@@ -43,7 +53,7 @@ export function LcdScreen({ className = '' }: { className?: string }) {
       title={lit ? 'The scanner\'s display, as it draws it' : off ? 'Scanner off' : 'No scanner connected'}
     >
       <div className="lcd-icons" aria-hidden={icons.length === 0}>
-        {icons.length ? icons.map((t, i) => <span key={i}>{t}</span>) : <span>&nbsp;</span>}
+        {icons.length ? icons.map((t, i) => <span key={i} title={ICON_TITLES[t]}>{t}</span>) : <span>&nbsp;</span>}
       </div>
       {lines.map((line, i) => (
         <div key={i} className={`lcd-line rounded px-1 ${lit && lcd?.cursorLine === i ? 'lcd-cursor' : ''}`}>
