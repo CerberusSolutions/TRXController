@@ -246,7 +246,7 @@ const nameCell: Column = {
   render: (r) => (
     <span
       className="truncate font-sans text-[13px] text-ink"
-      title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (radioid.net)`}
+      title={r.name || !r.radioCallsign ? (r.licensee ? `Licensed: ${r.licensee}` : undefined) : `Radio ID ${r.radioId} (${r.radioAlias ? "the scanner's own alpha tag" : 'radioid.net'})`}
     >
       {r.name ||
         (r.radioCallsign ? (

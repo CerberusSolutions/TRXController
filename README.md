@@ -32,7 +32,9 @@ npm run build && npm start    # run the built app
 ## Optional data
 
 - **DMR user database**: download the user export from radioid.net
-  (<https://radioid.net/static/user.csv>), then Data > Import.
+  (<https://radioid.net/static/user.csv>), then Data > Import. A radio ID you have given an alpha tag on
+  the scanner itself (the Radio ID list of a trunked system in EZ Scan) shows that tag first, in the
+  hero and the log, since the scanner's own word outranks the database.
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom
   (<https://static.ofcom.org.uk/static/radiolicensing/html/register/WTR.csv>), set your
   location in Data, then Data > Import WTR CSV. Heard frequencies then show the nearest licensees.

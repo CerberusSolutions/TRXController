@@ -171,6 +171,11 @@ export function parseScanObjectLine(line: string): ScanObjectLine | null {
  *   5: extra: "RadioID:    104" or "Slot:2  Color: 7" (DMR),
  *            "CTCSS 77.0  S" / "DCS 023" / "NAC 293" when the tone lookup has found
  *            the transmitter's tone (the trailing letter is a status flag), blank otherwise
+ *
+ * On a trunked talkgroup (TGRP) the screen reads scanlist / "TGRP        psDr" / talkgroup name /
+ * system name / and, when the radio ID is one the user has given an alpha tag on the scanner's
+ * Radio ID list, that tag on line 5 in place of the "RadioID:" line ("Radio 7", captured on a
+ * TRX-1e on a P25 system, 1 Oct 2026). Any other free text on line 5 is taken as that alias.
  */
 export interface ScanScreen extends SignalDetails {
   scanlist: string;
@@ -198,6 +203,13 @@ export interface SignalDetails {
   detectedTone: string | null;
   /** Trailing status letter after the detected tone (observed "S"), or null. */
   toneFlag: string | null;
+  /** The alpha tag the scanner shows for the radio ID (its own Radio ID list), when line 5 carries one instead of the number. */
+  radioAlias: string | null;
+}
+
+/** True when the line is one of the structured detail lines (TGID, RadioID, slot / colour, tone). */
+function isDetailLine(line: string): boolean {
+  return TGID_RE.test(line) || RADIO_ID_RE.test(line) || SLOT_RE.test(line) || TONE_RE.test(line);
 }
 
 /**
@@ -206,7 +218,7 @@ export interface SignalDetails {
  * a single screen never shows both; callers merge over time.
  */
 export function parseSignalDetails(lines: readonly string[]): SignalDetails {
-  const d: SignalDetails = { tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null };
+  const d: SignalDetails = { tgid: null, radioId: null, slot: null, colorCode: null, detectedTone: null, toneFlag: null, radioAlias: null };
   for (const raw of lines) {
     const line = raw.trim();
     let m: RegExpExecArray | null;
@@ -240,6 +252,7 @@ export function parseScanScreen(lcd: Pick<Lcd, 'lines'>): ScanScreen | null {
     mode: mf?.[1] ?? '',
     frequencyText: mf?.[2] ?? '',
     ...parseSignalDetails([l3, l5]),
+    radioAlias: l5 && !isDetailLine(l5) ? l5 : null,
   };
 }
 
@@ -282,6 +295,10 @@ export function parseSearchScreen(lcd: Pick<Lcd, 'lines'>): SearchScreen | null 
     mode: mf[1]!,
     frequencyText: mf[2]!,
     ...parseSignalDetails([lcd.lines[4] ?? '', lcd.lines[5] ?? '']),
+    radioAlias: (() => {
+      const l5 = (lcd.lines[5] ?? '').trim();
+      return l5 && !isDetailLine(l5) ? l5 : null;
+    })(),
   };
 }
 

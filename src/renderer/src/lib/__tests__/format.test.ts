@@ -9,9 +9,9 @@ function lcdData(lines: string[]): Uint8Array {
   lines.forEach((l, r) => { for (let c = 0; c < Math.min(16, l.length); c++) d[r * 16 + c] = l.charCodeAt(c); });
   return d;
 }
-function snap(over: { rf?: boolean; hz?: number; lcd?: string[] }): ScannerSnapshot {
+function snap(over: { rf?: boolean; hz?: number; lcd?: string[]; mode?: number }): ScannerSnapshot {
   const data = new Uint8Array(STATUS);
-  data[0] = 0x12;
+  data[0] = over.mode ?? 0x12;
   data[1] = over.rf === false ? 0 : 3;
   const hz = over.hz ?? 145_637_500;
   data[11] = hz & 0xff; data[12] = (hz >> 8) & 0xff; data[13] = (hz >> 16) & 0xff; data[14] = (hz >>> 24) & 0xff;
@@ -62,6 +62,24 @@ describe('holdDetails', () => {
     // A different radio ID drops the stale user until main resolves the new one.
     held = holdDetails(held, { ...snap({ lcd: ['', '-Service Search-', 'Tune Mode', 'DMR   145.637500', 'Slot:1  Color:15', 'RadioID: 1234567'] }), radioUser: null }, 1400);
     expect(held).toMatchObject({ radioId: 1234567, radioUser: null });
+  });
+
+  it('keeps the scanner\'s alias for the radio and drops it when a RadioID line names another', () => {
+    const ALIAS = ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'Radio 7'];
+    const OTHER = ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'RadioID:16734000'];
+    const SAME = ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'RadioID:16734037'];
+    // Scan mode (0x0a): the trunked talkgroup screen, with the system name where a conventional object shows its frequency.
+    let held = holdDetails(null, snap({ lcd: OTHER, mode: 0x0a }), 1000);
+    held = holdDetails(held, snap({ lcd: ALIAS, mode: 0x0a }), 1100);
+    expect(held?.radioAlias).toBe('Radio 7');
+    // The same radio's RadioID line keeps the alias; a blank line 5 keeps it too; another radio's RadioID line drops it.
+    held = holdDetails(held, snap({ lcd: OTHER, mode: 0x0a }), 1200);
+    expect(held?.radioAlias).toBe('Radio 7');
+    held = holdDetails(held, snap({ lcd: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', ''], mode: 0x0a }), 1300);
+    expect(held?.radioAlias).toBe('Radio 7');
+    held = holdDetails(held, snap({ lcd: SAME, mode: 0x0a }), 1400);
+    expect(held?.radioAlias).toBeNull();
+    expect(held?.radioId).toBe(16734037);
   });
 
   it('starts afresh when the frequency changes', () => {

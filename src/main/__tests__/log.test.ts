@@ -215,6 +215,13 @@ describe('describe()', () => {
     expect(describeSnapshot(snap({}))).toMatchObject({ distanceKm: null, bearingDeg: null, candidates: [] });
   });
 
+  it('takes the scanner\'s own alias for the radio off a trunked talkgroup screen', () => {
+    const d = describeSnapshot(snap({ lcd: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'Radio 7'] }));
+    expect(d.radioAlias).toBe('Radio 7');
+    expect(d.scanlist).toBe('P25 Sites');
+    expect(describeSnapshot(snap({ lcd: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] })).radioAlias).toBe('');
+  });
+
   it('does not treat the sweeping screen as a channel', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', 'Ofcom', 'P25'] }));
     expect(d.name).toBe('');
@@ -461,6 +468,21 @@ describe('LogDb', () => {
     expect(db.traffic(456_350_000, { radioIds: 1 })[0]).toMatchObject({ radioIds: [1904], radioCount: 2 });
     expect(db.traffic(1)).toEqual([]);
     db.close();
+  });
+
+  it('shows the scanner\'s alias for a radio ahead of the radioid.net callsign', () => {
+    const db = new LogDb(':memory:');
+    db.replaceDmrUsers([{ id: 16734037, callsign: 'G0XYZ', name: 'Someone', city: '', state: '', country: '' }], 'test');
+    const base = { startedAt: 5, endedAt: null, frequencyHz: 419_475_000, mode: 'NFM', signalType: '', name: 'UNID', system: 'USAF Bases UK', scanlist: 'P25 Sites', objectType: 'TGRP', tgid: 63354, radioId: null, site: 'RAF Croughton', squelch: '', tone: '', licensee: '', source: '' as const, scannerName: 'UNID', wtr: '', rrName: '', rrSystem: '', rpt: '', rruk: '', distanceKm: null, bearingDeg: null, lat: null, lon: null, candidates: [], rssiPeak: 0, calls: 1 };
+    const aliased = db.insert({ ...base, radioId: 16734037, radioAlias: 'Radio 7' });
+    expect(aliased.radioAlias).toBe('Radio 7');
+    expect(aliased.radioCallsign).toBe('Radio 7');
+    expect(aliased.radioName).toBe('');
+    const plain = db.insert({ ...base, radioId: 16734037 });
+    expect(plain.radioAlias).toBe('');
+    expect(plain.radioCallsign).toBe('G0XYZ');
+    expect(plain.radioName).toBe('Someone');
+    expect(db.update(plain.id, { radioAlias: 'Radio 7' })?.radioCallsign).toBe('Radio 7');
   });
 
   it('closes receptions left open by a previous run', () => {

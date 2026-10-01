@@ -51,7 +51,7 @@ export type Description = Omit<NewReception, 'startedAt' | 'endedAt' | 'frequenc
  */
 const FIELDS: Exclude<keyof Description, 'source' | 'distanceKm' | 'bearingDeg' | 'lat' | 'lon' | 'candidates'>[] = [
   'mode', 'signalType', 'name', 'system', 'scanlist', 'objectType', 'tgid', 'radioId', 'site', 'squelch', 'tone', 'licensee',
-  'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rruk', 'rssiPeak',
+  'scannerName', 'wtr', 'rrName', 'rrSystem', 'rpt', 'rruk', 'rssiPeak', 'radioAlias',
 ];
 
 /** The placement travels with the identity exactly as `sourceAfter` moves the source; an unplaced row takes any placement offered. */
@@ -153,15 +153,21 @@ export class ReceptionTracker {
     let changed = false;
     const cur = this.current!;
     const source = sourceAfter(cur, fresh);
+    const radioBefore = cur.radioId;
     for (const f of FIELDS) {
-      const next = fresh[f];
-      const prev = cur[f];
+      const next = fresh[f] ?? '';
+      const prev = cur[f] ?? '';
       // Keep the best value seen: never replace real data with blanks.
       const better = f === 'rssiPeak' ? (next as number) > (prev as number) : next !== '' && next !== null && next !== prev;
       if (better) {
         (cur as unknown as Record<string, unknown>)[f] = next;
         changed = true;
       }
+    }
+    // The alias belongs to the radio it was shown for: another radio keying up without one drops it.
+    if (fresh.radioId !== null && radioBefore !== null && fresh.radioId !== radioBefore && !fresh.radioAlias && cur.radioAlias) {
+      cur.radioAlias = '';
+      changed = true;
     }
     if (source !== cur.source) {
       cur.source = source;
@@ -321,6 +327,8 @@ export function describe(s: ScannerSnapshot): Description {
     objectType: screen?.type || (h ? h.recordingTypeName : search ? 'Search' : ''),
     tgid: idOr(h?.talkgroupId1) ?? details?.tgid ?? null,
     radioId: idOr(h?.radioId1) ?? details?.radioId ?? null,
+    // The scanner's own alpha tag for the radio, off the display, when its Radio ID list has one.
+    radioAlias: details?.radioAlias ?? '',
     site: h?.siteName ?? '',
     squelch: h?.squelchText ?? '',
     tone: detected ?? '',

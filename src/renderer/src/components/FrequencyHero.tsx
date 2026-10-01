@@ -75,6 +75,8 @@ export default function FrequencyHero() {
   // the searches they only appear on the display.
   const tgid = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : (details?.tgid ?? null);
   const radioId = h && h.radioId1 !== NO_ID ? h.radioId1 : (details?.radioId ?? null);
+  // The alpha tag the scanner shows for the radio from its own Radio ID list: its word, ahead of radioid.net.
+  const radioAlias = details?.radioAlias ?? null;
   // The header's misc text repeats the slot line, with "--" where the display has the colour code.
   const slotText = details?.slot !== null && details?.slot !== undefined ? `${details.slot} · CC ${details.colorCode}` : null;
   const info = h?.miscText && !(slotText && /^Slot:/i.test(h.miscText)) ? h.miscText : null;
@@ -101,12 +103,24 @@ export default function FrequencyHero() {
   const ids = (
     <>
       {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
-      {radioId !== null && (
+      {(radioId !== null || radioAlias) && (
         <Param
           label="Radio ID"
-          value={radioUser ? [`${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}`, location].filter(Boolean).join(' · ') : formatId(radioId)}
-          title={radioUser ? `${formatId(radioId)} · ${radioUser.callsign} ${radioUser.name}${location ? ' · ' + location : ''}` : 'Radio ID (import the radioid.net database to resolve callsigns)'}
-          flex={!!radioUser}
+          value={
+            radioAlias
+              ? [radioAlias, radioUser ? `${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}` : null].filter(Boolean).join(' · ')
+              : radioUser
+                ? [`${radioUser.callsign}${radioUser.name ? ' ' + radioUser.name : ''}`, location].filter(Boolean).join(' · ')
+                : formatId(radioId!)
+          }
+          title={
+            radioAlias
+              ? `${radioId !== null ? formatId(radioId) + ' · ' : ''}${radioAlias} is the scanner's own alpha tag for this radio${radioUser ? ` · radioid.net: ${radioUser.callsign} ${radioUser.name}` : ''}`
+              : radioUser
+                ? `${formatId(radioId!)} · ${radioUser.callsign} ${radioUser.name}${location ? ' · ' + location : ''}`
+                : 'Radio ID (import the radioid.net database to resolve callsigns)'
+          }
+          flex={!!radioUser || !!radioAlias}
         />
       )}
       {slotText && <Param label="Slot" value={slotText} title="DMR time slot and colour code" />}

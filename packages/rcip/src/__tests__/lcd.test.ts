@@ -115,6 +115,20 @@ describe('parseScanObjectLine', () => {
 });
 
 describe('parseScanScreen', () => {
+  it('reads the radio alias the scanner shows in place of the RadioID line on a trunked talkgroup', () => {
+    // Captured on a TRX-1e on a P25 system, 1 Oct 2026, with "Radio 7" on the scanner's Radio ID list.
+    const s = parseScanScreen({ lines: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'Radio 7'] });
+    expect(s).toMatchObject({ scanlist: 'P25 Sites', type: 'TGRP', name: 'UNID', radioAlias: 'Radio 7', radioId: null, tgid: null });
+    expect(s!.mode).toBe('');
+  });
+
+  it('never takes a RadioID, slot or tone line for an alias', () => {
+    expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] })!.radioAlias).toBeNull();
+    expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'Resound Ayles', 'DMR   456.025000', 'Slot:2  Color: 7'] })!.radioAlias).toBeNull();
+    expect(parseScanScreen({ lines: ['', 'Local HAM Rptrs', 'CONV        psDr', 'GB3TU A', 'Auto  433.225000', 'CTCSS 77.0  S'] })!.radioAlias).toBeNull();
+    expect(parseScanScreen({ lines: ['', 'Civil Airband', 'CONV        psDr', 'TC NW Deps', 'AM    119.775000', ''] })!.radioAlias).toBeNull();
+  });
+
   it('reads the analogue channel screen', () => {
     const s = parseScanScreen({ lines: ['', 'Civil Airband', 'CONV        psDr', 'TC NW Deps', 'AM    119.775000', ''] });
     expect(s).toMatchObject({ scanlist: 'Civil Airband', type: 'CONV', name: 'TC NW Deps', mode: 'AM', frequencyText: '119.775000', tgid: null, radioId: null, slot: null });
