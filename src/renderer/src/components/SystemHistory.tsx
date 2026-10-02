@@ -41,18 +41,24 @@ export function periodOf(range: Range, date: string): { from: number; to: number
 }
 
 interface Props {
-  /** The network on show: DSD+'s current one, else the most recently recorded. */
+  /** The network on show unless one is picked: DSD+'s current one, else the most recently recorded. */
   network: string | null;
+  /** Every network recorded, newest activity first, for the picker. */
+  networks: string[];
   /** Names for the chips and the CSV: the user's, DSD+'s alias, else blank. */
   tgName: (tgid: number) => string;
   radioName: (rid: number, alias: string | null) => string;
 }
 
-export default function SystemHistory({ network, tgName, radioName }: Props) {
+export default function SystemHistory({ network: current, networks, tgName, radioName }: Props) {
   const day = useDsd((s) => s.day);
   const dayBusy = useDsd((s) => s.dayBusy);
   const loadDay = useDsd((s) => s.loadDay);
   const [range, setRange] = useState<Range>('day');
+  // A network picked by hand stays on show as DSD+ moves; otherwise the view follows DSD+.
+  const [picked, setPicked] = useState<string | null>(null);
+  const network = picked ?? current;
+  const choices = [...new Set([...(current ? [current] : []), ...networks])];
   const [date, setDate] = useState(dayKey(new Date()));
   const [selTg, setSelTg] = useState<number | null>(null);
   const [selRid, setSelRid] = useState<number | null>(null);
@@ -140,6 +146,20 @@ export default function SystemHistory({ network, tgName, radioName }: Props) {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-baseline gap-x-2 gap-y-1 border-b border-edge bg-panel px-4 py-2 text-[12px] text-ink-2">
+        {choices.length > 1 && (
+          <select
+            className="max-w-[12rem] truncate rounded border border-edge bg-bg px-1 py-px font-sans text-[11px] text-ink outline-none focus:border-cyan"
+            value={network ?? ''}
+            title="The network on show; DSD+'s current one unless another is picked"
+            onChange={(e) => setPicked(e.target.value === current ? null : e.target.value)}
+          >
+            {choices.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        )}
         <span className="inline-flex overflow-hidden rounded border border-edge" title="History: the period on show">
           {RANGES.map((r) => (
             <button key={r.id} type="button" className={`px-1.5 text-[11px] ${range === r.id ? 'bg-cyan/15 text-cyan' : 'text-ink-3 hover:text-ink'}`} title={r.id === 'all' ? 'Everything recorded for the network' : `The ${r.label.toLowerCase()} ending on the date`} onClick={() => setRange(r.id)}>

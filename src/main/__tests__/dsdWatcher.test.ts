@@ -60,7 +60,7 @@ describe('DsdWatcher', () => {
     w.setFolder(dir);
     let s = w.status();
     expect(s.folder).toBe(dir);
-    expect(s.feed.network).toEqual({ id: 'BEE00.169', name: 'USAF Bases United Kingdom' });
+    expect(s.feed.network).toEqual({ id: 'BEE00.169', name: 'USAF Bases United Kingdom', key: 'BEE00.169 USAF Bases United Kingdom' });
     expect(s.feed.site?.name).toBe('RAF Croughton');
     expect(s.feed.calls.map((c) => c.rid)).toEqual([16734081]);
     expect(s.alive).toBe(true);
@@ -124,7 +124,7 @@ describe('DsdWatcher', () => {
     );
     w.setFolder(dir);
     const s = w.status();
-    expect(s.feed.network).toEqual({ id: 'L1', name: 'PTT Systems' });
+    expect(s.feed.network).toEqual({ id: 'L1', name: 'PTT Systems', key: 'L1 PTT Systems' });
     expect(s.feed.site).toEqual({ id: 'L1-15', name: '' });
     expect(s.protocol).toBeNull();
     // The groups file names the protocol: the newest line's, since DSD+ reclassified the site.
