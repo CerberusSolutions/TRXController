@@ -564,7 +564,11 @@ captured on 14 Sep 2026.
   calls `tick(now)` every snapshot. A grant is settled only once its window has closed (`PAIR_BEFORE_MS` 1.5 s before it,
   DSD+ stamps whole seconds; `PAIR_AFTER_MS` 4 s after, the TRX stops a moment later): exactly one frequency among the
   openings in the window, and no other grant on another channel claiming them, is one vote for channel = frequency; two
-  openings on different frequencies or two grants are ambiguous and cast none. `MIN_VOTES` (2) with `MIN_SHARE` (70 %)
+  openings on different frequencies or two grants are ambiguous and cast none. An opening counts only when the scanner has
+  just arrived on the frequency (`heldMs` ≤ `ARRIVAL_MS` 2 s, main's `onFrequency.since`): a scanner parked on a Tier III
+  control channel (a Service Search sat on it) has its squelch flutter there every few seconds, and on the TfL site on
+  2 Oct 2026 every grant found such a re-opening, so 1701 and 1716 were "learned" as the control channel 139.53125.
+  `MIN_VOTES` (2) with `MIN_SHARE` (70 %)
   makes the channel learned. Votes are per DSD+ network (`ChannelVotes`), kept in `userData/dsd-channels.json`
   (`saveChannels`, 2 s debounce, on every change). `DsdStatus.channels` is the feed network's learned map and
   `DsdStatus.protocol` the network's protocol from the groups file (its newest line's: DSD+ reclassified TIII sites in
@@ -586,7 +590,11 @@ captured on 14 Sep 2026.
   anchors on the line, each anchor carrying `fits`; a plan with more than one range (some 900 MHz systems) shows as misfits.
   `mapHz`, `mapLsn` (null off the grid by more than a tenth of a step), `channelMapLines` (one line per carrier under its slot-1
   LSN, `mhzText` four decimals or five when needed: DSD+'s own table shows 139.53125), `neighbourAnchors(sites)` (a site's
-  neighbour line `CC=63` joined to that neighbour's `controlHz` fact from `siteEventRow`). Main keeps the user's settings per
+  neighbour line `CC=63` joined to that neighbour's `controlHz` fact from `siteEventRow`, which the scanner's trunked header
+  writes in `learnDsdSystem` or main's `parkedControlChannel` writes from where the scanner parks: squelch open `CC_PARK_MS`
+  30 s on one frequency with DMR details on the display, `onFrequency.dmr`, while DSD+ is alive on a site with an event in
+  the last 15 s; once per session per site, the upsert keeping the first frequency written. The add-anchor row's
+  **Scanner** button fills the MHz box with the frequency the scanner is on, `scannerHz`). Main keeps the user's settings per
   network key as `maps` in `dsd-channels.json` (`ChannelMapSettings {stepHz | null, anchors}`, `sanitizeMapSettings` on the way
   in), builds the map onto every published status in `withMap` (user anchors + `neighbourAnchors(db.dsdSites(key))`, cached
   `SITE_FACTS_MS` 5 s, + learned channels with a frequency) as `DsdStatus.map: ChannelMapInfo {map, settings}`; IPC

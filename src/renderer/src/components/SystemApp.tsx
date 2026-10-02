@@ -192,7 +192,7 @@ export default function SystemApp() {
         </button>
       </header>
 
-      {channelsOpen && status && <ChannelMapPanel status={status} />}
+      {channelsOpen && status && <ChannelMapPanel status={status} scannerHz={onHz} />}
 
       {historyOpen ? (
         <SystemHistory network={historyNetwork} networks={networks.map((n) => n.network)} tgName={(tg) => tgName(tg)} radioName={radioName} />

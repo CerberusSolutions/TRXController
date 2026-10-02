@@ -2,7 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, scr
 import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { Key, isKeyCode } from '@trxcontroller/rcip';
+import { Key, isKeyCode, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { isDayKey } from '../shared/dayMap';
 import { locateCdat, readCdat, writeCdat } from './programming/locate';
@@ -66,6 +66,13 @@ function saveChannels(): void {
 }
 /** The squelch as last seen, so each opening (or move while open) is one vote at most. */
 let lastSquelch: { rf: boolean; hz: number } = { rf: false, hz: 0 };
+/** The frequency the scanner is on and since when, for the learner (a stop is a fresh arrival) and the parked-control-channel fact. */
+let onFrequency: { hz: number; since: number; openSince: number | null; dmr: boolean } = { hz: 0, since: 0, openSince: null, dmr: false };
+/**
+ * A scanner whose squelch has stayed open this long on one frequency while DSD+ is decoding a site, the display showing
+ * DMR details, is sat on that site's control channel (a Service Search parks on it; a voice channel drops between calls).
+ */
+const CC_PARK_MS = 30_000;
 const mapDock: WindowDock = new WindowDock({
   main: () => win,
   win: () => mapWin,
@@ -210,6 +217,31 @@ function learnDsdSystem(s: ScannerSnapshot): void {
   publishDsd(dsd.status());
 }
 
+/**
+ * The control channel from where the scanner parks: squelch open `CC_PARK_MS` on one frequency with DMR details on the
+ * display while DSD+ is live on a site is that site's control channel (DSD+ prints it only as a channel number). Recorded
+ * as the site's fact once per session, so a neighbour list naming this site's control LSN can anchor the channel map,
+ * and the History sites table can show it. A fact from the scanner's trunked header, when there is one, was written first
+ * and stays (the upsert keeps the first frequency).
+ */
+function parkedControlChannel(): void {
+  if (!dsd || !db || onFrequency.openSince === null || !onFrequency.dmr || onFrequency.hz <= 0) return;
+  const now = Date.now();
+  if (now - onFrequency.openSince < CC_PARK_MS) return;
+  const status = dsd.status();
+  const site = status.feed.site;
+  const networkKey = status.feed.network?.key;
+  if (!site || !networkKey || !status.alive || status.feed.lastEventAt === null || now - status.feed.lastEventAt > 15_000) return;
+  const code = status.feed.nac ? `NAC ${status.feed.nac}` : status.feed.dcc !== null ? `CC ${status.feed.dcc}` : null;
+  const key = `${networkKey}|${site.id}|${onFrequency.hz}|${code ?? ''}`;
+  if (recordedSites.has(key)) return;
+  recordedSites.add(key);
+  console.log(`[dsd] site ${site.id} control channel ${(onFrequency.hz / 1e6).toFixed(5)} MHz (the scanner has sat on it ${Math.round((now - onFrequency.openSince) / 1000)} s)`);
+  db.recordDsdEvents([siteEventRow(networkKey, site.id, site.name, onFrequency.hz, code, now)]);
+  siteFactsCache = null;
+  publishDsd(status);
+}
+
 /** The identity the user confirmed for the current frequency, tone and talkgroup, if any. */
 function confirmedFor(s: ScannerSnapshot): ScannerSnapshot['confirmed'] {
   const d = describeSnapshot(s);
@@ -285,12 +317,26 @@ const session = new ScannerSession(serialTransportFactory, {
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
+    // Where the scanner is and for how long: a change of frequency is an arrival, an opening on a frequency it has sat on is not a stop.
+    {
+      const now = Date.now();
+      const rf = !!s.status?.squelch.rf;
+      const hz = s.status?.frequencyHz ?? 0;
+      if (hz !== onFrequency.hz) onFrequency = { hz, since: now, openSince: null, dmr: false };
+      if (!rf) onFrequency.openSince = null;
+      else if (onFrequency.openSince === null) onFrequency.openSince = now;
+      if (rf && s.lcd) {
+        const screen = (s.status?.mode === 0x0a ? parseScanScreen(s.lcd) : null) ?? parseSearchScreen(s.lcd);
+        if (screen && (screen.colorCode !== null || screen.slot !== null)) onFrequency.dmr = true;
+      }
+    }
+    parkedControlChannel();
     // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant.
     if (channels) {
       const now = Date.now();
       const rf = !!s.status?.squelch.rf;
       const hz = s.status?.frequencyHz ?? 0;
-      if (rf && (!lastSquelch.rf || lastSquelch.hz !== hz)) channels.opening(now, hz);
+      if (rf && (!lastSquelch.rf || lastSquelch.hz !== hz)) channels.opening(now, hz, now - onFrequency.since);
       lastSquelch = { rf, hz };
       channels.tick(now);
       if (channels.takeChanged()) {
