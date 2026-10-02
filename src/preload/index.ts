@@ -30,6 +30,7 @@ import {
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { NewRadioName, RadioName } from '../shared/radioNames';
+import type { DsdStatus } from '../shared/dsd';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -79,6 +80,17 @@ const api = {
   logRadioName: (n: NewRadioName): Promise<RadioName> => ipcRenderer.invoke(IPC.logRadioName, n),
   logRadioUnname: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logRadioUnname, id),
   logRadioNames: (): Promise<RadioName[]> => ipcRenderer.invoke(IPC.logRadioNames),
+  /** The DSD+ link: what the watcher on the DSD+ folder sees (null before the log is open). */
+  dsdStatus: (): Promise<DsdStatus | null> => ipcRenderer.invoke(IPC.dsdStatus),
+  onDsdUpdate: (cb: (status: DsdStatus) => void): (() => void) => {
+    const listener = (_e: unknown, status: DsdStatus): void => cb(status);
+    ipcRenderer.on(IPC.dsdUpdate, listener);
+    return () => ipcRenderer.removeListener(IPC.dsdUpdate, listener);
+  },
+  /** Pick the DSD+ folder through a dialog; resolves to the settings, or null if cancelled. */
+  dsdChooseFolder: (): Promise<Settings | null> => ipcRenderer.invoke(IPC.dsdChooseFolder),
+  /** Open (or raise) the System window. */
+  dsdOpen: (): Promise<void> => ipcRenderer.invoke(IPC.dsdOpen),
   /** Pick a DSD+ radio list (DSDPlus.radios) and name every radio it carries an alias for, on any system. */
   logRadioImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.logRadioImport),
   /** What has been heard on a frequency, grouped by tone / colour code and talkgroup. */

@@ -278,6 +278,25 @@ export default function HelpDialog() {
                 </li>
                 <li className="rounded-lg border border-edge bg-panel-2 p-3">
                   <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold text-ink">DSD+ link</span>
+                    <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://www.dsdplus.com/" target="_blank" rel="noreferrer">
+                      dsdplus.com
+                    </a>
+                  </div>
+                  <p className="mt-1 text-ink-3">
+                    DSD+ on a trunked system's control channel sees every call; the TRX follows one. Point the app at the DSD+ folder (Data › DSD+ link) and it
+                    reads DSDPlus.event, .radios and .groups as DSD+ writes them: a DSD+ pill appears in the top bar, green while events arrive, and opens the
+                    System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio aliases DSD+
+                    learns go into the log as it learns them, no import needed.
+                  </p>
+                  <p className="mt-2">
+                    <span className="text-ink-3">Then: </span>
+                    Run DSD+ as usual. Feed it from an SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+ keeps the
+                    whole system in view. Nothing is sent to DSD+; the link only reads its files.
+                  </p>
+                </li>
+                <li className="rounded-lg border border-edge bg-panel-2 p-3">
+                  <div className="flex items-baseline justify-between gap-3">
                     <span className="font-semibold text-ink">RadioReference UK (online)</span>
                     <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://radioreferenceuk.co.uk/" target="_blank" rel="noreferrer">
                       radioreferenceuk.co.uk

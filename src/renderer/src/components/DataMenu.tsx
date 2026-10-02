@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
 import { useLog } from '../store/log';
+import { useDsd } from '../store/dsd';
 import { useScanner } from '../store/scanner';
 import { useUi } from '../store/ui';
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
@@ -203,6 +204,63 @@ function ScanTimeoutForm() {
           ? 'The scanner stays on a carrier as long as its own delay settings allow.'
           : `After ${value} s on one carrier in Scan mode the app presses ► so scanning resumes; a dead carrier or a stuck beacon then costs ${value} s, not the session.`}
       </p>
+    </div>
+  );
+}
+
+/** The DSD+ link: the folder DSD+ runs in, and what the watcher finds there. */
+function DsdForm() {
+  const status = useDsd((s) => s.status);
+  const chooseFolder = useDsd((s) => s.chooseFolder);
+  const clearFolder = useDsd((s) => s.clearFolder);
+  const open = useDsd((s) => s.open);
+  const when = (t: number | null): string => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
+  return (
+    <div className="mt-1">
+      <p className="text-[11px] text-ink-3">
+        DSD+ decodes a trunked system's control channel and sees every call; the TRX follows one. With its folder set, the app reads DSDPlus.event, .radios and .groups as DSD+
+        writes them: calls in the System window, radio aliases into the log as DSD+ learns them.
+      </p>
+      <div className="mt-2 flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink" title={status?.folder ?? undefined}>
+          {status?.folder ?? <span className="text-ink-3">No folder set</span>}
+        </span>
+        <button className="shrink-0 rounded-md border border-edge px-2.5 py-1 text-[12px] text-ink-2 hover:text-ink" onClick={() => void chooseFolder()}>
+          {status?.folder ? 'Change…' : 'Choose folder…'}
+        </button>
+        {status?.folder && (
+          <button className="shrink-0 rounded-md border border-edge px-2.5 py-1 text-[12px] text-ink-2 hover:text-red" title="Switch the link off" onClick={() => void clearFolder()}>
+            Off
+          </button>
+        )}
+      </div>
+      {status?.folder && (
+        <ul className="mt-2 space-y-0.5 text-[11px] text-ink-2">
+          <li>
+            {status.error ? (
+              <span className="text-red">{status.error}</span>
+            ) : status.event.found ? (
+              <>
+                <span className={status.alive ? 'text-green' : 'text-amber'}>{status.alive ? '● DSD+ live' : '● DSD+ quiet'}</span>
+                {status.feed.network && <span className="text-ink-3"> · {status.feed.network.name || status.feed.network.id}</span>}
+                {status.feed.lastEventAt && <span className="text-ink-3"> · last event {when(status.feed.lastEventAt)}</span>}
+              </>
+            ) : (
+              <span className="text-amber">No DSDPlus.event in that folder yet. DSD+ writes it as it runs.</span>
+            )}
+          </li>
+          <li className="text-ink-3">
+            {status.radios.found ? `Radios: ${status.radios.named} named from DSDPlus.radios${status.radios.importedAt ? ` at ${when(status.radios.importedAt)}` : ''}` : 'No DSDPlus.radios yet'}
+            {' · '}
+            {status.groups.found ? `${status.groups.count} talkgroups in DSDPlus.groups` : 'no DSDPlus.groups yet'}
+          </li>
+        </ul>
+      )}
+      {status?.folder && (
+        <button className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink" onClick={open}>
+          Open the System window
+        </button>
+      )}
     </div>
   );
 }
@@ -667,6 +725,10 @@ export default function DataDialog() {
             </Section>
 
             <p className="border-t border-edge pt-2 text-[11px] text-ink-3">Download links and what to do with the files are under the ? button.</p>
+
+            <Section title="DSD+ link">
+              <DsdForm />
+            </Section>
 
             <Section title="Confirmed identities">
               <ConfirmedList />

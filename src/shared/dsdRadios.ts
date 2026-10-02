@@ -50,6 +50,48 @@ function fields(line: string): { value: string; quoted: boolean }[] {
   return out;
 }
 
+/**
+ * DSD+'s talkgroup list (`DSDPlus.groups`): protocol, network, group, priority, override, hits, last heard,
+ * "group alias". A comment line naming the network precedes each block, as in the radios file.
+ */
+export interface DsdGroupLine {
+  protocol: string;
+  network: string;
+  tgid: number;
+  priority: number;
+  override: string;
+  hits: number;
+  lastHeard: string;
+  alias: string;
+}
+
+/** Parse a DSD+ groups file; comments and blanks are skipped silently, other non-group lines counted. */
+export function parseDsdGroups(text: string): { groups: DsdGroupLine[]; skipped: number } {
+  const groups: DsdGroupLine[] = [];
+  let skipped = 0;
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+    const f = fields(line);
+    const tgid = Number(f[2]?.value);
+    if (f.length < 7 || !Number.isInteger(tgid) || f[2]!.quoted) {
+      skipped++;
+      continue;
+    }
+    groups.push({
+      protocol: f[0]!.value,
+      network: f[1]?.value ?? '',
+      tgid,
+      priority: Number(f[3]?.value) || 0,
+      override: f[4]?.value ?? '',
+      hits: Number(f[5]?.value) || 0,
+      lastHeard: f[6]?.value ?? '',
+      alias: (f.slice(7).find((x) => x.quoted)?.value ?? '').replace(/^\*/, ''),
+    });
+  }
+  return { groups, skipped };
+}
+
 /** Parse a DSD+ radio list. `skipped` counts lines that are not radio entries (comments and blanks are not counted). */
 export function parseDsdRadios(text: string): { radios: DsdRadio[]; skipped: number } {
   const radios: DsdRadio[] = [];

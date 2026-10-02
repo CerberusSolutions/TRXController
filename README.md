@@ -39,7 +39,18 @@ npm run build && npm start    # run the built app
   its traffic list to name that one). The scanner's list is cut to 16 characters; here "Chatterley
   Whitfield Radio User 1" fits. On a trunked system the name is keyed to the system (radio 5 on one
   system is not radio 5 on another); on a conventional channel it applies everywhere. Radios already
-  named in DSD+ come in with Data > Import DSD+ radio list (its `DSDPlus.radios` file).
+  named in DSD+ come in with Data > Import DSD+ radio list (its `DSDPlus.radios` file), or by
+  themselves with the DSD+ link below.
+- **DSD+ link**: DSD+ (dsdplus.com) on a trunked system's control channel sees every call, while the
+  TRX follows one. Data > DSD+ link > Choose folder points the app at the DSD+ folder, and it reads
+  `DSDPlus.event`, `DSDPlus.radios` and `DSDPlus.groups` as DSD+ writes them. A **DSD+** pill appears in
+  the top bar, green while events arrive and amber once DSD+ has gone quiet, and opens the **System
+  window**: every call on the system, newest first, with its talkgroup (named from DSD+'s groups file),
+  radio (your name, else DSD+'s alias, else the number), channel, slot, an ENC pill and its length, the
+  call the TRX is on marked TRX, and registrations, affiliations and alias returns beneath. Radio aliases
+  DSD+ learns go into the log as it learns them. Nothing is written to DSD+'s folder. Feed DSD+ from an
+  SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
+  sees the whole system while the TRX moves to voice channels.
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom
   (<https://static.ofcom.org.uk/static/radiolicensing/html/register/WTR.csv>), set your
   location in Data, then Data > Import WTR CSV. Heard frequencies then show the nearest licensees.

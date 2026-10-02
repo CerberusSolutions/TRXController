@@ -7,7 +7,7 @@ import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
 export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '', tested: false };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, clockSync: true, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, clockSync: true, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], dsd: { folder: null, window: null }, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -52,10 +52,17 @@ export function sanitize(s: Settings): Settings {
     mapDock: s.mapDock === 'left' || s.mapDock === 'right' ? s.mapDock : null,
     mapWindow: sanitizeWindow(s.mapWindow, MAP_MIN_WINDOW),
     programmingRecent: Array.isArray(s.programmingRecent) ? [...new Set(s.programmingRecent.filter((d): d is string => typeof d === 'string' && d.trim() !== ''))].slice(0, 8) : [],
+    dsd: sanitizeDsd(s.dsd),
     rr: sanitizeRr(s.rr),
     rruk: sanitizeRruk(s.rruk),
     lookups: normaliseLookups(s.lookups),
   };
+}
+
+function sanitizeDsd(d: unknown): Settings['dsd'] {
+  if (typeof d !== 'object' || d === null) return { folder: null, window: null };
+  const o = d as Record<string, unknown>;
+  return { folder: typeof o['folder'] === 'string' && o['folder'].trim() !== '' ? o['folder'].trim() : null, window: sanitizeWindow(o['window'], MAP_MIN_WINDOW) };
 }
 
 function sanitizeRr(r: unknown): RrSettings {

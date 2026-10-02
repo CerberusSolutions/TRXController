@@ -15,6 +15,8 @@ import { DEFAULT_LOOKUPS, lookupEnabled, type LookupPref } from '../shared/sourc
 import type { NewConfirmation } from '../shared/confirm';
 import type { NewRadioName } from '../shared/radioNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
+import { DsdWatcher } from './dsd/watcher';
+import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
 import { ReceptionLogger } from './log/logger';
@@ -27,6 +29,9 @@ import { listPorts, preferredPath, serialTransportFactory } from './scanner/seri
 
 let win: BrowserWindow | null = null;
 let mapWin: BrowserWindow | null = null;
+/** The System window: what DSD+ sees on the trunked system's control channel. */
+let systemWin: BrowserWindow | null = null;
+let dsd: DsdWatcher | null = null;
 /** Which side of the main window the map is docked to, or null while it floats. */
 let mapDocked: MapDockSide | null = null;
 /** True while we are placing the map window ourselves, so its move events are not taken for a drag. */
@@ -247,6 +252,21 @@ function isLogCursor(v: unknown): v is LogCursor {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
+  ipcMain.handle(IPC.dsdStatus, () => dsd?.status() ?? null);
+  ipcMain.handle(IPC.dsdOpen, () => openSystem());
+  ipcMain.handle(IPC.dsdChooseFolder, async () => {
+    if (!settings) throw new Error('No settings');
+    const res = await dialog.showOpenDialog({
+      title: 'Choose the DSD+ folder (the one with DSDPlus.event in it)',
+      defaultPath: settings.get().dsd.folder ?? undefined,
+      properties: ['openDirectory'],
+    });
+    const folder = res.filePaths[0];
+    if (res.canceled || !folder) return null;
+    const next = settings.set({ dsd: { ...settings.get().dsd, folder } });
+    dsd?.setFolder(folder);
+    return publicSettings(next);
+  });
   // Development only: the scanner's SD-card programming. Not registered in a packaged build, so the
   // renderer's calls resolve to nothing there and no window can be opened.
   if (!app.isPackaged) {
@@ -448,7 +468,9 @@ function registerIpc(): void {
     // The renderer never carries the password or the RRUK key; only rr:account-set / rruk:key-set change them.
     if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
     if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey, tested: settings.get().rruk.tested };
+    if (p.dsd) p.dsd = { ...settings.get().dsd, folder: p.dsd.folder ?? null };
     const next = settings.set(p);
+    dsd?.setFolder(next.dsd.folder);
     licenceCache = null;
     repeaterCache = null;
     // A new postcode or location changes what RRUK is asked; failed frequencies may be tried again.
@@ -570,6 +592,16 @@ function openLog(): void {
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
   console.log(`[log] ${path} (${db.count()} log entries)`);
+  dsd = new DsdWatcher({
+    nameRadios: (list) => db!.nameRadios(list),
+    onChange: (status, radiosChanged) => {
+      publishDsd(status);
+      // The names joined into every log row moved: every window reloads its log.
+      if (radiosChanged) broadcast(IPC.logChanged, null);
+    },
+    log: (msg) => console.log(msg),
+  });
+  dsd.setFolder(settings.get().dsd.folder);
   rr = new RrService({
     db,
     appKey: __RR_APP_KEY__,
@@ -664,6 +696,59 @@ function windowChrome(): Electron.BrowserWindowConstructorOptions {
 function loadRenderer(w: BrowserWindow, hash?: string): void {
   if (process.env['ELECTRON_RENDERER_URL']) void w.loadURL(`${process.env['ELECTRON_RENDERER_URL']}${hash ? `#${hash}` : ''}`);
   else void w.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined);
+}
+
+let dsdPublishTimer: ReturnType<typeof setTimeout> | null = null;
+let dsdPending: DsdStatus | null = null;
+/** Push the DSD+ status to every window, at most four times a second (the event file can burst). */
+function publishDsd(status: DsdStatus): void {
+  dsdPending = status;
+  if (dsdPublishTimer) return;
+  dsdPublishTimer = setTimeout(() => {
+    dsdPublishTimer = null;
+    if (dsdPending) broadcast(IPC.dsdUpdate, dsdPending);
+    dsdPending = null;
+  }, 250);
+}
+
+/**
+ * The System window: the renderer's `#system` route, one at a time, showing what DSD+ sees on the control
+ * channel of the trunked system it is on, beside what the TRX is on. A free window that remembers its place.
+ */
+function openSystem(): void {
+  if (systemWin && !systemWin.isDestroyed()) {
+    if (systemWin.isMinimized()) systemWin.restore();
+    systemWin.focus();
+    return;
+  }
+  const saved = savedBounds(settings?.get().dsd.window);
+  systemWin = new BrowserWindow({
+    ...windowChrome(),
+    ...(saved ?? { width: 760, height: 620 }),
+    minWidth: MAP_MIN_WINDOW.width,
+    minHeight: MAP_MIN_WINDOW.height,
+    title: 'TRXController system',
+  });
+  systemWin.on('ready-to-show', () => systemWin?.show());
+  systemWin.on('closed', () => {
+    systemWin = null;
+  });
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  const remember = (): void => {
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      if (!systemWin || systemWin.isDestroyed() || systemWin.isMinimized()) return;
+      settings?.set({ dsd: { ...settings.get().dsd, window: { ...systemWin.getNormalBounds(), maximized: false } } });
+    }, 400);
+  };
+  systemWin.on('move', remember);
+  systemWin.on('resize', remember);
+  systemWin.webContents.setWindowOpenHandler(({ url }) => {
+    void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  loadRenderer(systemWin, 'system');
 }
 
 /**
@@ -916,6 +1001,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  dsd?.stop();
   if (autoConnectTimer) clearTimeout(autoConnectTimer);
   autoConnectTimer = null;
   if (updateTimer) clearTimeout(updateTimer);

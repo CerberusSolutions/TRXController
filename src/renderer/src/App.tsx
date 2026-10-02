@@ -6,6 +6,7 @@ import Keypad from './components/Keypad';
 import MainPanel from './components/MainPanel';
 import StatusBar from './components/StatusBar';
 import TopBar from './components/TopBar';
+import { attachDsdEvents } from './store/dsd';
 import { attachLogEvents } from './store/log';
 import { attachScannerEvents } from './store/scanner';
 import { initTheme } from './store/theme';
@@ -16,6 +17,7 @@ export default function App() {
     const offTheme = initTheme();
     const offScanner = attachScannerEvents();
     const offLog = attachLogEvents();
+    const offDsd = attachDsdEvents();
     void useUi.getState().loadAppInfo();
     const offUpdate = window.trx?.onUpdate ? window.trx.onUpdate((u) => useUi.getState().setUpdate(u)) : () => undefined;
     if (isFirstRun()) useUi.getState().openHelp();
@@ -32,6 +34,7 @@ export default function App() {
       offTheme();
       offScanner();
       offLog();
+      offDsd();
     };
   }, []);
 

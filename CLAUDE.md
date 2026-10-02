@@ -472,6 +472,47 @@ captured on 14 Sep 2026.
   (`ClockStatus`) carries it all; the dialog shows the state in words. Verified on the author's TRX-1e, 1 Oct 2026: the
   little-endian send set the clock, so the big-endian retry is a safety net for other firmware, not the expected path.
 
+## DSD+ link
+
+- DSD+ (dsdplus.com, Fast Lane) has no interface for other programs: its TCP link is its own audio and tuning channel
+  to FMPx, private and version-locked (every protocol change needs matching copies). It writes everything to files and
+  reads its data files back while running, and its own companions work the same way (LRRP.exe reads `DSDPlus.LRRP`,
+  the voice-side FMPx tunes from `.traffic` files), so files are the link, in both directions. Decided 2 Oct 2026 after
+  reading its docs and a real folder; the user's idea of a second TRX as a PC-driven voice follower was dropped because
+  the TRX already trunk-tracks natively and a keystroke tune takes seconds against a grant's sub-second window.
+- `src/shared/dsd.ts`: `parseDsdEventLine` reads one line of `DSDPlus.event` (`YYYY/MM/DD  HH:MM:SS  [NAC=hex | DCC=n |
+  RAN=n] [RAS] message`): calls (`[Enc ][Emerg ][Bcast |TXI |OVCM ]Group|Private|Voice call; TG= RID= [alias] Tgt= Src=
+  Ch= Slot= Alg= KeyID= … Ns`; a grant line carries `Ch=` as MHz on P25 or a channel number on DMR, the closing line
+  the duration, a talker joining a call neither), `Current network:  ID  Name`, `Current site:  ID  Name` (a bare site
+  number is printed first and ignored once the named one is known), `Alias server returned talker alias "X" for NET-RID`,
+  `Registration; RID= [alias] TG= ACCEPT`, `Affiliation; …`, `Deregistration; RID=`, `DSD+ 2.523 / Fast Lane Release`,
+  anything else `other`. `reduceDsdEvent` folds events into a `DsdFeed`: one `DsdCall` per transmission (a grant
+  opens one, its duration line closes it, a line with neither is a new talker on the talkgroup's last channel, a
+  transmission with no closing line is closed after `CALL_OPEN_MS`), the newest `FEED_CALLS` kept, plus `FEED_NOTES`
+  of registrations / affiliations / alias returns. `parseDsdGroups` in `dsdRadios.ts` shares the tokenizer.
+- `src/main/dsd/watcher.ts` (`DsdWatcher`): polls the folder once a second (a stat poll behaves the same on every
+  platform and on a network share, and DSD+ keeps the files open), seeds from the last `SEED_BYTES` of the event file,
+  then reads appended bytes (a shrunken file is read from the top again); re-reads `DSDPlus.radios` and
+  `DSDPlus.groups` once a rewrite has sat still for `SETTLE_MS` (DSD+ rewrites them every minute or so), naming the
+  log's radios through `LogDb.nameRadios` (system '', DSD+ keys by its own network ID) only when the set of aliases
+  moved (`signature`), and keeping the groups' aliases for the feed's current network as `tgNames`. `alive` = an event
+  in the last `ALIVE_MS`; going quiet or waking is announced once (`lastAlive`). `settings.dsd` is `{ folder, window }`
+  (the System window's placement); `dsd:status` / `dsd:update` (throttled to 4 a second by `publishDsd`) /
+  `dsd:choose-folder` (a directory dialog) / `dsd:open`; `settingsSet` with `dsd.folder` retargets the watcher; a
+  radios import broadcasts `log:changed`.
+- Renderer: `store/dsd.ts`; the top bar's **DSD+** pill (only with a folder set: green alive, amber quiet or no event
+  file yet, red on a read error) opens the **System window** (`#system` route, `components/SystemApp.tsx`, a free
+  window remembered in `settings.dsd.window`, no docking yet): network · site · NAC / CC in the bar with the link
+  state, a table of calls (talkgroup named from `tgNames`, radio by the user's own name via `pickRadioName` keyed to
+  the scanner's system tag, else DSD+'s alias, else the number; channel in MHz or `ch N`; slot; ENC with the
+  algorithm and key in the tooltip; Emergency and Bcast / TXI / OVCM pills; length, counting while open), the call the
+  TRX is on marked **TRX** (newest call on the header's talkgroup and the status frequency, while open or within 15 s
+  of ending), and the notes beneath. The Data dialog's **DSD+ link** section (right column) has the folder, Change /
+  Off, the link state and the file counts, and an Open button. Preview: `scene=dsd` in the mock, `index.html?scene=dsd#system`
+  for the window. Next steps agreed with the user: talkgroup names keyed by network + TGID shown where the scanner
+  says UNID, then write-back (our radio names into `DSDPlus.radios`, priorities into `DSDPlus.groups` as the
+  "follow this" control), then docking like the map.
+
 ## Band tab (channel occupancy)
 
 - `src/renderer/src/store/band.ts` accumulates one bin per frequency the scanner visits
