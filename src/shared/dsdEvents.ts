@@ -7,7 +7,7 @@
  */
 import type { DsdCall, DsdEvent, DsdFeed } from './dsd';
 
-export type DsdEventKind = 'call' | 'registration' | 'affiliation' | 'deregistration' | 'alias';
+export type DsdEventKind = 'call' | 'registration' | 'affiliation' | 'deregistration' | 'alias' | 'neighbour' | 'site';
 
 /** One recorded event. A call row is one transmission, updated as its closing line lands. */
 export interface DsdEventRow {
@@ -37,6 +37,10 @@ export interface DsdEventRow {
   durationS: number | null;
   /** Registration / affiliation accepted; null where that does not apply. */
   accepted: boolean | null;
+  /** A neighbour row: the neighbouring site. */
+  peer: string | null;
+  /** A site row: its NAC or colour code ("NAC 167", "CC 15"); a neighbour row: the neighbour's, as DSD+ printed it ("CC=63"). */
+  code: string | null;
 }
 
 /** The row for a transmission as the feed holds it. */
@@ -61,11 +65,47 @@ export function callEventRow(c: DsdCall, network: string, site: string | null): 
     alias: c.alias ?? c.callsign,
     durationS: c.durationS,
     accepted: null,
+    peer: null,
+    code: null,
   };
 }
 
-/** The row for a registration, affiliation, deregistration or alias return; null for any other line. */
+/**
+ * A site as the scanner and DSD+ saw it together: its control channel from the scanner's header (DSD+ prints
+ * channel numbers), its NAC or colour code from DSD+, its name as DSD+ has it. One row per site, brought up to date.
+ */
+export function siteEventRow(network: string, site: string, name: string, controlHz: number | null, code: string | null, at: number): DsdEventRow {
+  return {
+    key: `${network}|site|${site}`,
+    at,
+    endedAt: null,
+    network,
+    site,
+    kind: 'site',
+    type: '',
+    tgid: null,
+    rid: null,
+    target: null,
+    channel: null,
+    hz: controlHz,
+    slot: null,
+    enc: false,
+    emergency: false,
+    flags: '',
+    alias: name || null,
+    durationS: null,
+    accepted: null,
+    peer: null,
+    code,
+  };
+}
+
+/** The row for a registration, affiliation, deregistration, alias return or neighbour line; null for any other line. */
 export function noteEventRow(ev: DsdEvent, network: string, site: string | null): DsdEventRow | null {
+  if (ev.kind === 'neighbour') {
+    // One row per pair of sites, its time the latest the list was printed.
+    return { key: `${network}|neighbour|${ev.site}|${ev.neighbour}`, at: ev.at, endedAt: null, network, site: ev.site, kind: 'neighbour', type: '', tgid: null, rid: null, target: null, channel: null, hz: null, slot: null, enc: false, emergency: false, flags: '', alias: null, durationS: null, accepted: null, peer: ev.neighbour, code: ev.code };
+  }
   if (ev.kind !== 'registration' && ev.kind !== 'affiliation' && ev.kind !== 'deregistration' && ev.kind !== 'alias') return null;
   const tg = ev.kind === 'registration' || ev.kind === 'affiliation' ? ev.tg : null;
   const accepted = ev.kind === 'registration' || ev.kind === 'affiliation' ? ev.accepted : null;
@@ -89,6 +129,8 @@ export function noteEventRow(ev: DsdEvent, network: string, site: string | null)
     alias: ev.alias,
     durationS: null,
     accepted,
+    peer: null,
+    code: null,
   };
 }
 
@@ -128,8 +170,8 @@ export class NoteThrottle {
   private readonly last = new Map<string, number>();
 
   keep(row: DsdEventRow): boolean {
-    if (row.kind === 'call' || row.kind === 'alias') return true;
-    const key = `${row.network}|${row.kind}|${row.rid}|${row.tgid ?? ''}|${row.accepted ?? ''}`;
+    if (row.kind === 'call' || row.kind === 'alias' || row.kind === 'site') return true;
+    const key = row.kind === 'neighbour' ? row.key : `${row.network}|${row.kind}|${row.rid}|${row.tgid ?? ''}|${row.accepted ?? ''}`;
     const at = this.last.get(key);
     if (at !== undefined && row.at - at < NOTE_REPEAT_MS && row.at >= at) return false;
     this.last.set(key, row.at);
@@ -188,9 +230,18 @@ export interface DsdRadioSummary {
 
 export interface DsdSiteSummary {
   site: string;
+  /** DSD+'s name for it, '' when it has none. */
+  name: string;
+  /** The control channel, from the scanner's header when the two were seen on one call; null until then. */
+  controlHz: number | null;
+  /** "NAC 167" or "CC 15", null until seen. */
+  code: string | null;
+  /** The sites it lists as neighbours (DMR), with their codes as DSD+ printed them. */
+  neighbours: { site: string; code: string | null }[];
+  /** Calls in the period; 0 for a site known only by its facts. */
   calls: number;
-  firstAt: number;
-  lastAt: number;
+  firstAt: number | null;
+  lastAt: number | null;
 }
 
 /** One network's day, as the History view shows it. */
@@ -223,7 +274,7 @@ export const DAY_RADIOS = 2000;
 /** How many partners / talkgroups / radios each summary line lists. */
 export const TOP_N = 8;
 
-const CSV_HEADER = ['time', 'ended', 'network', 'site', 'kind', 'type', 'tgid', 'talkgroup', 'rid', 'radio', 'target', 'channel', 'mhz', 'slot', 'enc', 'emergency', 'flags', 'alias', 'duration_s', 'accepted'];
+const CSV_HEADER = ['time', 'ended', 'network', 'site', 'kind', 'type', 'tgid', 'talkgroup', 'rid', 'radio', 'target', 'channel', 'mhz', 'slot', 'enc', 'emergency', 'flags', 'alias', 'duration_s', 'accepted', 'peer', 'code'];
 
 const csvCell = (v: string | number | boolean | null): string => {
   if (v === null) return '';
@@ -237,6 +288,24 @@ const stamp = (t: number): string => {
   const p = (n: number): string => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
+
+/** The period's summary as one flat CSV: a line per site, talkgroup and radio, with its partners in the last column. */
+export function dsdMapCsv(s: DsdDaySummary, names: { tg: (tgid: number) => string; radio: (rid: number) => string }): string {
+  const lines = ['kind,id,name,calls,radios,airtime_s,first,last,detail'];
+  const row = (kind: string, id: string | number, name: string, calls: number, radios: number | '', seconds: number | '', first: number | null, last: number | null, detail: string): void => {
+    lines.push([kind, id, name, calls, radios, seconds, first !== null ? stamp(first) : '', last !== null ? stamp(last) : '', detail].map(csvCell).join(','));
+  };
+  for (const site of s.sites) {
+    const facts = [site.controlHz !== null ? `control ${(site.controlHz / 1e6).toFixed(4)}` : '', site.code ?? '', site.neighbours.length ? `neighbours ${site.neighbours.map((n) => `${n.site}${n.code ? ` (${n.code})` : ''}`).join('; ')}` : ''].filter(Boolean).join(' · ');
+    row('site', site.site, site.name, site.calls, '', '', site.firstAt, site.lastAt, facts);
+  }
+  for (const t of s.talkgroups) row('talkgroup', t.tgid, names.tg(t.tgid), t.calls, t.radios, t.seconds, t.firstAt, t.lastAt, t.topRadios.map((r) => `${names.radio(r.rid) || r.rid} ${r.calls}`).join('; '));
+  for (const r of s.radios) {
+    const detail = [r.topTalkgroups.map((t) => `${names.tg(t.tgid) || 'TG ' + t.tgid} ${t.calls}`).join('; '), r.privateWith.length ? `private ${r.privateWith.map((p) => `${names.radio(p.rid) || p.rid} ${p.calls}`).join('; ')}` : '', r.affiliatedTg !== null ? `affiliated ${names.tg(r.affiliatedTg) || 'TG ' + r.affiliatedTg}` : ''].filter(Boolean).join(' · ');
+    row('radio', r.rid, names.radio(r.rid) || r.alias || '', r.calls, '', r.seconds, r.firstAt, r.lastAt, detail);
+  }
+  return lines.join('\r\n') + '\r\n';
+}
 
 /** The day's events as CSV (CRLF, no BOM), the names resolved by the caller. */
 export function dsdEventsCsv(rows: readonly DsdEventRow[], names: { tg: (tgid: number) => string; radio: (rid: number) => string }): string {
@@ -264,6 +333,8 @@ export function dsdEventsCsv(rows: readonly DsdEventRow[], names: { tg: (tgid: n
         r.alias,
         r.durationS,
         r.accepted,
+        r.peer,
+        r.code,
       ]
         .map(csvCell)
         .join(','),

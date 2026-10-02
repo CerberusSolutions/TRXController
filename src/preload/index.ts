@@ -96,8 +96,8 @@ const api = {
   dsdChooseFolder: (): Promise<Settings | null> => ipcRenderer.invoke(IPC.dsdChooseFolder),
   /** Open (or raise) the System window. */
   dsdOpen: (): Promise<void> => ipcRenderer.invoke(IPC.dsdOpen),
-  dsdDay: (network: string, day: string): Promise<DsdDaySummary | null> => ipcRenderer.invoke(IPC.dsdDay, network, day),
-  dsdEvents: (network: string, day: string): Promise<DsdEventRow[]> => ipcRenderer.invoke(IPC.dsdEvents, network, day),
+  dsdSummary: (network: string, from: number, to: number): Promise<DsdDaySummary | null> => ipcRenderer.invoke(IPC.dsdSummary, network, from, to),
+  dsdEvents: (network: string, from: number, to: number): Promise<DsdEventRow[]> => ipcRenderer.invoke(IPC.dsdEvents, network, from, to),
   dsdNetworks: (): Promise<DsdNetworkSummary[]> => ipcRenderer.invoke(IPC.dsdNetworks),
   /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
   dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),

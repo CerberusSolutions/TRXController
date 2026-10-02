@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EMPTY_FEED, parseDsdEventLine, reduceDsdEvent, type DsdEvent, type DsdFeed } from '../dsd';
-import { NOTE_REPEAT_MS, NoteThrottle, callEventRow, dsdEventsCsv, eventRows, noteEventRow } from '../dsdEvents';
+import { NOTE_REPEAT_MS, NoteThrottle, callEventRow, dsdEventsCsv, dsdMapCsv, eventRows, noteEventRow, siteEventRow, type DsdDaySummary } from '../dsdEvents';
 
 const LINES = [
   '2026/10/01  18:42:32  NAC=167  Current network:  BEE00.169  USAF Bases United Kingdom',
@@ -42,6 +42,11 @@ describe('eventRows', () => {
     expect(noteEventRow({ kind: 'deregistration', at: 5000, rid: 7, alias: null }, 'L1', null)).toMatchObject({ key: 'L1|deregistration|5000|7|', kind: 'deregistration', rid: 7, tgid: null, accepted: null });
     expect(noteEventRow({ kind: 'other', at: 5000, text: 'x' }, 'L1', null)).toBeNull();
     expect(noteEventRow({ kind: 'alias', at: 6000, network: 'L1', rid: 9, alias: 'Bus 4' }, 'L1', null)).toMatchObject({ kind: 'alias', alias: 'Bus 4' });
+    // A neighbour line is one row per pair of sites, a site row one per site.
+    const nb = parseDsdEventLine('2026/10/02  09:52:07  DCC=15  RAS  L1-15 neighbor:  Site L1-3; CC=63')!;
+    expect(nb).toMatchObject({ kind: 'neighbour', site: 'L1-15', neighbour: 'L1-3', code: 'CC=63', text: 'L1-15 neighbor:  Site L1-3; CC=63' });
+    expect(noteEventRow(nb, 'L1', 'L1-15')).toMatchObject({ key: 'L1|neighbour|L1-15|L1-3', kind: 'neighbour', site: 'L1-15', peer: 'L1-3', code: 'CC=63' });
+    expect(siteEventRow('L1', 'L1-15', '', 167_300_000, 'CC 15', 5000)).toMatchObject({ key: 'L1|site|L1-15', kind: 'site', site: 'L1-15', hz: 167_300_000, code: 'CC 15', alias: null, at: 5000 });
   });
 
   it('keeps a radio\'s repeated registration once per ten minutes, and every call', () => {
@@ -56,6 +61,11 @@ describe('eventRows', () => {
     const call = callEventRow({ id: 1, startedAt: 1000, lastAt: 1000, type: 'Group', enc: false, emergency: false, flags: [], tg: 69, rid: 1503, target: null, callsign: null, alias: null, channel: null, hz: null, slot: null, alg: null, keyId: null, durationS: null, open: true }, 'L1', null);
     expect(t.keep(call)).toBe(true);
     expect(t.keep(call)).toBe(true);
+    // A site's neighbour list is reprinted every few seconds: one pass per pair per ten minutes.
+    const nb = noteEventRow(parseDsdEventLine('2026/10/02  09:52:07  DCC=15  RAS  L1-15 neighbor:  Site L1-3; CC=63')!, 'L1', 'L1-15')!;
+    expect(t.keep(nb)).toBe(true);
+    expect(t.keep({ ...nb, at: nb.at + 30_000 })).toBe(false);
+    expect(t.keep({ ...nb, at: nb.at + NOTE_REPEAT_MS })).toBe(true);
     t.reset();
     expect(t.keep(reg(1000)!)).toBe(true);
   });
@@ -64,8 +74,27 @@ describe('eventRows', () => {
     const row = callEventRow({ id: 1, startedAt: new Date(2026, 9, 2, 10, 32, 11).getTime(), lastAt: 0, type: 'Group', enc: true, emergency: false, flags: [], tg: 69, rid: 1438, target: null, callsign: null, alias: 'Bus, "4"', channel: null, hz: 167_300_000, slot: 1, alg: 'AES', keyId: null, durationS: 8, open: false }, 'L1', 'L1-15');
     const csv = dsdEventsCsv([row], { tg: (t) => (t === 69 ? 'Bus Ops' : ''), radio: (r) => (r === 1438 ? 'Depot 4' : '') });
     const lines = csv.split('\r\n');
-    expect(lines[0]).toBe('time,ended,network,site,kind,type,tgid,talkgroup,rid,radio,target,channel,mhz,slot,enc,emergency,flags,alias,duration_s,accepted');
-    expect(lines[1]).toBe('2026-10-02 10:32:11,2026-10-02 10:32:19,L1,L1-15,call,Group,69,Bus Ops,1438,Depot 4,,,167.3000,1,1,0,,"Bus, ""4""",8,');
+    expect(lines[0]).toBe('time,ended,network,site,kind,type,tgid,talkgroup,rid,radio,target,channel,mhz,slot,enc,emergency,flags,alias,duration_s,accepted,peer,code');
+    expect(lines[1]).toBe('2026-10-02 10:32:11,2026-10-02 10:32:19,L1,L1-15,call,Group,69,Bus Ops,1438,Depot 4,,,167.3000,1,1,0,,"Bus, ""4""",8,,,');
     expect(lines[2]).toBe('');
+  });
+
+  it('writes the map as one flat CSV: sites, talkgroups and radios with their partners', () => {
+    const t0 = new Date(2026, 9, 2, 10, 0, 0).getTime();
+    const s: DsdDaySummary = {
+      network: 'L1', from: t0, to: t0 + 3600_000, calls: 3, privateCalls: 1, events: 5, hours: new Array<number>(24).fill(0),
+      sites: [{ site: 'L1-15', name: '', controlHz: 167_300_000, code: 'CC 15', neighbours: [{ site: 'L1-3', code: 'CC=63' }], calls: 3, firstAt: t0, lastAt: t0 + 60_000 }],
+      talkgroups: [{ tgid: 69, calls: 2, radios: 2, seconds: 12, firstAt: t0, lastAt: t0 + 60_000, enc: 0, emergency: 0, topRadios: [{ rid: 1438, calls: 1 }, { rid: 1432, calls: 1 }], hours: [] }],
+      radios: [{ rid: 1438, calls: 2, seconds: 9, firstAt: t0, lastAt: t0 + 60_000, alias: 'Depot 4', topTalkgroups: [{ tgid: 69, calls: 1 }], privateWith: [{ rid: 1503, calls: 1 }], registrations: 1, affiliations: 1, affiliatedTg: 32 }],
+      radiosTruncated: false,
+    };
+    const lines = dsdMapCsv(s, { tg: (tg) => (tg === 69 ? 'Bus Ops' : ''), radio: (rid) => (rid === 1438 ? 'Depot 4' : '') }).split('\r\n');
+    expect(lines).toEqual([
+      'kind,id,name,calls,radios,airtime_s,first,last,detail',
+      'site,L1-15,,3,,,2026-10-02 10:00:00,2026-10-02 10:01:00,control 167.3000 · CC 15 · neighbours L1-3 (CC=63)',
+      'talkgroup,69,Bus Ops,2,2,12,2026-10-02 10:00:00,2026-10-02 10:01:00,Depot 4 1; 1432 1',
+      'radio,1438,Depot 4,2,,9,2026-10-02 10:00:00,2026-10-02 10:01:00,Bus Ops 1 · private 1503 1 · affiliated TG 32',
+      '',
+    ]);
   });
 });

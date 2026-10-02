@@ -601,7 +601,7 @@ export const IPC = {
   dsdOpen: 'dsd:open',
   dsdDock: 'dsd:dock',
   dsdDockState: 'dsd:dock-state',
-  dsdDay: 'dsd:day',
+  dsdSummary: 'dsd:summary',
   dsdEvents: 'dsd:events',
   dsdNetworks: 'dsd:networks',
   logTraffic: 'log:traffic',

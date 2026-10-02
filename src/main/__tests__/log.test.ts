@@ -575,7 +575,7 @@ describe('LogDb', () => {
     const db = new LogDb(':memory:');
     const day = new Date(2026, 9, 2, 0, 0, 0).getTime();
     const at = (h: number, m: number, s = 0): number => day + ((h * 60 + m) * 60 + s) * 1000;
-    const base = { endedAt: null, network: 'L1', site: 'L1-15', type: 'Group', tgid: 69, rid: 1438, target: null, channel: '306', hz: null, slot: 1, enc: false, emergency: false, flags: '', alias: null, durationS: null, accepted: null } as const;
+    const base = { endedAt: null, network: 'L1', site: 'L1-15', type: 'Group', tgid: 69, rid: 1438, target: null, channel: '306', hz: null, slot: 1, enc: false, emergency: false, flags: '', alias: null, durationS: null, accepted: null, peer: null, code: null } as const;
     const call = (key: string, t: number, over: Partial<typeof base> & { kind?: 'call' } = {}) => ({ ...base, key, at: t, kind: 'call' as const, ...over });
     // The grant, then its closing line as the watcher's next poll records it (same key, now with an end), then a replay of both after a restart.
     expect(db.recordDsdEvents([call('a', at(10, 0)), call('b', at(10, 1), { rid: 1432, durationS: 4, endedAt: at(10, 1, 4) })])).toBe(2);
@@ -592,9 +592,15 @@ describe('LogDb', () => {
       { ...base, key: 'g', at: at(9, 59, 30), kind: 'affiliation' as const, type: '', tgid: 32, rid: 1503, channel: null, slot: null, alias: 'Depot 3', accepted: true },
       call('h', at(12, 5), { network: 'S1', site: 'S1-1', tgid: 7, rid: 9, durationS: 1, endedAt: at(12, 5, 1) }),
       call('i', day + 86_400_000 + 1000, { tgid: 69, rid: 1438, durationS: 1, endedAt: day + 86_400_000 + 2000 }),
+      // The site's facts and its neighbours are the map whatever the period; a neighbour known only from a list is a site too.
+      { ...base, key: 'L1|site|L1-15', at: at(10, 0), kind: 'site' as const, type: '', tgid: null, rid: null, channel: null, slot: null, hz: 167_300_000, code: 'CC 15' },
+      { ...base, key: 'L1|neighbour|L1-15|L1-3', at: at(10, 0), kind: 'neighbour' as const, type: '', tgid: null, rid: null, channel: null, slot: null, peer: 'L1-3', code: 'CC=63' },
+      { ...base, key: 'L1|neighbour|L1-15|L1-9', at: at(10, 1), kind: 'neighbour' as const, type: '', tgid: null, rid: null, channel: null, slot: null, peer: 'L1-9', code: 'CC=183' },
     ]);
+    // A neighbour line reprinted later moves the row's time on, nothing else.
+    db.recordDsdEvents([{ ...base, key: 'L1|neighbour|L1-15|L1-3', at: at(10, 5), kind: 'neighbour' as const, type: '', tgid: null, rid: null, channel: null, slot: null, peer: 'L1-3', code: 'CC=63' }]);
     const d = db.dsdDay('L1', day, day + 86_400_000);
-    expect(d).toMatchObject({ network: 'L1', calls: 5, privateCalls: 1, events: 7, radiosTruncated: false });
+    expect(d).toMatchObject({ network: 'L1', calls: 5, privateCalls: 1, events: 10, radiosTruncated: false });
     expect(d.hours[10]).toBe(2);
     expect(d.hours[11]).toBe(2);
     expect(d.hours[12]).toBe(1);
@@ -614,10 +620,12 @@ describe('LogDb', () => {
     ]);
     expect(d.radios[0]).toMatchObject({ topTalkgroups: [{ tgid: 69, calls: 1 }, { tgid: 32, calls: 1 }], privateWith: [{ rid: 1503, calls: 1 }], registrations: 0, affiliations: 0, affiliatedTg: null });
     expect(d.radios[1]).toMatchObject({ alias: 'Depot 3', privateWith: [{ rid: 1438, calls: 1 }], registrations: 1, affiliations: 1, affiliatedTg: 32 });
-    expect(d.sites).toEqual([{ site: 'L1-15', calls: 5, firstAt: at(10, 0), lastAt: at(12, 0) }]);
-    expect(db.dsdNetworks().map((n) => [n.network, n.events])).toEqual([['L1', 8], ['S1', 1]]);
+    expect(d.sites).toEqual([{ site: 'L1-15', name: '', controlHz: 167_300_000, code: 'CC 15', neighbours: [{ site: 'L1-3', code: 'CC=63' }, { site: 'L1-9', code: 'CC=183' }], calls: 5, firstAt: at(10, 0), lastAt: at(12, 0) }]);
+    expect(db.dsdEvents('L1', at(10, 4), at(10, 6)).map((r) => r.key)).toEqual(['L1|neighbour|L1-15|L1-3']);
+    expect(db.dsdNetworks().map((n) => [n.network, n.events])).toEqual([['L1', 11], ['S1', 1]]);
     expect(db.dsdDay('S1', day, day + 86_400_000).calls).toBe(1);
-    expect(db.pruneDsdEvents(at(11, 0))).toBe(4);
+    // Before 11:00: a, b, f, g, the site row and both neighbour rows.
+    expect(db.pruneDsdEvents(at(11, 0))).toBe(7);
     expect(db.dsdEventCount()).toBe(5);
     db.close();
   });

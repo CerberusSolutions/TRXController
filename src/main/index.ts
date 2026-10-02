@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
-import { dayRange, isDayKey } from '../shared/dayMap';
+import { isDayKey } from '../shared/dayMap';
 import { locateCdat, readCdat, writeCdat } from './programming/locate';
 import type { ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 import type { LookupMode } from '../shared/ipc';
@@ -19,7 +19,7 @@ import type { NewTgName } from '../shared/tgNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
 import { ChannelLearner, type ChannelVotes } from '../shared/dsdChannels';
-import { DSD_KEEP_DAYS } from '../shared/dsdEvents';
+import { DSD_KEEP_DAYS, siteEventRow } from '../shared/dsdEvents';
 import { WindowDock } from './dock';
 import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
@@ -46,6 +46,8 @@ let channels: ChannelLearner | null = null;
 let dsdSystems: Record<string, string> = {};
 /** A DSD+ call and a scanner header count as the same call when they are this close. */
 const SAME_CALL_MS = 15_000;
+/** Sites whose control channel and code have been recorded this session (key: network | site | control | code). */
+const recordedSites = new Set<string>();
 let channelsPath = '';
 let saveChannelsTimer: ReturnType<typeof setTimeout> | null = null;
 function saveChannels(): void {
@@ -170,10 +172,22 @@ function learnDsdSystem(s: ScannerSnapshot): void {
   if (!dsd || !db || !h || h.recordingType !== 1 || !h.systemTag || !s.status?.squelch.rf) return;
   const status = dsd.status();
   const network = status.feed.network?.id;
-  if (!network || dsdSystems[network] === h.systemTag) return;
+  if (!network) return;
   const now = Date.now();
   const tgid = h.talkgroupId1;
   if (!status.feed.calls.some((c) => c.tg === tgid && c.type === 'Group' && (c.open || now - c.lastAt < SAME_CALL_MS))) return;
+  // The same call on both: the site DSD+ is parked on is the scanner's, so its control channel (which DSD+ prints
+  // only as a channel number) and code go on the site's row of the map, once per session.
+  const site = status.feed.site;
+  if (site && h.controlFrequencyHz > 0) {
+    const code = status.feed.nac ? `NAC ${status.feed.nac}` : status.feed.dcc !== null ? `CC ${status.feed.dcc}` : null;
+    const key = `${network}|${site.id}|${h.controlFrequencyHz}|${code ?? ''}`;
+    if (!recordedSites.has(key)) {
+      recordedSites.add(key);
+      db.recordDsdEvents([siteEventRow(network, site.id, site.name, h.controlFrequencyHz, code, now)]);
+    }
+  }
+  if (dsdSystems[network] === h.systemTag) return;
   const was = dsdSystems[network];
   dsdSystems[network] = h.systemTag;
   console.log(`[dsd] network ${network} is the scanner's "${h.systemTag}" (talkgroup ${tgid} on both)`);
@@ -350,15 +364,17 @@ function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
   ipcMain.handle(IPC.dsdStatus, () => dsd?.status() ?? null);
   ipcMain.handle(IPC.dsdOpen, () => openSystem());
-  ipcMain.handle(IPC.dsdDay, (_e, network: unknown, day: unknown) => {
-    if (!db || typeof network !== 'string' || !isDayKey(day)) return null;
-    const { from, to } = dayRange(day);
-    return db.dsdDay(network, from, to);
+  const period = (from: unknown, to: unknown): { from: number; to: number } | null =>
+    typeof from === 'number' && typeof to === 'number' && Number.isFinite(from) && Number.isFinite(to) && to > from ? { from, to } : null;
+  ipcMain.handle(IPC.dsdSummary, (_e, network: unknown, from: unknown, to: unknown) => {
+    const p = period(from, to);
+    if (!db || typeof network !== 'string' || !p) return null;
+    return db.dsdDay(network, p.from, p.to);
   });
-  ipcMain.handle(IPC.dsdEvents, (_e, network: unknown, day: unknown) => {
-    if (!db || typeof network !== 'string' || !isDayKey(day)) return [];
-    const { from, to } = dayRange(day);
-    return db.dsdEvents(network, from, to);
+  ipcMain.handle(IPC.dsdEvents, (_e, network: unknown, from: unknown, to: unknown) => {
+    const p = period(from, to);
+    if (!db || typeof network !== 'string' || !p) return [];
+    return db.dsdEvents(network, p.from, p.to);
   });
   ipcMain.handle(IPC.dsdNetworks, () => db?.dsdNetworks() ?? []);
   ipcMain.handle(IPC.dsdChooseFolder, async () => {
