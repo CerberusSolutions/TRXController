@@ -17,6 +17,8 @@ export type DsdEvent =
   | { kind: 'affiliation'; at: number; rid: number; alias: string | null; tg: number | null; accepted: boolean }
   | { kind: 'deregistration'; at: number; rid: number; alias: string | null }
   | { kind: 'start'; at: number; version: string }
+  /** A DMR site's neighbour list, one line per neighbour, reprinted every few seconds ("L1-15 neighbor:  Site L1-3; CC=63"). */
+  | { kind: 'neighbour'; at: number; site: string; neighbour: string; code: string | null; text: string }
   | { kind: 'other'; at: number; text: string };
 
 /**
@@ -172,6 +174,7 @@ export function parseDsdEventLine(line: string): DsdEvent | null {
     return { kind, at, rid, alias, tg: c[4] !== undefined ? Number(c[4]) : null, accepted: /^ACCEPT/i.test(c[5] ?? '') };
   }
   if ((c = /^DSD\+ (\S+)/.exec(msg))) return { kind: 'start', at, version: c[1]! };
+  if ((c = /^(\S+) neighbou?r:\s+Site (\S+?)(?:;\s*(.*))?$/i.exec(msg))) return { kind: 'neighbour', at, site: c[1]!, neighbour: c[2]!, code: c[3]?.trim() || null, text: msg };
   return { kind: 'other', at, text: msg };
 }
 
@@ -188,8 +191,10 @@ function noteText(ev: DsdEvent): string | null {
       return `Deregistration ${ev.rid}${ev.alias ? ` ${ev.alias}` : ''}`;
     case 'start':
       return `DSD+ ${ev.version} started`;
+    case 'neighbour':
+      return ev.text;
     case 'other':
-      return /^(Private Call Alert|Emerg|Affiliation Request|.*neighbor)/.test(ev.text) ? ev.text : null;
+      return /^(Private Call Alert|Emerg|Affiliation Request)/.test(ev.text) ? ev.text : null;
     default:
       return null;
   }

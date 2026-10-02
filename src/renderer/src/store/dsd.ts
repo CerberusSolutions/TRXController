@@ -9,13 +9,13 @@ interface DsdState {
   chooseFolder: () => Promise<void>;
   clearFolder: () => Promise<void>;
   open: () => void;
-  /** The History view's day summary, for `dayKey` on `dayNetwork`; null until fetched or when nothing is recorded. */
+  /** The History view's summary for `dayKey` (the period as "from-to") on `dayNetwork`; null until fetched or when nothing is recorded. */
   day: DsdDaySummary | null;
   dayKey: string | null;
   dayNetwork: string | null;
   dayBusy: boolean;
   networks: DsdNetworkSummary[];
-  loadDay: (network: string, day: string) => Promise<void>;
+  loadDay: (network: string, from: number, to: number) => Promise<void>;
   loadNetworks: () => Promise<void>;
 }
 
@@ -38,11 +38,12 @@ export const useDsd = create<DsdState>((set, get) => ({
   dayNetwork: null,
   dayBusy: false,
   networks: [],
-  loadDay: async (network, day) => {
-    if (!window.trx?.dsdDay) return;
+  loadDay: async (network, from, to) => {
+    if (!window.trx?.dsdSummary) return;
+    const day = `${from}-${to}`;
     set({ dayBusy: true, dayKey: day, dayNetwork: network });
     try {
-      const summary = await window.trx.dsdDay(network, day);
+      const summary = await window.trx.dsdSummary(network, from, to);
       // A later request may have overtaken this one: keep only the answer for the day in hand.
       if (get().dayKey === day && get().dayNetwork === network) set({ day: summary, dayBusy: false });
     } catch {

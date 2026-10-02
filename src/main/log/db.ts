@@ -8,7 +8,7 @@ import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import type { NewRadioName, RadioName } from '../../shared/radioNames';
 import { pickTgName, type NewTgName, type TgName } from '../../shared/tgNames';
-import { DAY_RADIOS, TOP_N, type DsdDaySummary, type DsdEventRow, type DsdNetworkSummary, type DsdRadioSummary, type DsdTgSummary } from '../../shared/dsdEvents';
+import { DAY_RADIOS, TOP_N, type DsdDaySummary, type DsdEventRow, type DsdNetworkSummary, type DsdRadioSummary, type DsdSiteSummary, type DsdTgSummary } from '../../shared/dsdEvents';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel, isPlaceholderName } from '@trxcontroller/rcip';
@@ -193,6 +193,7 @@ export class LogDb {
         accepted   INTEGER
       );
       CREATE INDEX IF NOT EXISTS dsd_events_network_at ON dsd_events(network, at);
+      CREATE INDEX IF NOT EXISTS dsd_events_network_kind ON dsd_events(network, kind);
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
         tg_dec   INTEGER NOT NULL,
@@ -222,6 +223,9 @@ export class LogDb {
       if (!cols.includes(c)) this.db.exec(`ALTER TABLE receptions ADD COLUMN ${c} TEXT NOT NULL DEFAULT ''`);
     }
     if (!cols.includes('rruk')) this.db.exec("ALTER TABLE receptions ADD COLUMN rruk TEXT NOT NULL DEFAULT ''");
+    const dsdCols = (this.db.prepare('PRAGMA table_info(dsd_events)').all() as { name: string }[]).map((c) => c.name);
+    if (!dsdCols.includes('peer')) this.db.exec('ALTER TABLE dsd_events ADD COLUMN peer TEXT');
+    if (!dsdCols.includes('code')) this.db.exec('ALTER TABLE dsd_events ADD COLUMN code TEXT');
     if (!cols.includes('distance_km')) this.db.exec('ALTER TABLE receptions ADD COLUMN distance_km REAL');
     if (!cols.includes('bearing_deg')) this.db.exec('ALTER TABLE receptions ADD COLUMN bearing_deg INTEGER');
     if (!cols.includes('candidates')) this.db.exec("ALTER TABLE receptions ADD COLUMN candidates TEXT NOT NULL DEFAULT '[]'");
@@ -718,19 +722,20 @@ export class LogDb {
    */
   recordDsdEvents(rows: Iterable<DsdEventRow>): number {
     const stmt = this.db.prepare(
-      `INSERT INTO dsd_events (key, at, ended_at, network, site, kind, type, tgid, rid, target, channel, hz, slot, enc, emergency, flags, alias, duration_s, accepted)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO dsd_events (key, at, ended_at, network, site, kind, type, tgid, rid, target, channel, hz, slot, enc, emergency, flags, alias, duration_s, accepted, peer, code)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (key) DO UPDATE SET
-         ended_at = COALESCE(excluded.ended_at, ended_at), site = COALESCE(excluded.site, site), rid = COALESCE(excluded.rid, rid),
+         at = MAX(at, excluded.at), ended_at = COALESCE(excluded.ended_at, ended_at), site = COALESCE(excluded.site, site), rid = COALESCE(excluded.rid, rid),
          channel = COALESCE(excluded.channel, channel), hz = COALESCE(excluded.hz, hz), slot = COALESCE(excluded.slot, slot),
          enc = MAX(enc, excluded.enc), emergency = MAX(emergency, excluded.emergency), alias = COALESCE(excluded.alias, alias),
-         duration_s = COALESCE(excluded.duration_s, duration_s), accepted = COALESCE(excluded.accepted, accepted)`,
+         duration_s = COALESCE(excluded.duration_s, duration_s), accepted = COALESCE(excluded.accepted, accepted),
+         peer = COALESCE(excluded.peer, peer), code = COALESCE(excluded.code, code)`,
     );
     let n = 0;
     this.db.exec('BEGIN');
     try {
       for (const r of rows) {
-        stmt.run(r.key, r.at, r.endedAt, r.network, r.site, r.kind, r.type, r.tgid, r.rid, r.target, r.channel, r.hz, r.slot, r.enc ? 1 : 0, r.emergency ? 1 : 0, r.flags, r.alias, r.durationS, r.accepted === null ? null : r.accepted ? 1 : 0);
+        stmt.run(r.key, r.at, r.endedAt, r.network, r.site, r.kind, r.type, r.tgid, r.rid, r.target, r.channel, r.hz, r.slot, r.enc ? 1 : 0, r.emergency ? 1 : 0, r.flags, r.alias, r.durationS, r.accepted === null ? null : r.accepted ? 1 : 0, r.peer, r.code);
         n++;
       }
       this.db.exec('COMMIT');
@@ -847,14 +852,26 @@ export class LogDb {
       };
     });
 
-    const sites = (
-      this.db.prepare(`SELECT site, COUNT(*) AS calls, MIN(at) AS first_at, MAX(at) AS last_at FROM dsd_events WHERE ${where} AND kind = 'call' AND site IS NOT NULL GROUP BY site ORDER BY calls DESC`).all(...args) as {
-        site: string;
-        calls: number;
-        first_at: number;
-        last_at: number;
-      }[]
-    ).map((r) => ({ site: r.site, calls: Number(r.calls), firstAt: Number(r.first_at), lastAt: Number(r.last_at) }));
+    // Sites: the ones with calls in the period, plus every site the network's facts (control channel, code, neighbours) name,
+    // since those are the map whatever the period.
+    const sites = new Map<string, DsdSiteSummary>();
+    const siteOf = (id: string): DsdSiteSummary => {
+      let s = sites.get(id);
+      if (!s) {
+        s = { site: id, name: '', controlHz: null, code: null, neighbours: [], calls: 0, firstAt: null, lastAt: null };
+        sites.set(id, s);
+      }
+      return s;
+    };
+    for (const r of this.db.prepare(`SELECT site, COUNT(*) AS calls, MIN(at) AS first_at, MAX(at) AS last_at FROM dsd_events WHERE ${where} AND kind = 'call' AND site IS NOT NULL GROUP BY site ORDER BY calls DESC`).all(...args) as { site: string; calls: number; first_at: number; last_at: number }[]) {
+      Object.assign(siteOf(r.site), { calls: Number(r.calls), firstAt: Number(r.first_at), lastAt: Number(r.last_at) });
+    }
+    for (const r of this.db.prepare(`SELECT site, alias, hz, code FROM dsd_events WHERE network = ? AND kind = 'site' AND site IS NOT NULL`).all(network) as { site: string; alias: string | null; hz: number | null; code: string | null }[]) {
+      Object.assign(siteOf(r.site), { name: r.alias ?? '', controlHz: r.hz === null ? null : Number(r.hz), code: r.code });
+    }
+    for (const r of this.db.prepare(`SELECT site, peer, code FROM dsd_events WHERE network = ? AND kind = 'neighbour' AND site IS NOT NULL AND peer IS NOT NULL ORDER BY peer`).all(network) as { site: string; peer: string; code: string | null }[]) {
+      siteOf(r.site).neighbours.push({ site: r.peer, code: r.code });
+    }
 
     return {
       network,
@@ -866,7 +883,7 @@ export class LogDb {
       hours: dayHours,
       talkgroups: [...talkgroups.values()],
       radios,
-      sites,
+      sites: [...sites.values()].sort((a, b) => b.calls - a.calls || a.site.localeCompare(b.site)),
       radiosTruncated,
     };
   }
@@ -1188,6 +1205,8 @@ interface RawDsdEvent {
   alias: string | null;
   duration_s: number | null;
   accepted: number | null;
+  peer?: string | null;
+  code?: string | null;
 }
 
 function toDsdEvent(r: RawDsdEvent): DsdEventRow {
@@ -1212,6 +1231,8 @@ function toDsdEvent(r: RawDsdEvent): DsdEventRow {
     alias: r.alias,
     durationS: num(r.duration_s),
     accepted: r.accepted === null ? null : !!r.accepted,
+    peer: r.peer ?? null,
+    code: r.code ?? null,
   };
 }
 

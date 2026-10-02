@@ -66,10 +66,12 @@ npm run build && npm start    # run the built app
   needs to voice-follow the site itself. The votes are kept in `dsd-channels.json` beside the log. Radio and
   talkgroup aliases DSD+ learns go into the log as it learns them. Every transmission, registration,
   affiliation and alias return is also **recorded** in the log database as it lands, and **History** (or H)
-  in the System window shows a recorded day: calls per hour, each talkgroup with its calls, radios, airtime,
-  active period and the radios heard on it, each radio with its talkgroups, private-call partners and
-  registrations, and the sites; click a talkgroup to see its radios, or a radio to see its talkgroups; [ and ]
-  step the day; CSV saves the day's events. Nothing is written to DSD+'s folder. Feed DSD+ from an
+  in the System window is the network map: a day, a week, a month or everything recorded, as calls per hour,
+  the sites (control channel once the scanner and DSD+ have been on one call, NAC or colour code, the
+  neighbours a DMR site lists), each talkgroup with its calls, radios, airtime, active period and the radios
+  heard on it, each radio with its talkgroups, private-call partners and registrations. Click a talkgroup to
+  see its radios, or a radio to see its talkgroups; [ and ] step the period; **Map CSV** saves the summary,
+  **Events CSV** the period's events. Nothing is written to DSD+'s folder. Feed DSD+ from an
   SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
   sees the whole system while the TRX moves to voice channels.
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom
