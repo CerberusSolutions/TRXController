@@ -194,6 +194,14 @@ describe('parseSearchScreen', () => {
     expect(parseSearchScreen({ lines: TG })).toMatchObject({ mode: 'DMR', slot: 1, colorCode: 15, radioId: null, tgid: 9 });
   });
 
+  it('reads the TRX-1e\'s RadID1 / RadID2 lines of a DMR search as the radio ID and its slot', () => {
+    // Captured on a TRX-1e in a service search on the TfL site, 2 Oct 2026.
+    const two = parseSearchScreen({ lines: ['', '-Service Search-', 'Public Safety', 'DMR   139.531250', 'Slot:2  Color: 0', 'RadID2: 327739'] });
+    expect(two).toMatchObject({ name: 'Public Safety', mode: 'DMR', slot: 2, colorCode: 0, radioId: 327739, radioAlias: null });
+    const one = parseSearchScreen({ lines: ['', '-Service Search-', 'Public Safety', 'DMR   139.981250', '', 'RadID1: 366354'] });
+    expect(one).toMatchObject({ slot: 1, radioId: 366354, radioAlias: null });
+  });
+
   it('returns null for the scan channel screen, the sweeping screen and menus', () => {
     expect(parseSearchScreen({ lines: ['', 'Civil Airband', 'CONV        psDr', 'TC NW Deps', 'AM    119.775000', ''] })).toBeNull();
     expect(parseSearchScreen({ lines: ['', 'Civil Airband', 'Military Airband', 'Shopwatch', '', ''] })).toBeNull();

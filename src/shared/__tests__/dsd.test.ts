@@ -105,6 +105,27 @@ describe('reduceDsdEvent', () => {
     expect(again.site?.name).toBe('RAF Croughton');
   });
 
+  it('gives a channel-less call line no channel unless a call on its talkgroup is open or just ended', () => {
+    // DSD+ on the TfL site, 2 Oct 2026: no Ch= on any line for an hour, the slot only.
+    const feed = feedOf([
+      '2026/10/02  10:32:11  Current network:  S1  TfL',
+      '2026/10/02  10:32:16  Private call; Tgt=370258  Src=374502  Ch=1736',
+      '2026/10/02  10:32:44  Private call; Tgt=370258  Src=374502  28s',
+      '2026/10/02  10:42:35  Private call; Tgt=371931  Src=374513  Slot=2',
+      '2026/10/02  10:46:09  Private call; Tgt=295487  Src=300735  Slot=1',
+      '2026/10/02  10:46:15  Private call; Tgt=295487  Src=300735  Slot=1  5s',
+      '2026/10/02  10:50:42  Group call; TG=333851  RID=333488  Slot=2',
+      '2026/10/02  10:50:44  Group call; TG=333851  RID=333490  Slot=2',
+    ]);
+    expect(feed.calls.map((c) => [c.rid, c.channel, c.slot, c.durationS])).toEqual([
+      [333490, null, 2, null],
+      [333488, null, 2, null],
+      [300735, null, 1, 5],
+      [374513, null, 2, null],
+      [374502, '1736', null, 28],
+    ]);
+  });
+
   it('closes a transmission that never got a closing line once it goes quiet', () => {
     const grant = parseDsdEventLine('2026/10/02  10:00:00  DCC=12  Group call; TG=69  RID=1430  Ch=306')!;
     const later = parseDsdEventLine('2026/10/02  10:01:00  DCC=12  Group call; TG=32  RID=1503  Ch=307')!;
