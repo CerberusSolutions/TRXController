@@ -271,6 +271,8 @@ function ConfirmedList() {
   const unconfirm = useLog((s) => s.unconfirm);
   const radioNames = useLog((s) => s.radioNames);
   const unnameRadio = useLog((s) => s.unnameRadio);
+  const tgNames = useLog((s) => s.tgNames);
+  const unnameTalkgroup = useLog((s) => s.unnameTalkgroup);
   const radioImport = useLog((s) => s.radioImport);
   const importRadios = useLog((s) => s.importRadios);
   const dsd = (
@@ -287,10 +289,10 @@ function ConfirmedList() {
       {radioImport.error && <p className="mt-1 text-xs text-red">{radioImport.error}</p>}
     </div>
   );
-  if (confirmations.length === 0 && radioNames.length === 0)
+  if (confirmations.length === 0 && radioNames.length === 0 && tgNames.length === 0)
     return (
       <>
-        <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, type a name, or name a radio ID (there, or with ✎ beside the hero's Radio ID).</p>
+        <p className="mt-1 text-[11px] text-ink-3">None yet. Unfold a log row with + and confirm the right candidate, type a name, or name a talkgroup or radio ID (there, or with ✎ beside the hero's TGID and Radio ID).</p>
         {dsd}
       </>
     );
@@ -311,9 +313,29 @@ function ConfirmedList() {
               </li>
             ))}
           </ul>
-          {confirmations.length > 0 && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3">Channels</p>}
         </>
       )}
+      {tgNames.length > 0 && (
+        <>
+          <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3">Talkgroups</p>
+          <ul className="mb-2 max-h-32 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
+            {tgNames.map((n) => (
+              <li key={n.id} className="flex items-center gap-2">
+                <span className="text-amber-2" title="Talkgroup ID">{n.tgid}</span>
+                <span className="w-24 shrink-0 truncate text-ink-3" title={n.system || 'Any system'}>{n.system || 'any system'}</span>
+                <span className="min-w-0 flex-1 truncate font-sans text-ink" title={`${n.source === 'USER' ? 'Named' : 'From DSDPlus.groups'} ${new Date(n.namedAt).toLocaleString()}`}>{n.name}</span>
+                <span className={`shrink-0 rounded px-1 py-px font-sans text-[9px] font-bold uppercase tracking-wider ${n.source === 'USER' ? 'bg-panel-2 text-ink-3' : SOURCE_PILL.DSD}`} title={n.source === 'USER' ? 'A name you typed' : "DSD+'s alias, read from its groups file whenever DSD+ rewrites it"}>{n.source === 'USER' ? 'typed' : 'DSD'}</span>
+                {n.source === 'USER' && (
+                  <button className="shrink-0 text-[10px] text-ink-3 underline decoration-ink-3/40 underline-offset-2 hover:text-red" title="Forget this name: the entries go back to the scanner's word, else DSD+'s alias, else the lookups" onClick={() => void unnameTalkgroup(n.id)}>
+                    remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {confirmations.length > 0 && (radioNames.length > 0 || tgNames.length > 0) && <p className="mb-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3">Channels</p>}
       <ul className="max-h-48 space-y-0.5 overflow-y-auto font-mono text-[11px] text-ink-2">
         {confirmations.map((c) => (
           <li key={c.id} className="flex items-center gap-2">
@@ -328,7 +350,7 @@ function ConfirmedList() {
         ))}
       </ul>
       <p className="mt-1 text-[11px] text-ink-3">
-        {[confirmations.length ? `${confirmations.length} channel${confirmations.length === 1 ? '' : 's'}` : '', radioNames.length ? `${radioNames.length} radio${radioNames.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' and ')} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone; a radio name outranks the scanner's alpha tag and radioid.net.
+        {[confirmations.length ? `${confirmations.length} channel${confirmations.length === 1 ? '' : 's'}` : '', radioNames.length ? `${radioNames.length} radio${radioNames.length === 1 ? '' : 's'}` : '', tgNames.length ? `${tgNames.length} talkgroup${tgNames.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ')} confirmed. A confirmation outranks every lookup and the scanner's own programming for its frequency and tone; a radio name outranks the scanner's alpha tag and radioid.net; a talkgroup name you type outranks the scanner's alpha tag, and DSD+'s alias stands in where the scanner shows UNID.
       </p>
       {dsd}
     </div>

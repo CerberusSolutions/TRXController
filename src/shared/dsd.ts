@@ -204,6 +204,8 @@ export function reduceDsdEvent(feed: DsdFeed, ev: DsdEvent): DsdFeed {
   const next: DsdFeed = { ...feed, lastEventAt: Math.max(feed.lastEventAt ?? 0, ev.at) };
   switch (ev.kind) {
     case 'network':
+      // DSD+ retuned to another system: its site, codes, calls and notes (a site's neighbour list) belong to the old one.
+      if (feed.network && feed.network.id !== ev.id) Object.assign(next, { site: null, nac: null, dcc: null, calls: [], notes: [] });
       next.network = { id: ev.id, name: ev.name };
       return next;
     case 'site':
@@ -287,6 +289,8 @@ export interface DsdStatus {
   groups: { found: boolean; count: number };
   /** Talkgroup aliases from the groups file for the feed's current network, by TGID. */
   tgNames: Record<number, string>;
+  /** The scanner's system tag the feed's current network is known as (learned from a call both saw), or null until then. */
+  system: string | null;
   /** The protocol DSD+'s groups file records for the feed's current network ("TIIInonStd", "P25"), for its frequencies-file lines. */
   protocol: string | null;
   /** Channel numbers of the feed's current network learned from the TRX's squelch openings, by channel. */
@@ -306,6 +310,7 @@ export const EMPTY_DSD_STATUS: DsdStatus = {
   radios: { found: false, named: 0, importedAt: null },
   groups: { found: false, count: 0 },
   tgNames: {},
+  system: null,
   protocol: null,
   channels: {},
   feed: EMPTY_FEED,

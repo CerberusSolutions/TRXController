@@ -4,6 +4,7 @@ import type { ReceptionRow, TrafficGroup } from "../../../shared/ipc";
 import { formatPlace, point, type Units } from "../../../shared/geo";
 import { pickConfirmation, type Confirmation, type NewConfirmation } from "../../../shared/confirm";
 import { pickRadioName, radioNameSystem } from "../../../shared/radioNames";
+import { pickTgName, tgNameSystem } from "../../../shared/tgNames";
 import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
@@ -583,9 +584,71 @@ function Candidates({ r, units }: { r: ReceptionRow; units: Units }) {
         </button>
         <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{keyText(key)}</span>
       </li>
+      {r.tgid !== null && <TgNamer r={r} busy={busy} run={run} />}
       {radio !== null && <RadioNamer r={r} radioId={radio} busy={busy} run={run} focusKey={picks} />}
       <Traffic r={r} onPick={pick} />
     </ul>
+  );
+}
+
+/**
+ * Name a talkgroup: the scanner shows UNID for one its wildcard object caught and cuts its own alpha tags to 16
+ * characters, so this is where "Highways Depot" goes. Keyed to the trunked system ('' elsewhere) and shown ahead of
+ * the scanner's word and DSD+'s alias from then on.
+ */
+function TgNamer({ r, busy, run }: { r: ReceptionRow; busy: boolean; run: (task: Promise<void>) => Promise<void> }) {
+  const tgNames = useLog((s) => s.tgNames);
+  const nameTalkgroup = useLog((s) => s.nameTalkgroup);
+  const unnameTalkgroup = useLog((s) => s.unnameTalkgroup);
+  const tgid = r.tgid!;
+  const system = tgNameSystem(r);
+  const current = pickTgName(tgNames, tgid, [system]);
+  const own = current?.source === "USER" ? current : null;
+  const [text, setText] = useState(own?.name ?? "");
+  useEffect(() => setText(own?.name ?? ""), [tgid, own?.name]);
+  const btn = "shrink-0 rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink disabled:opacity-40";
+  const where = system ? `on ${system}` : "on any system";
+  // What the talkgroup is known as without a name of yours: the scanner's own word, and DSD+'s alias when it has one.
+  const known = [r.scannerName ? `scanner: ${r.scannerName}` : "", current?.source === "DSD" ? `DSD+: ${current.name}` : ""].filter(Boolean).join(" · ");
+  const save = (): void => {
+    const name = text.trim();
+    if (!name || (own && own.system === system && own.name === name)) return;
+    void run(nameTalkgroup({ tgid, system, name, source: "USER" }));
+  };
+  return (
+    <li className="flex min-w-0 items-center gap-2 py-px">
+      <span className="w-9 shrink-0 rounded bg-panel-2 px-1 py-px text-center font-sans text-[9px] font-bold uppercase tracking-wider text-ink-2" title="Talkgroup">
+        TG
+      </span>
+      <span className="shrink-0 text-ink-2" title={`Talkgroup ${tgid} ${where}`}>
+        {tgid}
+      </span>
+      <input
+        className="w-56 rounded border border-edge bg-panel px-1.5 py-px font-sans text-[11px] text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+        placeholder="Name this talkgroup…"
+        value={text}
+        disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") save();
+          if (e.key === "Escape") setText(own?.name ?? "");
+        }}
+      />
+      <button type="button" className={btn} disabled={busy || !text.trim() || (!!own && own.system === system && own.name === text.trim())} title={`Give talkgroup ${tgid} ${where} this name. The hero and every log entry show it ahead of the scanner's own word and DSD+'s alias`} onClick={save}>
+        name
+      </button>
+      {own && (
+        <>
+          <span className="shrink-0 font-sans text-[10px] font-bold text-green" title={`Named ${new Date(own.namedAt).toLocaleString()} ${own.system ? `on ${own.system}` : "on any system"}`}>
+            ✓ named
+          </span>
+          <button type="button" className={btn} disabled={busy} title="Forget this name: the entries go back to the scanner's word, else DSD+'s alias, else the lookups" onClick={() => void run(unnameTalkgroup(own.id))}>
+            remove
+          </button>
+        </>
+      )}
+      <span className="min-w-0 flex-1 truncate font-sans text-[10px] text-ink-3">{[where, known].filter(Boolean).join(" · ")}</span>
+    </li>
   );
 }
 

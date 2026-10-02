@@ -30,6 +30,7 @@ import {
 } from '../shared/ipc';
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { NewRadioName, RadioName } from '../shared/radioNames';
+import type { NewTgName, TgName } from '../shared/tgNames';
 import type { DsdStatus } from '../shared/dsd';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
@@ -80,6 +81,9 @@ const api = {
   logRadioName: (n: NewRadioName): Promise<RadioName> => ipcRenderer.invoke(IPC.logRadioName, n),
   logRadioUnname: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logRadioUnname, id),
   logRadioNames: (): Promise<RadioName[]> => ipcRenderer.invoke(IPC.logRadioNames),
+  logTgName: (n: NewTgName): Promise<TgName> => ipcRenderer.invoke(IPC.logTgName, n),
+  logTgUnname: (id: number): Promise<void> => ipcRenderer.invoke(IPC.logTgUnname, id),
+  logTgNames: (): Promise<TgName[]> => ipcRenderer.invoke(IPC.logTgNames),
   /** The DSD+ link: what the watcher on the DSD+ folder sees (null before the log is open). */
   dsdStatus: (): Promise<DsdStatus | null> => ipcRenderer.invoke(IPC.dsdStatus),
   onDsdUpdate: (cb: (status: DsdStatus) => void): (() => void) => {

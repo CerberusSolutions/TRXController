@@ -186,6 +186,8 @@ export interface ReceptionRow {
   radioAlias: string;
   /** The name the user gave this radio ID (Data › Confirmed identities › Radios), '' when none: ahead of the alias and radioid.net in `radioCallsign`. */
   radioLabel: string;
+  /** The talkgroup's name from the user or DSD+ that fits this row (its system, else any), '' when none: `name` and `source` already carry it when it applies. */
+  tgLabel: string;
   /** Callsign for radioId: the user's own name for it, else the scanner's alias when it showed one, else from the imported DMR user database. */
   radioCallsign: string | null;
   /** Name for radioId from the imported DMR user database, if known and no scanner alias stands in front of it. */
@@ -590,6 +592,9 @@ export const IPC = {
   logRadioUnname: 'log:radio-unname',
   logRadioNames: 'log:radio-names',
   logRadioImport: 'log:radio-import',
+  logTgName: 'log:tg-name',
+  logTgUnname: 'log:tg-unname',
+  logTgNames: 'log:tg-names',
   dsdStatus: 'dsd:status',
   dsdUpdate: 'dsd:update',
   dsdChooseFolder: 'dsd:choose-folder',

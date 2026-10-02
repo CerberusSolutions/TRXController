@@ -3,7 +3,7 @@
  * programming is the blank source; the initials name the lookup that filled
  * in what the scanner did not know.
  */
-export type LookupSource = '' | 'RRDB' | 'RRUK' | 'WTR' | 'UKR' | 'RID' | 'MEM' | 'CONF';
+export type LookupSource = '' | 'RRDB' | 'RRUK' | 'WTR' | 'UKR' | 'RID' | 'MEM' | 'CONF' | 'TG' | 'DSD';
 
 export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = {
   RRDB: 'RadioReference database',
@@ -13,6 +13,8 @@ export const SOURCE_NAME: Readonly<Record<Exclude<LookupSource, ''>, string>> = 
   RID: 'radioid.net DMR user database',
   MEM: "scanner's object remembered from an earlier reception on this frequency",
   CONF: 'identity you confirmed by hand (outranks every lookup and the scanner)',
+  TG: "talkgroup name you typed (outranks the scanner's own alpha tag for the talkgroup)",
+  DSD: "DSD+'s alias for the talkgroup (its DSDPlus.groups file), standing in where the scanner shows UNID",
 };
 
 /** The lookups a user can order and switch off. The scanner's own programming is always first. */

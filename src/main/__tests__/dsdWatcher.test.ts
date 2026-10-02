@@ -21,6 +21,7 @@ describe('DsdWatcher', () => {
   let dir: string;
   let now: number;
   let named: NewRadioName[][];
+  let talkgroups: [string, { tgid: number; name: string }[]][];
   let updates: { status: DsdStatus; radiosChanged: boolean }[];
   let w: DsdWatcher;
   beforeEach(() => {
@@ -28,8 +29,15 @@ describe('DsdWatcher', () => {
     dir = mkdtempSync(join(tmpdir(), 'dsd-'));
     now = new Date(2026, 9, 1, 18, 59, 30).getTime();
     named = [];
+    talkgroups = [];
     updates = [];
-    w = new DsdWatcher({ nameRadios: (list) => (named.push(list), list.length), onChange: (status, radiosChanged) => updates.push({ status, radiosChanged }), now: () => now });
+    w = new DsdWatcher({
+      nameRadios: (list) => (named.push(list), list.length),
+      nameTalkgroups: (network, list) => (talkgroups.push([network, list]), list.length),
+      systemOf: (network) => (network === 'BEE00.169' ? 'USAF Bases UK' : null),
+      onChange: (status, radiosChanged) => updates.push({ status, radiosChanged }),
+      now: () => now,
+    });
   });
   afterEach(() => {
     w.stop();
@@ -57,7 +65,12 @@ describe('DsdWatcher', () => {
     expect(s.radios).toMatchObject({ found: true, named: 1 });
     expect(s.groups).toEqual({ found: true, count: 2 });
     expect(s.tgNames).toEqual({ 46226: 'RAFC FD Disp' });
+    expect(s.system).toBe('USAF Bases UK');
+    // Every network's aliases go to the log's talkgroup names, once per change of the set.
+    expect(talkgroups).toEqual([['BEE00.169', [{ tgid: 46226, name: 'RAFC FD Disp' }]], ['BEE00.167', [{ tgid: 63354, name: 'Salisbury Plain Army' }]]]);
     expect(updates.some((u) => u.radiosChanged)).toBe(true);
+    w.reimportGroups();
+    expect(talkgroups).toHaveLength(4);
 
     // A line appended, and a fragment that waits for its line end.
     appendFileSync(join(dir, EVENT_FILE), '2026/10/01  18:59:02  NAC=167  Enc Group call; TG=63354  RID=16734081    Alg=AES  KeyID=1405 (5125)  3s\r\n2026/10/01  18:59:06  NAC=167  Enc Group');

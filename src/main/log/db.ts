@@ -7,12 +7,13 @@ import type { DayLog, DmrUser, IdentityStats, LogCursor, ReceptionRow, Repeater,
 import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import type { NewRadioName, RadioName } from '../../shared/radioNames';
+import { pickTgName, type NewTgName, type TgName } from '../../shared/tgNames';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
-import { isFrequencyLabel } from '@trxcontroller/rcip';
+import { isFrequencyLabel, isPlaceholderName } from '@trxcontroller/rcip';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias' | 'radioLabel'> & { radioAlias?: string };
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias' | 'radioLabel' | 'tgLabel'> & { radioAlias?: string };
 
 /** How far a heard frequency may be from a licensed one to count as the same channel. */
 export const WTR_TOLERANCE_HZ = 3_125;
@@ -21,11 +22,19 @@ export const WTR_TOLERANCE_HZ = 3_125;
 const ORDER_SQL = 'ORDER BY COALESCE(r.ended_at, 9223372036854775807) DESC, r.started_at DESC, r.id DESC';
 
 /**
+ * The talkgroup name that fits a row: the user's own ahead of DSD+'s alias, the row's system ahead of any system.
+ * `toRow` decides whether it stands in for the row's name (a typed name always; an alias only over a placeholder).
+ */
+const TG_SQL = `(SELECT t.name FROM tg_names t WHERE t.tgid = r.tgid AND (t.system = r.system OR t.system = '') ORDER BY t.source = 'DSD', t.system = '' LIMIT 1) AS tg_label,
+  (SELECT t.source FROM tg_names t WHERE t.tgid = r.tgid AND (t.system = r.system OR t.system = '') ORDER BY t.source = 'DSD', t.system = '' LIMIT 1) AS tg_source`;
+
+/**
  * What a row shows for its radio ID: the user's own name for it (keyed to the row's system, else to any
  * system), else the scanner's alias, else radioid.net's callsign; radioid.net's name only behind its callsign.
  */
 const RADIO_SQL = `(SELECT n.name FROM radio_names n WHERE n.radio_id = r.radio_id AND (n.system = r.system OR n.system = '') ORDER BY n.system = '' LIMIT 1) AS radio_label,
-  COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name`;
+  COALESCE(NULLIF(r.radio_alias, ''), u.callsign) AS radio_callsign, CASE WHEN r.radio_alias <> '' THEN '' ELSE u.name END AS radio_name,
+  ${TG_SQL}`;
 
 const ROW_SQL = `SELECT r.*,
   (SELECT COUNT(*) FROM receptions h WHERE h.frequency_hz = r.frequency_hz) AS hits,
@@ -150,6 +159,16 @@ export class LogDb {
         named_at INTEGER NOT NULL,
         UNIQUE (radio_id, system)
       );
+      CREATE TABLE IF NOT EXISTS tg_names (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        system   TEXT NOT NULL DEFAULT '',
+        tgid     INTEGER NOT NULL,
+        name     TEXT NOT NULL,
+        source   TEXT NOT NULL DEFAULT 'USER',
+        named_at INTEGER NOT NULL,
+        UNIQUE (system, tgid, source)
+      );
+      CREATE INDEX IF NOT EXISTS tg_names_tgid ON tg_names(tgid);
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
         tg_dec   INTEGER NOT NULL,
@@ -377,6 +396,69 @@ export class LogDb {
 
   radioNames(): RadioName[] {
     return (this.db.prepare('SELECT * FROM radio_names ORDER BY system, radio_id').all() as unknown as RawRadioName[]).map(toRadioName);
+  }
+
+  // --- Talkgroup names -------------------------------------------------------
+
+  /**
+   * Name a talkgroup (on one trunked system, or on any with system ''), replacing an earlier name with the same
+   * key and source. Rows are not rewritten: every select joins the name in, so the whole log follows at once.
+   */
+  nameTalkgroup(n: NewTgName, now = Date.now()): TgName {
+    this.db
+      .prepare(
+        `INSERT INTO tg_names (system, tgid, name, source, named_at) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (system, tgid, source) DO UPDATE SET name = excluded.name, named_at = excluded.named_at`,
+      )
+      .run(n.system, n.tgid, n.name, n.source, now);
+    const id = Number((this.db.prepare('SELECT id FROM tg_names WHERE system = ? AND tgid = ? AND source = ?').get(n.system, n.tgid, n.source) as { id: number }).id);
+    return this.tgName(id)!;
+  }
+
+  /**
+   * DSD+'s aliases for one system (its groups file, re-read whenever DSD+ rewrites it): the system's DSD rows
+   * become exactly this list. Names the user typed are never touched. Returns how many were written.
+   */
+  replaceDsdTalkgroups(system: string, list: Iterable<{ tgid: number; name: string }>, now = Date.now()): number {
+    const ins = this.db.prepare(`INSERT INTO tg_names (system, tgid, name, source, named_at) VALUES (?, ?, ?, 'DSD', ?)`);
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare(`DELETE FROM tg_names WHERE system = ? AND source = 'DSD'`).run(system);
+      const seen = new Set<number>();
+      for (const g of list) {
+        if (!g.name || seen.has(g.tgid)) continue;
+        seen.add(g.tgid);
+        ins.run(system, g.tgid, g.name, now);
+        n++;
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  /** Forget a talkgroup name; the rows go back to the scanner's own name, else the lookups'. */
+  unnameTalkgroup(id: number): void {
+    this.db.prepare('DELETE FROM tg_names WHERE id = ?').run(id);
+  }
+
+  tgName(id: number): TgName | null {
+    const r = this.db.prepare('SELECT * FROM tg_names WHERE id = ?').get(id) as unknown as RawTgName | undefined;
+    return r ? toTgName(r) : null;
+  }
+
+  tgNames(): TgName[] {
+    return (this.db.prepare(`SELECT * FROM tg_names ORDER BY source = 'DSD', system, tgid`).all() as unknown as RawTgName[]).map(toTgName);
+  }
+
+  /** The name that applies to `tgid` on one of `systems` (most specific first; '' is tried last whatever is passed). */
+  tgNameFor(tgid: number | null, systems: readonly (string | null | undefined)[]): TgName | null {
+    if (tgid === null) return null;
+    const rows = (this.db.prepare('SELECT * FROM tg_names WHERE tgid = ?').all(tgid) as unknown as RawTgName[]).map(toTgName);
+    return pickTgName(rows, tgid, systems);
   }
 
   // --- Traffic analysis ----------------------------------------------------
@@ -888,6 +970,8 @@ interface Raw {
   radio_label?: string | null;
   radio_callsign: string | null;
   radio_name: string | null;
+  tg_label?: string | null;
+  tg_source?: string | null;
 }
 
 interface RawRadioName {
@@ -896,6 +980,19 @@ interface RawRadioName {
   system: string;
   name: string;
   named_at: number;
+}
+
+interface RawTgName {
+  id: number;
+  system: string;
+  tgid: number;
+  name: string;
+  source: string;
+  named_at: number;
+}
+
+function toTgName(r: RawTgName): TgName {
+  return { id: Number(r.id), system: r.system, tgid: Number(r.tgid), name: r.name, source: r.source === 'DSD' ? 'DSD' : 'USER', namedAt: Number(r.named_at) };
 }
 
 function toRadioName(r: RawRadioName): RadioName {
@@ -912,6 +1009,12 @@ function parseCandidates(json: string | null | undefined): ReceptionRow['candida
 }
 
 function toRow(r: Raw): ReceptionRow {
+  // A talkgroup name of the user's own stands in for whatever the row carries short of a confirmation; DSD+'s
+  // alias only where the scanner itself had nothing to say (UNID, a bare number, blank, the frequency). The
+  // per-source columns are untouched, so the Detail view still shows the scanner's word.
+  const tgLabel = r.tg_label ?? '';
+  const scannerSaid = r.source === 'MEM' ? r.name : (r.scanner_name ?? '');
+  const tgApplies = tgLabel !== '' && r.source !== 'CONF' && (r.tg_source === 'USER' || isPlaceholderName(scannerSaid));
   return {
     id: Number(r.id),
     startedAt: Number(r.started_at),
@@ -919,7 +1022,7 @@ function toRow(r: Raw): ReceptionRow {
     frequencyHz: Number(r.frequency_hz),
     mode: r.mode,
     signalType: r.signal_type,
-    name: r.name,
+    name: tgApplies ? tgLabel : r.name,
     system: r.system,
     scanlist: r.scanlist,
     objectType: r.object_type,
@@ -929,7 +1032,7 @@ function toRow(r: Raw): ReceptionRow {
     squelch: r.squelch,
     tone: r.tone ?? '',
     licensee: r.licensee ?? '',
-    source: (r.source ?? '') as LookupSource,
+    source: tgApplies ? (r.tg_source === 'USER' ? 'TG' : 'DSD') : ((r.source ?? '') as LookupSource),
     scannerName: r.scanner_name ?? '',
     wtr: r.wtr ?? '',
     rrName: r.rr_name ?? '',
@@ -946,6 +1049,7 @@ function toRow(r: Raw): ReceptionRow {
     hits: Number(r.hits),
     radioAlias: r.radio_alias ?? '',
     radioLabel: r.radio_label ?? '',
+    tgLabel,
     // The user's own name for the radio stands in front of the alias and the callsign, and hides radioid.net's name.
     radioCallsign: r.radio_label || (r.radio_callsign ?? null),
     radioName: r.radio_label ? '' : (r.radio_name ?? null),

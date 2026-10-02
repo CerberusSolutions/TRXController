@@ -1,5 +1,5 @@
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
-import { NO_ID, formatId, isFrequencyLabel, parseScanObjectLine } from '@trxcontroller/rcip';
+import { NO_ID, formatId, isPlaceholderName, parseScanObjectLine } from '@trxcontroller/rcip';
 import { identify, isChannelScreen, splitFrequency } from '../lib/format';
 import { formatPlace } from '../../../shared/geo';
 import { candidatesFor } from '../../../shared/listed';
@@ -8,6 +8,8 @@ import { useIdentities } from '../store/identities';
 import { useLog } from '../store/log';
 import { useScanner } from '../store/scanner';
 import { pickRadioName } from '../../../shared/radioNames';
+import { pickTgName } from '../../../shared/tgNames';
+import { useDsd } from '../store/dsd';
 import { useEffect, useState } from 'react';
 import SignalMeter from './SignalMeter';
 
@@ -127,8 +129,75 @@ function RadioParam({ radioId, system, alias, user, location }: { radioId: numbe
   );
 }
 
+/**
+ * The TGID parameter with a pencil: a box to give the talkgroup a name of your own without leaving the hero. The name
+ * itself shows on the name line (ahead of the scanner's UNID or alpha tag), with a TG or DSD pill after it.
+ */
+function TgParam({ tgid, system, named }: { tgid: number; system: string; named: { name: string; source: 'USER' | 'DSD' } | null }) {
+  const nameTalkgroup = useLog((s) => s.nameTalkgroup);
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  // The scanner moving to another talkgroup closes the box: a name typed for one must never land on the next.
+  useEffect(() => setEditing(false), [tgid, system]);
+  const title = [
+    `Talkgroup ${formatId(tgid)}${system ? ` on ${system}` : ''}`,
+    named ? (named.source === 'USER' ? `${named.name} is your name for it` : `${named.name} is DSD+'s alias for it (DSDPlus.groups)`) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const save = (): void => {
+    const name = text.trim();
+    if (name) void nameTalkgroup({ tgid, system, name, source: 'USER' });
+    setEditing(false);
+  };
+  return (
+    <div className="flex shrink-0 items-end gap-1 whitespace-nowrap" title={editing ? undefined : title}>
+      {editing ? (
+        <div className="flex min-w-0 flex-col">
+          <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">TGID {formatId(tgid)}{system ? ` on ${system}` : ''}</span>
+          <input
+            autoFocus
+            className="w-56 rounded border border-edge bg-panel px-1.5 py-px font-sans text-[12px] text-ink placeholder:text-ink-3 outline-none focus:border-cyan"
+            placeholder="Name this talkgroup…"
+            value={text}
+            onFocus={(e) => e.target.select()}
+            onChange={(e) => setText(e.target.value)}
+            onBlur={() => setEditing(false)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') save();
+              if (e.key === 'Escape') setEditing(false);
+              e.stopPropagation();
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">TGID</span>
+            <span className="font-mono text-sm text-ink-2">{formatId(tgid)}</span>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded px-1 text-[11px] leading-5 text-ink-3 hover:bg-panel-2 hover:text-ink"
+            title={named?.source === 'USER' ? `Change your name for talkgroup ${formatId(tgid)}` : `Give talkgroup ${formatId(tgid)} a name of your own (shown ahead of the scanner's UNID or alpha tag${named ? " and DSD+'s alias" : ''})`}
+            onClick={() => {
+              setText(named?.name ?? '');
+              setEditing(true);
+            }}
+          >
+            ✎
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function FrequencyHero() {
   const { status, lcd, active, link, licences, repeaters, rr, rruk, lookups, confirmed } = useScanner((s) => s.snapshot);
+  const tgNames = useLog((s) => s.tgNames);
+  // The DSD+ network DSD+ is parked on: its talkgroup aliases are keyed to it until main has matched it to the scanner's system tag.
+  const dsdNetwork = useDsd((s) => s.status?.feed.network?.id ?? null);
   const held = useScanner((s) => s.held);
   const units = useIdentities((s) => s.settings.units);
   const snapshotUser = useScanner((s) => s.snapshot.radioUser);
@@ -175,11 +244,16 @@ export default function FrequencyHero() {
   // An object the scanner has no name for, or names only by its frequency (with the fingerprint notes a
   // user adds while identifying it, "453.0625 CC15"), takes the highest-ranked listing's name here, as
   // the log does; the scanner's text stays beneath so the two can be compared.
-  const unnamed = (id.source === 'active' || id.source === 'lcd') && (scannerName === '' || isFrequencyLabel(scannerName));
-  const top = !conf && unnamed && listed.length > 0 ? listed[0]! : null;
+  const unnamed = (id.source === 'active' || id.source === 'lcd') && isPlaceholderName(scannerName);
+  // The talkgroup's name: the user's own stands in for the scanner's alpha tag (short of a confirmation); DSD+'s
+  // alias only where the scanner shows UNID or nothing. Keyed to the system tag on a trunked object, '' elsewhere.
+  const tgSystem = h && h.recordingType === 1 ? h.systemTag : '';
+  const tgNamed = pickTgName(tgNames, tgid, [tgSystem, dsdNetwork]);
+  const tg = !conf && tgNamed && (id.source === 'active' || id.source === 'lcd') && (tgNamed.source === 'USER' || unnamed) ? tgNamed : null;
+  const top = !conf && !tg && unnamed && listed.length > 0 ? listed[0]! : null;
   const ids = (
     <>
-      {tgid !== null && <Param label="TGID" value={formatId(tgid)} />}
+      {tgid !== null && <TgParam tgid={tgid} system={tgSystem} named={tgNamed} />}
       {(radioId !== null || radioAlias) && (
         // Radio IDs are local to a trunked system, so a name is keyed to the system tag there and to nothing on a conventional object.
         <RadioParam radioId={radioId} system={h && h.recordingType === 1 ? h.systemTag : ''} alias={radioAlias} user={radioUser} location={location} />
@@ -252,6 +326,18 @@ export default function FrequencyHero() {
               {scannerName && scannerName !== conf.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
               {conf.system || id.system || id.detail}
               {(conf.system || id.system) && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
+            </p>
+          </>
+        ) : tg ? (
+          <>
+            <p className="flex min-w-0 items-center gap-2 text-3xl font-semibold tracking-tight text-ink" title={tg.source === 'USER' ? SOURCE_NAME.TG : SOURCE_NAME.DSD}>
+              <span className="truncate">{tg.name}</span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL[tg.source === 'USER' ? 'TG' : 'DSD']}`}>{tg.source === 'USER' ? 'TG' : 'DSD'}</span>
+            </p>
+            <p className="mt-0.5 truncate text-base text-ink-2">
+              {scannerName && scannerName !== tg.name ? <span className="text-ink-3">Scanner: {scannerName} · </span> : null}
+              {id.system || id.detail}
+              {id.system && id.detail ? <span className="text-ink-3"> · {id.detail}</span> : null}
             </p>
           </>
         ) : top ? (
