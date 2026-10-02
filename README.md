@@ -63,9 +63,16 @@ npm run build && npm start    # run the built app
   channel numbers ("ch 306"); the app learns what they are from the TRX: each time the scanner's squelch
   opens within a moment of such a grant is a vote, two consistent votes learn the channel, and from then
   on the window shows the frequency (dotted, to say it was learned) and the TRX marker can match on it.
-  **Channels** (or C) lists them with the lines to paste into `DSDPlus.frequencies`, which is what DSD+
-  needs to voice-follow the site itself. A **clear** link beside a channel forgets its votes, for a frequency learned
-  from a coincidence. The votes are kept in `dsd-channels.json` beside the log. Radio and
+  **Channel map** (or C) goes further on a DMR Tier III network: Tier III numbers its channels in pairs
+  (odd LSN slot 1, even slot 2 of one carrier) at a fixed step, so one known channel places every other.
+  The panel gathers the anchors it can (a neighbour list's control channel number joined to the control
+  frequency the scanner reported for that site, the channels learned from the scanner, and any LSN and
+  frequency you type), infers the step (6.25 / 12.5 / 25 kHz, or choose it), draws the line, flags an anchor
+  off it, lists every channel heard with its slot, LCN and frequency, has an LSN ↔ MHz calculator, and
+  writes the `DSDPlus.frequencies` lines for the lot, which is what DSD+ needs to voice-follow the site
+  itself. Calls on the map show their frequency dashed. A **clear** link beside a learned channel forgets its
+  votes, for a frequency learned from a coincidence. The votes and anchors are kept in `dsd-channels.json`
+  beside the log. Radio and
   talkgroup aliases DSD+ learns go into the log as it learns them. Every transmission, registration,
   affiliation and alias return is also **recorded** in the log database as it lands, and **History** (or H)
   in the System window is the network map: a day, a week, a month or everything recorded, as calls per hour,

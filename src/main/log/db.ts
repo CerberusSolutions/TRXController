@@ -9,6 +9,7 @@ import { pickConfirmation, type Confirmation, type NewConfirmation } from '../..
 import type { NewRadioName, RadioName } from '../../shared/radioNames';
 import { pickTgName, type NewTgName, type TgName } from '../../shared/tgNames';
 import { DAY_RADIOS, TOP_N, type DsdDaySummary, type DsdEventRow, type DsdNetworkSummary, type DsdRadioSummary, type DsdSiteSummary, type DsdTgSummary } from '../../shared/dsdEvents';
+import type { HeardChannel } from '../../shared/dsdChannelMap';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel, isPlaceholderName } from '@trxcontroller/rcip';
@@ -746,6 +747,40 @@ export class LogDb {
     return n;
   }
 
+  /** A network's site facts whatever the period: each site's name, control channel, code and neighbours, by site ID. */
+  private siteFacts(network: string): Map<string, DsdSiteSummary> {
+    const sites = new Map<string, DsdSiteSummary>();
+    const siteOf = (id: string): DsdSiteSummary => {
+      let s = sites.get(id);
+      if (!s) {
+        s = { site: id, name: '', controlHz: null, code: null, neighbours: [], calls: 0, firstAt: null, lastAt: null };
+        sites.set(id, s);
+      }
+      return s;
+    };
+    for (const r of this.db.prepare(`SELECT site, alias, hz, code FROM dsd_events WHERE network = ? AND kind = 'site' AND site IS NOT NULL`).all(network) as { site: string; alias: string | null; hz: number | null; code: string | null }[]) {
+      Object.assign(siteOf(r.site), { name: r.alias ?? '', controlHz: r.hz === null ? null : Number(r.hz), code: r.code });
+    }
+    for (const r of this.db.prepare(`SELECT site, peer, code FROM dsd_events WHERE network = ? AND kind = 'neighbour' AND site IS NOT NULL AND peer IS NOT NULL ORDER BY peer`).all(network) as { site: string; peer: string; code: string | null }[]) {
+      siteOf(r.site).neighbours.push({ site: r.peer, code: r.code });
+    }
+    return sites;
+  }
+
+  /** A network's sites with their facts (name, control channel, code, neighbours), for the channel map's anchors. */
+  dsdSites(network: string): DsdSiteSummary[] {
+    return [...this.siteFacts(network).values()];
+  }
+
+  /** The logical slot numbers heard on a network (calls with a numeric channel), busiest first, with the frequency DSD+ itself printed if ever. */
+  dsdChannelsHeard(network: string): HeardChannel[] {
+    return (
+      this.db
+        .prepare(`SELECT channel, COUNT(*) AS calls, MAX(hz) AS hz, MAX(at) AS last_at FROM dsd_events WHERE network = ? AND kind = 'call' AND channel IS NOT NULL AND channel GLOB '[0-9]*' AND channel NOT GLOB '*[^0-9]*' GROUP BY channel ORDER BY calls DESC`)
+        .all(network) as { channel: string; calls: number; hz: number | null; last_at: number }[]
+    ).map((r) => ({ lsn: Number(r.channel), calls: Number(r.calls), hz: r.hz === null ? null : Number(r.hz), lastAt: Number(r.last_at) }));
+  }
+
   /** Drop recorded events older than `before`; returns how many went. */
   pruneDsdEvents(before: number): number {
     return Number(this.db.prepare('DELETE FROM dsd_events WHERE at < ?').run(before).changes);
@@ -854,7 +889,7 @@ export class LogDb {
 
     // Sites: the ones with calls in the period, plus every site the network's facts (control channel, code, neighbours) name,
     // since those are the map whatever the period.
-    const sites = new Map<string, DsdSiteSummary>();
+    const sites = this.siteFacts(network);
     const siteOf = (id: string): DsdSiteSummary => {
       let s = sites.get(id);
       if (!s) {
@@ -865,12 +900,6 @@ export class LogDb {
     };
     for (const r of this.db.prepare(`SELECT site, COUNT(*) AS calls, MIN(at) AS first_at, MAX(at) AS last_at FROM dsd_events WHERE ${where} AND kind = 'call' AND site IS NOT NULL GROUP BY site ORDER BY calls DESC`).all(...args) as { site: string; calls: number; first_at: number; last_at: number }[]) {
       Object.assign(siteOf(r.site), { calls: Number(r.calls), firstAt: Number(r.first_at), lastAt: Number(r.last_at) });
-    }
-    for (const r of this.db.prepare(`SELECT site, alias, hz, code FROM dsd_events WHERE network = ? AND kind = 'site' AND site IS NOT NULL`).all(network) as { site: string; alias: string | null; hz: number | null; code: string | null }[]) {
-      Object.assign(siteOf(r.site), { name: r.alias ?? '', controlHz: r.hz === null ? null : Number(r.hz), code: r.code });
-    }
-    for (const r of this.db.prepare(`SELECT site, peer, code FROM dsd_events WHERE network = ? AND kind = 'neighbour' AND site IS NOT NULL AND peer IS NOT NULL ORDER BY peer`).all(network) as { site: string; peer: string; code: string | null }[]) {
-      siteOf(r.site).neighbours.push({ site: r.peer, code: r.code });
     }
 
     return {

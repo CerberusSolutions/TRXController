@@ -33,6 +33,7 @@ import type { NewRadioName, RadioName } from '../shared/radioNames';
 import type { NewTgName, TgName } from '../shared/tgNames';
 import type { DsdStatus } from '../shared/dsd';
 import type { DsdDaySummary, DsdEventRow, DsdNetworkSummary } from '../shared/dsdEvents';
+import type { ChannelMapSettings, HeardChannel } from '../shared/dsdChannelMap';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -100,6 +101,8 @@ const api = {
   dsdEvents: (network: string, from: number, to: number): Promise<DsdEventRow[]> => ipcRenderer.invoke(IPC.dsdEvents, network, from, to),
   dsdNetworks: (): Promise<DsdNetworkSummary[]> => ipcRenderer.invoke(IPC.dsdNetworks),
   dsdForgetChannel: (channel: string): Promise<void> => ipcRenderer.invoke(IPC.dsdForgetChannel, channel),
+  dsdMapSet: (settings: ChannelMapSettings): Promise<void> => ipcRenderer.invoke(IPC.dsdMapSet, settings),
+  dsdChannels: (): Promise<HeardChannel[]> => ipcRenderer.invoke(IPC.dsdChannels),
   /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
   dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),
   onDsdDockState: (cb: (s: MapDockState) => void): (() => void) => {

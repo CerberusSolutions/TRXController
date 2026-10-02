@@ -605,6 +605,8 @@ export const IPC = {
   dsdEvents: 'dsd:events',
   dsdNetworks: 'dsd:networks',
   dsdForgetChannel: 'dsd:forget-channel',
+  dsdMapSet: 'dsd:map-set',
+  dsdChannels: 'dsd:channels',
   logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',

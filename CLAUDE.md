@@ -571,11 +571,33 @@ captured on 14 Sep 2026.
   2.457 and a network carries lines under both names; the first seen said `TIIIStd` for a site DSD+ now calls `TIIInonStd`,
   2 Oct 2026); the System window shows a learned frequency dotted
   (tooltip with the votes), uses it for the TRX marker (`hzOf`; with no talkgroup in the header, a conventional object,
-  the marker matches on frequency alone), and its **Channels** button (C) lists the learned and forming channels (each with a **clear**
-  link: `dsd:forget-channel` → `ChannelLearner.forget` under the feed network's key and bare ID, saved and republished) with
-  `dsdFrequencyLines` (`protocol, network, site, channel, MHz, 0.0, 0`, the comma form of DSD+'s own data files; the
-  user checks protocol and site against a line DSD+ wrote) and a Copy button. Nothing is written into DSD+'s folder.
-  The mock's `dsddmr` scene pictures it (`docs/img/system-dmr.png`).
+  the marker matches on frequency alone); a **clear** link (`dsd:forget-channel` → `ChannelLearner.forget` under the feed network's
+  key and bare ID, saved and republished) forgets a channel's votes. `dsdFrequencyLines` (`protocol, network, site, channel, MHz,
+  0.0, 0`, the comma form of DSD+'s own data files) is the fallback for the frequencies lines when no map can be built.
+  Nothing is written into DSD+'s folder.
+- Channel map (`src/shared/dsdChannelMap.ts`, built 2 Oct 2026 from a forum write-up of Tier III channel plans and the TfL London Buses
+  site): Tier III numbers channels in pairs, odd LSN = slot 1 and even = slot 2 of one carrier, at a fixed step, so
+  `index(LSN) = floor((LSN − 1) / 2)` and `hz = base + index × step` (`lsnIndex`, `lcnOf` = the index, Uniden's LCN, `lsnSlot`,
+  `lsnPair`); TfL's own DSD+ table had 1607 / 1608 = 139.53125, 1715 / 1716 = 140.20625, 1735 / 1736 = 140.33125 (12.5 kHz), and the
+  learner's earlier vote of 1716 = 139.91875 was a coincidence the map now flags. `buildChannelMap(anchors, stepHz)`: one anchor per
+  LSN (`MapAnchor {lsn, hz, source: 'user' | 'neighbour' | 'learned', note}`, user over neighbour over learned), the step chosen or
+  inferred from the pairs of anchors at different carriers (the one of `MAP_STEPS` 6.25 / 12.5 / 25 kHz most pairs agree on, within
+  `FIT_HZ` 10 Hz; `DEFAULT_STEP_HZ` 12.5 kHz with no such pair, `inferredStep` false), the base from the anchor that puts the most
+  anchors on the line, each anchor carrying `fits`; a plan with more than one range (some 900 MHz systems) shows as misfits.
+  `mapHz`, `mapLsn` (null off the grid by more than a tenth of a step), `channelMapLines` (one line per carrier under its slot-1
+  LSN, `mhzText` four decimals or five when needed: DSD+'s own table shows 139.53125), `neighbourAnchors(sites)` (a site's
+  neighbour line `CC=63` joined to that neighbour's `controlHz` fact from `siteEventRow`). Main keeps the user's settings per
+  network key as `maps` in `dsd-channels.json` (`ChannelMapSettings {stepHz | null, anchors}`, `sanitizeMapSettings` on the way
+  in), builds the map onto every published status in `withMap` (user anchors + `neighbourAnchors(db.dsdSites(key))`, cached
+  `SITE_FACTS_MS` 5 s, + learned channels with a frequency) as `DsdStatus.map: ChannelMapInfo {map, settings}`; IPC
+  `dsd:map-set(settings)` saves and republishes, `dsd:channels` is `LogDb.dsdChannelsHeard(network)` (`HeardChannel`: every numeric
+  channel granted, calls, the frequency DSD+ printed if ever, last heard). `components/ChannelMapPanel.tsx` is the System window's
+  **Channel map** panel (the button, C, red with ⚠ when an anchor is off the line): step select (Infer / 6.25 / 12.5 / 25), the
+  line ("LSN 1 / 2 = … MHz"), the anchors with a source pill (You / Site / TRX), fit and remove / clear, add-anchor inputs, an
+  LSN ↔ MHz calculator, the channels heard (slot, LCN, MHz dashed from the map, calls, last, DSD+'s or the scanner's own frequency
+  checked against the map, red with a clear link when it differs) and the frequencies lines with Copy. `SystemApp`'s `hzOf` is DSD+'s
+  frequency, else the map's for the LSN (dashed in the calls table), else the learned one (dotted), so the TRX marker matches
+  through the map. The mock's `dsddmr` scene pictures it (`docs/img/system-dmr.png`).
 - Event recording (`src/shared/dsdEvents.ts`, `dsd_events` table; built 2 Oct 2026 as the ground for the network map): every
   transmission, registration, affiliation, deregistration and alias return goes into the log database. `eventRows(before, after, ev)`
   is the pure diff of one event file line: the `DsdCall`s it opened, changed or closed (by id against the previous feed) as
