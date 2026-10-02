@@ -91,6 +91,13 @@ const api = {
   dsdChooseFolder: (): Promise<Settings | null> => ipcRenderer.invoke(IPC.dsdChooseFolder),
   /** Open (or raise) the System window. */
   dsdOpen: (): Promise<void> => ipcRenderer.invoke(IPC.dsdOpen),
+  /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
+  dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),
+  onDsdDockState: (cb: (s: MapDockState) => void): (() => void) => {
+    const listener = (_e: unknown, s: MapDockState): void => cb(s);
+    ipcRenderer.on(IPC.dsdDockState, listener);
+    return () => ipcRenderer.removeListener(IPC.dsdDockState, listener);
+  },
   /** Pick a DSD+ radio list (DSDPlus.radios) and name every radio it carries an alias for, on any system. */
   logRadioImport: (): Promise<ImportResult | null> => ipcRenderer.invoke(IPC.logRadioImport),
   /** What has been heard on a frequency, grouped by tone / colour code and talkgroup. */

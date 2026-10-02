@@ -19,6 +19,7 @@ const P25 = [
   '2026/10/02  09:42:41  NAC=167  Deregistration; RID=16734165 [CRO FIRE 10.3]',
 ];
 
+const hms = (t: number): string => new Date(t).toTimeString().slice(0, 8);
 const events = (lines: string[]): DsdEvent[] => lines.map((l) => parseDsdEventLine(l)!).filter(Boolean);
 const feedOf = (lines: string[]): DsdFeed => events(lines).reduce(reduceDsdEvent, EMPTY_FEED);
 
@@ -72,6 +73,18 @@ describe('reduceDsdEvent', () => {
     expect(feed.calls[0]!.alias).toBe('CRO SFS 046');
     expect(feed.notes.map((n) => n.text)).toEqual(['Deregistration 16734165 CRO FIRE 10.3', 'Affiliation 16734160 → TG 63305', 'Registration 16734160', 'Alias for 16734046: CRO SFS 007', 'DSD+ 2.523 started']);
     expect(feed.lastEventAt).toBe(parseDsdEventLine(P25[12]!)!.at);
+  });
+
+  it('keeps a repeated note (a neighbour list) once, at its newest time', () => {
+    const feed = feedOf([
+      '2026/10/02  09:52:07  DCC=15  RAS  L1-15 neighbor:  Site L1-3; CC=63',
+      '2026/10/02  09:52:08  DCC=15  RAS  L1-15 neighbor:  Site L1-12; CC=243',
+      '2026/10/02  09:52:37  DCC=15  RAS  L1-15 neighbor:  Site L1-3; CC=63',
+    ]);
+    expect(feed.notes.map((n) => [hms(n.at), n.text])).toEqual([
+      ['09:52:37', 'L1-15 neighbor:  Site L1-3; CC=63'],
+      ['09:52:08', 'L1-15 neighbor:  Site L1-12; CC=243'],
+    ]);
   });
 
   it('closes a transmission that never got a closing line once it goes quiet', () => {

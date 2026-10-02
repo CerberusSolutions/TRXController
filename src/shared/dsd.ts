@@ -259,7 +259,8 @@ export function reduceDsdEvent(feed: DsdFeed, ev: DsdEvent): DsdFeed {
       break;
   }
   const text = noteText(ev);
-  if (text) next.notes = [{ at: ev.at, text }, ...feed.notes].slice(0, FEED_NOTES);
+  // A site's neighbour list is printed again every few seconds: the same note is kept once, at its newest time.
+  if (text) next.notes = [{ at: ev.at, text }, ...feed.notes.filter((n) => n.text !== text)].slice(0, FEED_NOTES);
   return next;
 }
 

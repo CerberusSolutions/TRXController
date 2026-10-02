@@ -489,7 +489,10 @@ captured on 14 Sep 2026.
   anything else `other`. `reduceDsdEvent` folds events into a `DsdFeed`: one `DsdCall` per transmission (a grant
   opens one, its duration line closes it, a line with neither is a new talker on the talkgroup's last channel, a
   transmission with no closing line is closed after `CALL_OPEN_MS`), the newest `FEED_CALLS` kept, plus `FEED_NOTES`
-  of registrations / affiliations / alias returns. `parseDsdGroups` in `dsdRadios.ts` shares the tokenizer.
+  of registrations / affiliations / alias returns, a repeated note (a DMR site's neighbour list, reprinted every few
+  seconds) kept once at its newest time. `parseDsdGroups` in `dsdRadios.ts` shares the tokenizer. The seed replays the
+  last `SEED_BYTES` of the event file and, when no `Current network` line is in it (a busy DMR site writes 500
+  registration lines a minute), scans back up to `SEED_WINDOWS` more for the latest network and site lines.
 - `src/main/dsd/watcher.ts` (`DsdWatcher`): polls the folder once a second (a stat poll behaves the same on every
   platform and on a network share, and DSD+ keeps the files open), seeds from the last `SEED_BYTES` of the event file,
   then reads appended bytes (a shrunken file is read from the top again); re-reads `DSDPlus.radios` and
@@ -501,13 +504,16 @@ captured on 14 Sep 2026.
   `dsd:choose-folder` (a directory dialog) / `dsd:open`; `settingsSet` with `dsd.folder` retargets the watcher; a
   radios import broadcasts `log:changed`.
 - Renderer: `store/dsd.ts`; the top bar's **DSD+** pill (only with a folder set: green alive, amber quiet or no event
-  file yet, red on a read error) opens the **System window** (`#system` route, `components/SystemApp.tsx`, a free
-  window remembered in `settings.dsd.window`, no docking yet): network · site · NAC / CC in the bar with the link
+  file yet, red on a read error) opens the **System window** (`#system` route, `components/SystemApp.tsx`, closed with the main window like the map; docked to the right of the main window on
+  first open, `settings.dsd.dock`, free placement in `settings.dsd.window`; Dock / Undock button and the D key, `dsd:dock` /
+  `dsd:dock-state`): the docking is `src/main/dock.ts` (`WindowDock`, one instance each for the map and the System window,
+  lifted out of main on 2 Oct 2026; both follow the main window's moves and let go when it is maximised or they are
+  dragged by hand; the two can share a side and then overlap, the user docks one left), network · site · NAC / CC in the bar with the link
   state, a table of calls (talkgroup named from `tgNames`, radio by the user's own name via `pickRadioName` keyed to
   the scanner's system tag, else DSD+'s alias, else the number; channel in MHz or `ch N`; slot; ENC with the
   algorithm and key in the tooltip; Emergency and Bcast / TXI / OVCM pills; length, counting while open), the call the
   TRX is on marked **TRX** (newest call on the header's talkgroup and the status frequency, while open or within 15 s
-  of ending), and the notes beneath. The Data dialog's **DSD+ link** section (right column) has the folder, Change /
+  of ending), and the notes beneath; the toolbar's mixed sizes sit on one baseline (`items-baseline`, asked for 2 Oct 2026). The Data dialog's **DSD+ link** section (right column) has the folder, Change /
   Off, the link state and the file counts, and an Open button. Preview: `scene=dsd` in the mock, `index.html?scene=dsd#system`
   for the window. Next steps agreed with the user: talkgroup names keyed by network + TGID shown where the scanner
   says UNID, then write-back (our radio names into `DSDPlus.radios`, priorities into `DSDPlus.groups` as the

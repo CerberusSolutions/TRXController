@@ -507,6 +507,8 @@ export interface Settings {
 
 export interface DsdSettings {
   folder: string | null;
+  /** Which side of the main window the System window docks to ('right' on first use); null when it floats free. */
+  dock: MapDockSide | null;
   window: WindowState | null;
 }
 
@@ -592,6 +594,8 @@ export const IPC = {
   dsdUpdate: 'dsd:update',
   dsdChooseFolder: 'dsd:choose-folder',
   dsdOpen: 'dsd:open',
+  dsdDock: 'dsd:dock',
+  dsdDockState: 'dsd:dock-state',
   logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',

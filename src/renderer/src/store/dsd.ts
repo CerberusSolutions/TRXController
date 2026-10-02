@@ -20,7 +20,7 @@ export const useDsd = create<DsdState>((set) => ({
   },
   clearFolder: async () => {
     if (!window.trx?.settingsSet) return;
-    await window.trx.settingsSet({ dsd: { folder: null, window: null } });
+    await window.trx.settingsSet({ dsd: { folder: null, dock: 'right', window: null } });
     set({ status: (await window.trx.dsdStatus?.()) ?? null });
   },
   open: () => void window.trx?.dsdOpen?.(),

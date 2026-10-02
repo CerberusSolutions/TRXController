@@ -47,7 +47,9 @@ npm run build && npm start    # run the built app
   the top bar, green while events arrive and amber once DSD+ has gone quiet, and opens the **System
   window**: every call on the system, newest first, with its talkgroup (named from DSD+'s groups file),
   radio (your name, else DSD+'s alias, else the number), channel, slot, an ENC pill and its length, the
-  call the TRX is on marked TRX, and registrations, affiliations and alias returns beneath. Radio aliases
+  call the TRX is on marked TRX, and registrations, affiliations and alias returns beneath. It opens docked
+  to the right of the main window, as tall as it is, and follows it; **Dock** / **Undock** (or D) sets it
+  free or docks it again, as with the map. Radio aliases
   DSD+ learns go into the log as it learns them. Nothing is written to DSD+'s folder. Feed DSD+ from an
   SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
   sees the whole system while the TRX moves to voice channels.

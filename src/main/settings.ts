@@ -7,7 +7,7 @@ import { DEFAULT_LOOKUPS, normaliseLookups } from '../shared/sources';
 
 export const DEFAULT_RR: RrSettings = { username: '', password: '', coid: null, stid: null, countryName: '', stateName: '' };
 export const DEFAULT_RRUK: RrukSettings = { apiKey: '', postcode: '', tested: false };
-export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, clockSync: true, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], dsd: { folder: null, window: null }, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
+export const DEFAULT_SETTINGS: Settings = { lat: null, lon: null, radiusKm: 60, units: 'km', scanTimeoutS: null, clockSync: true, port: null, autoConnect: true, window: null, mapDock: null, mapWindow: null, programmingRecent: [], dsd: { folder: null, dock: 'right', window: null }, rr: { ...DEFAULT_RR }, rruk: { ...DEFAULT_RRUK }, lookups: DEFAULT_LOOKUPS.map((p) => ({ ...p })) };
 
 export class SettingsStore {
   private value: Settings;
@@ -60,9 +60,11 @@ export function sanitize(s: Settings): Settings {
 }
 
 function sanitizeDsd(d: unknown): Settings['dsd'] {
-  if (typeof d !== 'object' || d === null) return { folder: null, window: null };
+  if (typeof d !== 'object' || d === null) return { folder: null, dock: 'right', window: null };
   const o = d as Record<string, unknown>;
-  return { folder: typeof o['folder'] === 'string' && o['folder'].trim() !== '' ? o['folder'].trim() : null, window: sanitizeWindow(o['window'], MAP_MIN_WINDOW) };
+  // Docked to the right until the user sets it free (a missing field is a settings file from before docking).
+  const dock = o['dock'] === undefined ? 'right' : o['dock'] === 'left' || o['dock'] === 'right' ? o['dock'] : null;
+  return { folder: typeof o['folder'] === 'string' && o['folder'].trim() !== '' ? o['folder'].trim() : null, dock, window: sanitizeWindow(o['window'], MAP_MIN_WINDOW) };
 }
 
 function sanitizeRr(r: unknown): RrSettings {
