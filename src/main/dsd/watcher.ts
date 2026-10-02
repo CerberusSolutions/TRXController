@@ -58,7 +58,8 @@ export class DsdWatcher {
   private named = 0;
   private importedAt: number | null = null;
   private groupAliases = new Map<string, string>();
-  private networkProtocols = new Map<string, string>();
+  /** A network's protocol as DSD+ last classified it: the protocol of its newest group line (DSD+ reclassified TIII sites in 2.457, so a network can carry both). */
+  private networkProtocols = new Map<string, { protocol: string; lastHeard: string }>();
   private groupCount = 0;
   private error: string | null = null;
   /** What the last status pushed out said about liveness, so going quiet (or waking) is announced once. */
@@ -119,7 +120,7 @@ export class DsdWatcher {
       radios: { found: this.radios.size >= 0, named: this.named, importedAt: this.importedAt },
       groups: { found: this.groups.size >= 0, count: this.groupCount },
       tgNames,
-      protocol: net ? (this.networkProtocols.get(net) ?? null) : null,
+      protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
       channels: net && this.opts.channels ? this.opts.channels(net) : {},
       feed: this.feed,
       alive: this.folder !== null && this.eventFound && this.feed.lastEventAt !== null && this.now() - this.feed.lastEventAt < ALIVE_MS,
@@ -286,7 +287,8 @@ export class DsdWatcher {
       this.networkProtocols.clear();
       for (const g of groups) {
         if (g.alias) this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
-        if (!this.networkProtocols.has(g.network)) this.networkProtocols.set(g.network, g.protocol);
+        const known = this.networkProtocols.get(g.network);
+        if (!known || g.lastHeard > known.lastHeard) this.networkProtocols.set(g.network, { protocol: g.protocol, lastHeard: g.lastHeard });
       }
       this.groupCount = groups.length;
     } catch (e) {

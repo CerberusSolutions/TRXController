@@ -528,7 +528,9 @@ captured on 14 Sep 2026.
   openings on different frequencies or two grants are ambiguous and cast none. `MIN_VOTES` (2) with `MIN_SHARE` (70 %)
   makes the channel learned. Votes are per DSD+ network (`ChannelVotes`), kept in `userData/dsd-channels.json`
   (`saveChannels`, 2 s debounce, on every change). `DsdStatus.channels` is the feed network's learned map and
-  `DsdStatus.protocol` the network's protocol from the groups file; the System window shows a learned frequency dotted
+  `DsdStatus.protocol` the network's protocol from the groups file (its newest line's: DSD+ reclassified TIII sites in
+  2.457 and a network carries lines under both names; the first seen said `TIIIStd` for a site DSD+ now calls `TIIInonStd`,
+  2 Oct 2026); the System window shows a learned frequency dotted
   (tooltip with the votes), uses it for the TRX marker (`hzOf`; with no talkgroup in the header, a conventional object,
   the marker matches on frequency alone), and its **Channels** button (C) lists the learned and forming channels with
   `dsdFrequencyLines` (`protocol, network, site, channel, MHz, 0.0, 0`, the comma form of DSD+'s own data files; the
