@@ -254,6 +254,9 @@ function DsdForm() {
             {' · '}
             {status.groups.found ? `${status.groups.count} talkgroups in DSDPlus.groups` : 'no DSDPlus.groups yet'}
           </li>
+          <li className="text-ink-3" title="Every transmission, registration, affiliation and alias return goes into the log database; the System window's History view reads it">
+            {status.recorded.toLocaleString()} events recorded this session
+          </li>
         </ul>
       )}
       {status?.folder && (

@@ -304,7 +304,9 @@ export default function HelpDialog() {
                     reads DSDPlus.event, .radios and .groups as DSD+ writes them: a DSD+ pill appears in the top bar, green while events arrive, and opens the
                     System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio and talkgroup
                     aliases DSD+ learns go into the log as it learns them, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
-                    learns what they are from the scanner's squelch openings, and Channels (C) gives the lines for DSDPlus.frequencies.
+                    learns what they are from the scanner's squelch openings, and Channels (C) gives the lines for DSDPlus.frequencies. Every
+                    transmission, registration and affiliation is recorded; History (H) in the System window shows a recorded day: calls per hour, the
+                    talkgroups with their radios and airtime, the radios with their talkgroups, and a CSV of the day's events.
                   </p>
                   <p className="mt-2">
                     <span className="text-ink-3">Then: </span>

@@ -4,7 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
-import { isDayKey } from '../shared/dayMap';
+import { dayRange, isDayKey } from '../shared/dayMap';
 import { locateCdat, readCdat, writeCdat } from './programming/locate';
 import type { ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 import type { LookupMode } from '../shared/ipc';
@@ -19,6 +19,7 @@ import type { NewTgName } from '../shared/tgNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
 import { ChannelLearner, type ChannelVotes } from '../shared/dsdChannels';
+import { DSD_KEEP_DAYS } from '../shared/dsdEvents';
 import { WindowDock } from './dock';
 import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
@@ -349,6 +350,17 @@ function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
   ipcMain.handle(IPC.dsdStatus, () => dsd?.status() ?? null);
   ipcMain.handle(IPC.dsdOpen, () => openSystem());
+  ipcMain.handle(IPC.dsdDay, (_e, network: unknown, day: unknown) => {
+    if (!db || typeof network !== 'string' || !isDayKey(day)) return null;
+    const { from, to } = dayRange(day);
+    return db.dsdDay(network, from, to);
+  });
+  ipcMain.handle(IPC.dsdEvents, (_e, network: unknown, day: unknown) => {
+    if (!db || typeof network !== 'string' || !isDayKey(day)) return [];
+    const { from, to } = dayRange(day);
+    return db.dsdEvents(network, from, to);
+  });
+  ipcMain.handle(IPC.dsdNetworks, () => db?.dsdNetworks() ?? []);
   ipcMain.handle(IPC.dsdChooseFolder, async () => {
     if (!settings) throw new Error('No settings');
     const res = await dialog.showOpenDialog({
@@ -704,6 +716,8 @@ function openLog(): void {
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
   console.log(`[log] ${path} (${db.count()} log entries)`);
+  const pruned = db.pruneDsdEvents(Date.now() - DSD_KEEP_DAYS * 86_400_000);
+  if (pruned) console.log(`[dsd] pruned ${pruned} recorded events older than ${DSD_KEEP_DAYS} days`);
   channelsPath = join(app.getPath('userData'), 'dsd-channels.json');
   let votes: ChannelVotes | null = null;
   try {
@@ -729,6 +743,8 @@ function openLog(): void {
       if (network && ev.channel && ev.hz === null) channels?.grant(ev.at, network, ev.channel);
     },
     channels: (network) => channels?.learned(network) ?? {},
+    // Every transmission, registration, affiliation and alias return goes into the log database, idempotently.
+    record: (rows) => db!.recordDsdEvents(rows),
     onChange: (status, namesChanged) => {
       publishDsd(status);
       // The names joined into every log row moved: every window reloads its log.

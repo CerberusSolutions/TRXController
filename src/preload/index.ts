@@ -32,6 +32,7 @@ import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { NewRadioName, RadioName } from '../shared/radioNames';
 import type { NewTgName, TgName } from '../shared/tgNames';
 import type { DsdStatus } from '../shared/dsd';
+import type { DsdDaySummary, DsdEventRow, DsdNetworkSummary } from '../shared/dsdEvents';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
 
 // The renderer only ever sees this object. Nothing in the renderer may
@@ -95,6 +96,9 @@ const api = {
   dsdChooseFolder: (): Promise<Settings | null> => ipcRenderer.invoke(IPC.dsdChooseFolder),
   /** Open (or raise) the System window. */
   dsdOpen: (): Promise<void> => ipcRenderer.invoke(IPC.dsdOpen),
+  dsdDay: (network: string, day: string): Promise<DsdDaySummary | null> => ipcRenderer.invoke(IPC.dsdDay, network, day),
+  dsdEvents: (network: string, day: string): Promise<DsdEventRow[]> => ipcRenderer.invoke(IPC.dsdEvents, network, day),
+  dsdNetworks: (): Promise<DsdNetworkSummary[]> => ipcRenderer.invoke(IPC.dsdNetworks),
   /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
   dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),
   onDsdDockState: (cb: (s: MapDockState) => void): (() => void) => {

@@ -296,6 +296,8 @@ export interface DsdStatus {
   /** Channel numbers of the feed's current network learned from the TRX's squelch openings, by channel. */
   channels: Record<string, LearnedChannel>;
   feed: DsdFeed;
+  /** Events recorded in the log database since the folder was set (`dsd_events`). */
+  recorded: number;
   /** True while events keep arriving: the newest is younger than `ALIVE_MS`. */
   alive: boolean;
 }
@@ -314,5 +316,6 @@ export const EMPTY_DSD_STATUS: DsdStatus = {
   protocol: null,
   channels: {},
   feed: EMPTY_FEED,
+  recorded: 0,
   alive: false,
 };

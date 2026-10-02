@@ -8,6 +8,7 @@ import { attachDsdEvents, useDsd } from '../store/dsd';
 import { attachLogEvents, useLog } from '../store/log';
 import { attachScannerEvents, useScanner } from '../store/scanner';
 import { initTheme } from '../store/theme';
+import SystemHistory from './SystemHistory';
 
 const hms = (t: number): string => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
 const mhz = (hz: number): string => (hz / 1e6).toFixed(4);
@@ -26,6 +27,9 @@ export default function SystemApp() {
   const [, setTick] = useState(0);
   const [docked, setDocked] = useState<'left' | 'right' | null>(null);
   const [channelsOpen, setChannelsOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const networks = useDsd((s) => s.networks);
+  const loadNetworks = useDsd((s) => s.loadNetworks);
   const [copied, setCopied] = useState(false);
   const toggleDock = useCallback(() => {
     const p = window.trx?.dsdDock?.(docked ? 'off' : 'auto');
@@ -56,12 +60,20 @@ export default function SystemApp() {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key.toLowerCase() === 'd') toggleDock();
       if (e.key.toLowerCase() === 'c') setChannelsOpen((o) => !o);
-      if (e.key === 'Escape') setChannelsOpen(false);
+      if (e.key.toLowerCase() === 'h') setHistoryOpen((o) => !o);
+      if (e.key === 'Escape') {
+        setChannelsOpen(false);
+        setHistoryOpen(false);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleDock]);
 
+  // The History view needs a network: DSD+'s current one, else the most recently recorded.
+  useEffect(() => {
+    if (historyOpen) void loadNetworks();
+  }, [historyOpen, loadNetworks]);
   const feed = status?.feed;
   const h = snapshot.active?.header ?? null;
   const onTg = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : null;
@@ -87,6 +99,8 @@ export default function SystemApp() {
     const sub = [own && c.alias && own !== c.alias ? c.alias : '', c.rid !== null && name !== String(c.rid) ? String(c.rid) : ''].filter(Boolean).join(' · ');
     return { name, sub };
   };
+  const radioName = (rid: number, alias: string | null): string => pickRadioName(radioNames, rid, system)?.name ?? alias ?? '';
+  const historyNetwork = feed?.network?.id ?? networks[0]?.network ?? null;
   const calls = useMemo(() => feed?.calls ?? [], [feed]);
   // A call's frequency: DSD+'s own when the site is in its frequencies file, else the one learned for the channel number.
   const learned = status?.channels ?? {};
@@ -152,6 +166,14 @@ export default function SystemApp() {
         )}
         <button
           type="button"
+          className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${historyOpen ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+          title="The recorded day: talkgroups, radios and sites with counts, airtime and busy hours (H)"
+          onClick={() => setHistoryOpen((o) => !o)}
+        >
+          {historyOpen ? 'Live' : 'History'}
+        </button>
+        <button
+          type="button"
           className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
           title={docked ? `Docked to the ${docked} of the main window; click (or D) to set it free` : 'Dock beside the main window and follow it (D)'}
           onClick={toggleDock}
@@ -200,8 +222,11 @@ export default function SystemApp() {
         </div>
       )}
 
-      <div className="min-h-0 flex-1 overflow-auto">
-        {calls.length === 0 ? (
+      {historyOpen ? (
+        <SystemHistory network={historyNetwork} tgName={(tg) => tgName(tg)} radioName={radioName} />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-auto">
+          {calls.length === 0 ? (
           <p className="p-6 text-sm text-ink-3">{status?.folder ? 'No calls yet. They appear here as DSD+ decodes the control channel.' : 'The DSD+ link reads DSDPlus.event, .radios and .groups from the DSD+ folder. Choose it under Data › DSD+ link.'}</p>
         ) : (
           <table className="w-full border-collapse font-mono text-[12.5px]">
@@ -280,8 +305,9 @@ export default function SystemApp() {
           </table>
         )}
       </div>
+      )}
 
-      {feed && feed.notes.length > 0 && (
+      {!historyOpen && feed && feed.notes.length > 0 && (
         <div className="max-h-40 shrink-0 overflow-auto border-t border-edge bg-panel px-3 py-1.5 font-mono text-[11px] text-ink-3">
           {feed.notes.map((n, i) => (
             <div key={i} className="truncate">
