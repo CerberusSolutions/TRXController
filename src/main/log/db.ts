@@ -8,6 +8,7 @@ import type { LookupSource } from '../../shared/sources';
 import { pickConfirmation, type Confirmation, type NewConfirmation } from '../../shared/confirm';
 import type { NewRadioName, RadioName } from '../../shared/radioNames';
 import { pickTgName, type NewTgName, type TgName } from '../../shared/tgNames';
+import { DAY_RADIOS, TOP_N, type DsdDaySummary, type DsdEventRow, type DsdNetworkSummary, type DsdRadioSummary, type DsdTgSummary } from '../../shared/dsdEvents';
 import { placeFrom } from '../../shared/geo';
 import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel, isPlaceholderName } from '@trxcontroller/rcip';
@@ -169,6 +170,29 @@ export class LogDb {
         UNIQUE (system, tgid, source)
       );
       CREATE INDEX IF NOT EXISTS tg_names_tgid ON tg_names(tgid);
+      CREATE TABLE IF NOT EXISTS dsd_events (
+        id         INTEGER PRIMARY KEY AUTOINCREMENT,
+        key        TEXT NOT NULL UNIQUE,
+        at         INTEGER NOT NULL,
+        ended_at   INTEGER,
+        network    TEXT NOT NULL,
+        site       TEXT,
+        kind       TEXT NOT NULL,
+        type       TEXT NOT NULL DEFAULT '',
+        tgid       INTEGER,
+        rid        INTEGER,
+        target     INTEGER,
+        channel    TEXT,
+        hz         INTEGER,
+        slot       INTEGER,
+        enc        INTEGER NOT NULL DEFAULT 0,
+        emergency  INTEGER NOT NULL DEFAULT 0,
+        flags      TEXT NOT NULL DEFAULT '',
+        alias      TEXT,
+        duration_s INTEGER,
+        accepted   INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS dsd_events_network_at ON dsd_events(network, at);
       CREATE TABLE IF NOT EXISTS rr_talkgroups (
         sid      INTEGER NOT NULL,
         tg_dec   INTEGER NOT NULL,
@@ -685,6 +709,168 @@ export class LogDb {
     return r ? r.value : null;
   }
 
+  // --- DSD+ event recording --------------------------------------------------
+
+  /**
+   * Record events from DSD+'s event file, in one transaction. A row already there (the watcher replays the
+   * file's tail on every start) is brought up to date instead: a call's closing line lands as its end and
+   * length, a radio or alias that arrived on a later line fills in. Returns how many rows were written.
+   */
+  recordDsdEvents(rows: Iterable<DsdEventRow>): number {
+    const stmt = this.db.prepare(
+      `INSERT INTO dsd_events (key, at, ended_at, network, site, kind, type, tgid, rid, target, channel, hz, slot, enc, emergency, flags, alias, duration_s, accepted)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (key) DO UPDATE SET
+         ended_at = COALESCE(excluded.ended_at, ended_at), site = COALESCE(excluded.site, site), rid = COALESCE(excluded.rid, rid),
+         channel = COALESCE(excluded.channel, channel), hz = COALESCE(excluded.hz, hz), slot = COALESCE(excluded.slot, slot),
+         enc = MAX(enc, excluded.enc), emergency = MAX(emergency, excluded.emergency), alias = COALESCE(excluded.alias, alias),
+         duration_s = COALESCE(excluded.duration_s, duration_s), accepted = COALESCE(excluded.accepted, accepted)`,
+    );
+    let n = 0;
+    this.db.exec('BEGIN');
+    try {
+      for (const r of rows) {
+        stmt.run(r.key, r.at, r.endedAt, r.network, r.site, r.kind, r.type, r.tgid, r.rid, r.target, r.channel, r.hz, r.slot, r.enc ? 1 : 0, r.emergency ? 1 : 0, r.flags, r.alias, r.durationS, r.accepted === null ? null : r.accepted ? 1 : 0);
+        n++;
+      }
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return n;
+  }
+
+  /** Drop recorded events older than `before`; returns how many went. */
+  pruneDsdEvents(before: number): number {
+    return Number(this.db.prepare('DELETE FROM dsd_events WHERE at < ?').run(before).changes);
+  }
+
+  dsdEventCount(): number {
+    return Number((this.db.prepare('SELECT COUNT(*) AS n FROM dsd_events').get() as { n: number }).n);
+  }
+
+  /** The networks recorded, most recently heard first. */
+  dsdNetworks(): DsdNetworkSummary[] {
+    return (this.db.prepare('SELECT network, COUNT(*) AS events, MIN(at) AS first_at, MAX(at) AS last_at FROM dsd_events GROUP BY network ORDER BY last_at DESC').all() as { network: string; events: number; first_at: number; last_at: number }[]).map((r) => ({
+      network: r.network,
+      events: Number(r.events),
+      firstAt: Number(r.first_at),
+      lastAt: Number(r.last_at),
+    }));
+  }
+
+  /** One network's recorded events in [from, to), oldest first (the CSV export). */
+  dsdEvents(network: string, from: number, to: number, limit = 100_000): DsdEventRow[] {
+    return (this.db.prepare('SELECT * FROM dsd_events WHERE network = ? AND at >= ? AND at < ? ORDER BY at, id LIMIT ?').all(network, from, to, limit) as unknown as RawDsdEvent[]).map(toDsdEvent);
+  }
+
+  /** One network's day: its talkgroups, radios and sites with counts, airtime, busy hours and who talks on what. */
+  dsdDay(network: string, from: number, to: number): DsdDaySummary {
+    const where = 'network = ? AND at >= ? AND at < ?';
+    const args = [network, from, to] as const;
+    const hourOf = (at: number): number => new Date(at).getHours();
+    const hours = (): number[] => new Array<number>(24).fill(0);
+    const totals = this.db.prepare(`SELECT COUNT(*) AS events, SUM(kind = 'call') AS calls, SUM(kind = 'call' AND type = 'Private') AS private_calls FROM dsd_events WHERE ${where}`).get(...args) as { events: number; calls: number | null; private_calls: number | null };
+    const dayHours = hours();
+    for (const r of this.db.prepare(`SELECT at FROM dsd_events WHERE ${where} AND kind = 'call'`).all(...args) as { at: number }[]) dayHours[hourOf(Number(r.at))]!++;
+
+    // Talkgroups: group calls by TGID, with the radios on each and the hour spread.
+    const tgRows = this.db
+      .prepare(
+        `SELECT tgid, COUNT(*) AS calls, COUNT(DISTINCT rid) AS radios, SUM(COALESCE(duration_s, 0)) AS seconds, MIN(at) AS first_at, MAX(at) AS last_at, SUM(enc) AS enc, SUM(emergency) AS emergency
+         FROM dsd_events WHERE ${where} AND kind = 'call' AND tgid IS NOT NULL GROUP BY tgid ORDER BY calls DESC, tgid`,
+      )
+      .all(...args) as { tgid: number; calls: number; radios: number; seconds: number; first_at: number; last_at: number; enc: number; emergency: number }[];
+    const talkgroups = new Map<number, DsdTgSummary>();
+    for (const r of tgRows) {
+      talkgroups.set(Number(r.tgid), { tgid: Number(r.tgid), calls: Number(r.calls), radios: Number(r.radios), seconds: Number(r.seconds), firstAt: Number(r.first_at), lastAt: Number(r.last_at), enc: Number(r.enc), emergency: Number(r.emergency), topRadios: [], hours: hours() });
+    }
+    for (const r of this.db.prepare(`SELECT tgid, at FROM dsd_events WHERE ${where} AND kind = 'call' AND tgid IS NOT NULL`).all(...args) as { tgid: number; at: number }[]) {
+      const tg = talkgroups.get(Number(r.tgid));
+      if (tg) tg.hours[hourOf(Number(r.at))]!++;
+    }
+    // Who talks on what: the pairs, busiest first, feed both the talkgroups' radio lists and the radios' talkgroup lists.
+    const pairs = this.db
+      .prepare(`SELECT tgid, rid, COUNT(*) AS calls FROM dsd_events WHERE ${where} AND kind = 'call' AND tgid IS NOT NULL AND rid IS NOT NULL GROUP BY tgid, rid ORDER BY calls DESC, rid`)
+      .all(...args) as { tgid: number; rid: number; calls: number }[];
+    const tgsOf = new Map<number, { tgid: number; calls: number }[]>();
+    for (const p of pairs) {
+      const tg = talkgroups.get(Number(p.tgid));
+      if (tg && tg.topRadios.length < TOP_N) tg.topRadios.push({ rid: Number(p.rid), calls: Number(p.calls) });
+      const list = tgsOf.get(Number(p.rid)) ?? [];
+      if (list.length < TOP_N) list.push({ tgid: Number(p.tgid), calls: Number(p.calls) });
+      tgsOf.set(Number(p.rid), list);
+    }
+
+    // Radios: every radio heard talking, registering or affiliating; the busiest first, cut at DAY_RADIOS.
+    const radioRows = this.db
+      .prepare(
+        `SELECT rid, SUM(kind = 'call') AS calls, SUM(CASE WHEN kind = 'call' THEN COALESCE(duration_s, 0) ELSE 0 END) AS seconds, MIN(at) AS first_at, MAX(at) AS last_at,
+                SUM(kind = 'registration') AS registrations, SUM(kind = 'affiliation') AS affiliations,
+                (SELECT alias FROM dsd_events a WHERE a.network = e.network AND a.rid = e.rid AND a.alias IS NOT NULL AND a.alias <> '' ORDER BY a.at DESC LIMIT 1) AS alias,
+                (SELECT tgid FROM dsd_events a WHERE a.network = e.network AND a.rid = e.rid AND a.kind = 'affiliation' AND a.tgid IS NOT NULL AND a.at >= ? AND a.at < ? ORDER BY a.at DESC LIMIT 1) AS affiliated_tg
+         FROM dsd_events e WHERE ${where} AND rid IS NOT NULL GROUP BY rid ORDER BY calls DESC, last_at DESC LIMIT ?`,
+      )
+      .all(from, to, ...args, DAY_RADIOS + 1) as { rid: number; calls: number; seconds: number; first_at: number; last_at: number; registrations: number; affiliations: number; alias: string | null; affiliated_tg: number | null }[];
+    const radiosTruncated = radioRows.length > DAY_RADIOS;
+    if (radiosTruncated) radioRows.length = DAY_RADIOS;
+    // Private calls: each side counts the other as a partner.
+    const privates = this.db
+      .prepare(`SELECT rid, target, COUNT(*) AS calls FROM dsd_events WHERE ${where} AND kind = 'call' AND type = 'Private' AND rid IS NOT NULL AND target IS NOT NULL GROUP BY rid, target`)
+      .all(...args) as { rid: number; target: number; calls: number }[];
+    const partners = new Map<number, Map<number, number>>();
+    const addPartner = (a: number, b: number, n: number): void => {
+      const m = partners.get(a) ?? new Map<number, number>();
+      m.set(b, (m.get(b) ?? 0) + n);
+      partners.set(a, m);
+    };
+    for (const p of privates) {
+      addPartner(Number(p.rid), Number(p.target), Number(p.calls));
+      addPartner(Number(p.target), Number(p.rid), Number(p.calls));
+    }
+    const radios: DsdRadioSummary[] = radioRows.map((r) => {
+      const rid = Number(r.rid);
+      const privateWith = [...(partners.get(rid) ?? [])].map(([other, calls]) => ({ rid: other, calls })).sort((a, b) => b.calls - a.calls).slice(0, TOP_N);
+      return {
+        rid,
+        calls: Number(r.calls),
+        seconds: Number(r.seconds),
+        firstAt: Number(r.first_at),
+        lastAt: Number(r.last_at),
+        alias: r.alias ?? null,
+        topTalkgroups: tgsOf.get(rid) ?? [],
+        privateWith,
+        registrations: Number(r.registrations),
+        affiliations: Number(r.affiliations),
+        affiliatedTg: r.affiliated_tg === null ? null : Number(r.affiliated_tg),
+      };
+    });
+
+    const sites = (
+      this.db.prepare(`SELECT site, COUNT(*) AS calls, MIN(at) AS first_at, MAX(at) AS last_at FROM dsd_events WHERE ${where} AND kind = 'call' AND site IS NOT NULL GROUP BY site ORDER BY calls DESC`).all(...args) as {
+        site: string;
+        calls: number;
+        first_at: number;
+        last_at: number;
+      }[]
+    ).map((r) => ({ site: r.site, calls: Number(r.calls), firstAt: Number(r.first_at), lastAt: Number(r.last_at) }));
+
+    return {
+      network,
+      from,
+      to,
+      calls: Number(totals.calls ?? 0),
+      privateCalls: Number(totals.private_calls ?? 0),
+      events: Number(totals.events),
+      hours: dayHours,
+      talkgroups: [...talkgroups.values()],
+      radios,
+      sites,
+      radiosTruncated,
+    };
+  }
+
   count(): number {
     return Number((this.db.prepare('SELECT COUNT(*) AS n FROM receptions').get() as { n: number }).n);
   }
@@ -980,6 +1166,53 @@ interface RawRadioName {
   system: string;
   name: string;
   named_at: number;
+}
+
+interface RawDsdEvent {
+  key: string;
+  at: number;
+  ended_at: number | null;
+  network: string;
+  site: string | null;
+  kind: string;
+  type: string;
+  tgid: number | null;
+  rid: number | null;
+  target: number | null;
+  channel: string | null;
+  hz: number | null;
+  slot: number | null;
+  enc: number;
+  emergency: number;
+  flags: string;
+  alias: string | null;
+  duration_s: number | null;
+  accepted: number | null;
+}
+
+function toDsdEvent(r: RawDsdEvent): DsdEventRow {
+  const num = (v: number | null): number | null => (v === null ? null : Number(v));
+  return {
+    key: r.key,
+    at: Number(r.at),
+    endedAt: num(r.ended_at),
+    network: r.network,
+    site: r.site,
+    kind: r.kind as DsdEventRow['kind'],
+    type: r.type,
+    tgid: num(r.tgid),
+    rid: num(r.rid),
+    target: num(r.target),
+    channel: r.channel,
+    hz: num(r.hz),
+    slot: num(r.slot),
+    enc: !!r.enc,
+    emergency: !!r.emergency,
+    flags: r.flags,
+    alias: r.alias,
+    durationS: num(r.duration_s),
+    accepted: r.accepted === null ? null : !!r.accepted,
+  };
 }
 
 interface RawTgName {

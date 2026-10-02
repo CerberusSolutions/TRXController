@@ -8,6 +8,7 @@
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { ALIVE_MS, EMPTY_FEED, parseDsdEventLine, reduceDsdEvent, type DsdCallEvent, type DsdFeed, type DsdStatus } from '../../shared/dsd';
+import { NoteThrottle, eventRows, type DsdEventRow } from '../../shared/dsdEvents';
 import type { LearnedChannel } from '../../shared/dsdChannels';
 import { parseDsdGroups, parseDsdRadios } from '../../shared/dsdRadios';
 import type { NewRadioName } from '../../shared/radioNames';
@@ -37,6 +38,8 @@ export interface DsdWatcherOptions {
   onCall?: (ev: DsdCallEvent, network: string | null) => void;
   /** The channel learner's view of a network, for the status. */
   channels?: (network: string) => Record<string, LearnedChannel>;
+  /** Record events (one batch per poll, the seed included); returns how many were written. */
+  record?: (rows: DsdEventRow[]) => number;
   log?: (msg: string) => void;
   now?: () => number;
 }
@@ -62,6 +65,11 @@ export class DsdWatcher {
   private named = 0;
   private importedAt: number | null = null;
   private groupAliases = new Map<string, string>();
+  /** Rows waiting for the end of the poll, when they go to the database in one transaction. */
+  private pending: DsdEventRow[] = [];
+  private readonly throttle = new NoteThrottle();
+  /** Rows recorded since the folder was set. */
+  recorded = 0;
   /** A network's protocol as DSD+ last classified it: the protocol of its newest group line (DSD+ reclassified TIII sites in 2.457, so a network can carry both). */
   private networkProtocols = new Map<string, { protocol: string; lastHeard: string }>();
   private groupCount = 0;
@@ -86,6 +94,9 @@ export class DsdWatcher {
     this.eventSize = 0;
     this.radios = { size: -1, mtimeMs: -1, changedAt: null, signature: '' };
     this.groups = { size: -1, mtimeMs: -1, changedAt: null, signature: '' };
+    this.pending = [];
+    this.recorded = 0;
+    this.throttle.reset();
     this.named = 0;
     this.importedAt = null;
     this.groupAliases.clear();
@@ -128,6 +139,7 @@ export class DsdWatcher {
       protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
       channels: net && this.opts.channels ? this.opts.channels(net) : {},
       feed: this.feed,
+      recorded: this.recorded,
       alive: this.folder !== null && this.eventFound && this.feed.lastEventAt !== null && this.now() - this.feed.lastEventAt < ALIVE_MS,
     };
   }
@@ -147,6 +159,7 @@ export class DsdWatcher {
       this.offset = size;
       this.eventFound = true;
       this.eventSize = size;
+      this.flushPending();
       // A busy DMR site writes 500 registration lines a minute, so the tail may not reach back to the
       // "Current network" line: look further back, a window at a time, for the latest one and its site.
       if (!this.feed.network) this.seedContext(path, from);
@@ -226,6 +239,7 @@ export class DsdWatcher {
       changed = true;
       if (this.groups.changedAt === null) radiosChanged = this.readGroups() || radiosChanged;
     }
+    this.flushPending();
     // Going quiet (or coming back) changes the pill without any file changing.
     const alive = this.status().alive;
     if (changed || alive !== this.lastAlive) {
@@ -326,8 +340,22 @@ export class DsdWatcher {
   private ingest(line: string, live = false): void {
     const ev = parseDsdEventLine(line);
     if (!ev) return;
-    this.feed = reduceDsdEvent(this.feed, ev);
+    const before = this.feed;
+    this.feed = reduceDsdEvent(before, ev);
     if (live && ev.kind === 'call') this.opts.onCall?.(ev, this.feed.network?.id ?? null);
+    if (this.opts.record) for (const row of eventRows(before, this.feed, ev)) if (this.throttle.keep(row)) this.pending.push(row);
+  }
+
+  /** Hand the rows gathered since the last flush to the database, one transaction; a failure is logged, never thrown into the poll. */
+  private flushPending(): void {
+    if (this.pending.length === 0 || !this.opts.record) return;
+    const rows = this.pending;
+    this.pending = [];
+    try {
+      this.recorded += this.opts.record(rows);
+    } catch (e) {
+      this.opts.log?.(`[dsd] recording events: ${(e as Error).message}`);
+    }
   }
 
   private read(path: string, from: number, length: number): string {

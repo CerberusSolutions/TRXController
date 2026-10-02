@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DsdStatus } from '../../../shared/dsd';
+import type { DsdDaySummary, DsdNetworkSummary } from '../../../shared/dsdEvents';
 
 interface DsdState {
   /** What the DSD+ folder watcher sees; null until main has answered. */
@@ -8,9 +9,17 @@ interface DsdState {
   chooseFolder: () => Promise<void>;
   clearFolder: () => Promise<void>;
   open: () => void;
+  /** The History view's day summary, for `dayKey` on `dayNetwork`; null until fetched or when nothing is recorded. */
+  day: DsdDaySummary | null;
+  dayKey: string | null;
+  dayNetwork: string | null;
+  dayBusy: boolean;
+  networks: DsdNetworkSummary[];
+  loadDay: (network: string, day: string) => Promise<void>;
+  loadNetworks: () => Promise<void>;
 }
 
-export const useDsd = create<DsdState>((set) => ({
+export const useDsd = create<DsdState>((set, get) => ({
   status: null,
   setStatus: (status) => set({ status }),
   chooseFolder: async () => {
@@ -24,6 +33,26 @@ export const useDsd = create<DsdState>((set) => ({
     set({ status: (await window.trx.dsdStatus?.()) ?? null });
   },
   open: () => void window.trx?.dsdOpen?.(),
+  day: null,
+  dayKey: null,
+  dayNetwork: null,
+  dayBusy: false,
+  networks: [],
+  loadDay: async (network, day) => {
+    if (!window.trx?.dsdDay) return;
+    set({ dayBusy: true, dayKey: day, dayNetwork: network });
+    try {
+      const summary = await window.trx.dsdDay(network, day);
+      // A later request may have overtaken this one: keep only the answer for the day in hand.
+      if (get().dayKey === day && get().dayNetwork === network) set({ day: summary, dayBusy: false });
+    } catch {
+      set({ day: null, dayBusy: false });
+    }
+  },
+  loadNetworks: async () => {
+    if (!window.trx?.dsdNetworks) return;
+    set({ networks: await window.trx.dsdNetworks() });
+  },
 }));
 
 export function attachDsdEvents(): () => void {

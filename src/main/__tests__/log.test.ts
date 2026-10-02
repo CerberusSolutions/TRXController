@@ -571,6 +571,57 @@ describe('LogDb', () => {
     db.close();
   });
 
+  it('records DSD+ events once whatever the replays, and sums a network\'s day', () => {
+    const db = new LogDb(':memory:');
+    const day = new Date(2026, 9, 2, 0, 0, 0).getTime();
+    const at = (h: number, m: number, s = 0): number => day + ((h * 60 + m) * 60 + s) * 1000;
+    const base = { endedAt: null, network: 'L1', site: 'L1-15', type: 'Group', tgid: 69, rid: 1438, target: null, channel: '306', hz: null, slot: 1, enc: false, emergency: false, flags: '', alias: null, durationS: null, accepted: null } as const;
+    const call = (key: string, t: number, over: Partial<typeof base> & { kind?: 'call' } = {}) => ({ ...base, key, at: t, kind: 'call' as const, ...over });
+    // The grant, then its closing line as the watcher's next poll records it (same key, now with an end), then a replay of both after a restart.
+    expect(db.recordDsdEvents([call('a', at(10, 0)), call('b', at(10, 1), { rid: 1432, durationS: 4, endedAt: at(10, 1, 4) })])).toBe(2);
+    db.recordDsdEvents([call('a', at(10, 0), { durationS: 8, endedAt: at(10, 0, 8) })]);
+    db.recordDsdEvents([call('a', at(10, 0)), call('b', at(10, 1), { rid: 1432, durationS: 4, endedAt: at(10, 1, 4) })]);
+    expect(db.dsdEventCount()).toBe(2);
+    expect(db.dsdEvents('L1', day, day + 86_400_000).map((r) => [r.key, r.durationS, r.endedAt])).toEqual([['a', 8, at(10, 0, 8)], ['b', 4, at(10, 1, 4)]]);
+    // More of the day: another talkgroup, a private call, a registration and an affiliation, and a call on another network.
+    db.recordDsdEvents([
+      call('c', at(11, 30), { tgid: 32, rid: 1503, durationS: 6, endedAt: at(11, 30, 6), channel: '305', enc: true }),
+      call('d', at(11, 31), { tgid: 32, rid: 1438, durationS: 2, endedAt: at(11, 31, 2), channel: '305' }),
+      call('e', at(12, 0), { type: 'Private', tgid: null, rid: 1438, target: 1503, durationS: 3, endedAt: at(12, 0, 3) }),
+      { ...base, key: 'f', at: at(9, 59), kind: 'registration' as const, type: '', tgid: null, rid: 1503, channel: null, slot: null, accepted: true },
+      { ...base, key: 'g', at: at(9, 59, 30), kind: 'affiliation' as const, type: '', tgid: 32, rid: 1503, channel: null, slot: null, alias: 'Depot 3', accepted: true },
+      call('h', at(12, 5), { network: 'S1', site: 'S1-1', tgid: 7, rid: 9, durationS: 1, endedAt: at(12, 5, 1) }),
+      call('i', day + 86_400_000 + 1000, { tgid: 69, rid: 1438, durationS: 1, endedAt: day + 86_400_000 + 2000 }),
+    ]);
+    const d = db.dsdDay('L1', day, day + 86_400_000);
+    expect(d).toMatchObject({ network: 'L1', calls: 5, privateCalls: 1, events: 7, radiosTruncated: false });
+    expect(d.hours[10]).toBe(2);
+    expect(d.hours[11]).toBe(2);
+    expect(d.hours[12]).toBe(1);
+    // Equal call counts: the lower talkgroup number first.
+    expect(d.talkgroups.map((t) => [t.tgid, t.calls, t.radios, t.seconds, t.enc])).toEqual([
+      [32, 2, 2, 8, 1],
+      [69, 2, 2, 12, 0],
+    ]);
+    expect(d.talkgroups[1]!.topRadios).toEqual([{ rid: 1432, calls: 1 }, { rid: 1438, calls: 1 }]);
+    expect(d.talkgroups[1]!.hours[10]).toBe(2);
+    expect(d.talkgroups[0]!.hours[11]).toBe(2);
+    // Radios: the busiest first; 1438 talked on both talkgroups and called 1503 privately; 1503 registered and affiliated.
+    expect(d.radios.map((r) => [r.rid, r.calls, r.seconds])).toEqual([
+      [1438, 3, 13],
+      [1503, 1, 6],
+      [1432, 1, 4],
+    ]);
+    expect(d.radios[0]).toMatchObject({ topTalkgroups: [{ tgid: 69, calls: 1 }, { tgid: 32, calls: 1 }], privateWith: [{ rid: 1503, calls: 1 }], registrations: 0, affiliations: 0, affiliatedTg: null });
+    expect(d.radios[1]).toMatchObject({ alias: 'Depot 3', privateWith: [{ rid: 1438, calls: 1 }], registrations: 1, affiliations: 1, affiliatedTg: 32 });
+    expect(d.sites).toEqual([{ site: 'L1-15', calls: 5, firstAt: at(10, 0), lastAt: at(12, 0) }]);
+    expect(db.dsdNetworks().map((n) => [n.network, n.events])).toEqual([['L1', 8], ['S1', 1]]);
+    expect(db.dsdDay('S1', day, day + 86_400_000).calls).toBe(1);
+    expect(db.pruneDsdEvents(at(11, 0))).toBe(4);
+    expect(db.dsdEventCount()).toBe(5);
+    db.close();
+  });
+
   it('closes receptions left open by a previous run', () => {
     const db = new LogDb(':memory:');
     const r = db.insert({ startedAt: 5, endedAt: null, frequencyHz: 1, mode: '', signalType: '', name: '', system: '', scanlist: '', objectType: '', tgid: null, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '', scannerName: '', wtr: '', rrName: '', rrSystem: '', rpt: '', rssiPeak: 0, calls: 1 });

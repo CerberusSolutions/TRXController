@@ -555,6 +555,34 @@ captured on 14 Sep 2026.
   `dsdFrequencyLines` (`protocol, network, site, channel, MHz, 0.0, 0`, the comma form of DSD+'s own data files; the
   user checks protocol and site against a line DSD+ wrote) and a Copy button. Nothing is written into DSD+'s folder.
   The mock's `dsddmr` scene pictures it (`docs/img/system-dmr.png`).
+- Event recording (`src/shared/dsdEvents.ts`, `dsd_events` table; built 2 Oct 2026 as the ground for the network map): every
+  transmission, registration, affiliation, deregistration and alias return goes into the log database. `eventRows(before, after, ev)`
+  is the pure diff of one event file line: the `DsdCall`s it opened, changed or closed (by id against the previous feed) as
+  `callEventRow` (`key` = network | call | grant time | type | TG | RID | target | callsign, so a replay of the file's tail on the next
+  start, and the closing line, land on the same row), or the note as `noteEventRow` (key = network | kind | time | RID | TG); nothing
+  before the first "Current network" line is attributable, so nothing is recorded until then. The watcher queues the rows per line
+  (`pending`) and hands them over once per poll and once after the seed (`flushPending`, `DsdWatcherOptions.record`,
+  `DsdStatus.recorded`), a `NoteThrottle` keeping one registration / affiliation / deregistration per radio, talkgroup and
+  `NOTE_REPEAT_MS` (10 min; a busy DMR site re-registers every radio every few minutes, hundreds of lines a minute; calls and
+  alias returns always pass) and `LogDb.pruneDsdEvents` dropping rows older than `DSD_KEEP_DAYS` (90) when the log opens;
+  `LogDb.recordDsdEvents` upserts them in one transaction (`ON CONFLICT (key)` fills in the end, length, radio,
+  alias, channel; `enc` / `emergency` only ever set). `LogDb.dsdDay(network, from, to)` is the `DsdDaySummary`: calls / private calls /
+  events, calls per hour, each talkgroup (`DsdTgSummary`: calls, distinct radios, seconds of known length, first / last, enc,
+  emergency, `topRadios` = the TG × RID pairs busiest first cut at `TOP_N` 8, hours), each radio (`DsdRadioSummary`: calls, seconds,
+  the newest alias DSD+ printed, `topTalkgroups` from the same pairs, `privateWith` from the private calls either way round,
+  registrations, affiliations, the TG it last affiliated to; busiest first, cut at `DAY_RADIOS` 2000 with `radiosTruncated`) and the
+  sites; `dsdEvents(network, from, to)` the raw rows oldest first; `dsdNetworks()` the networks recorded, newest activity first. IPC
+  `dsd:day` / `dsd:events` / `dsd:networks` (a `dayKey` resolved with `dayRange`); `store/dsd.ts` keeps `day` / `dayKey` /
+  `dayNetwork` / `networks`. `components/SystemHistory.tsx` is the System window's **History** view (the History / Live button, H;
+  Esc returns): date input capped at today with ◀ ▶ and [ / ], the counts line (sites in its tooltip), calls-per-hour bars, the
+  talkgroups table (chips for the radios heard on each) and the radios table (chips for talkgroups and private partners, an
+  affiliated-but-silent talkgroup dashed, Reg / Aff counts), a talkgroup clicked narrows the radios to its own and the other way
+  about (`selTg` / `selRid`, either side's top list knowing the pair), a filter box, `RADIO_ROWS` 300 shown before "more", today
+  refetched every `REFRESH_MS` 15 s, and **CSV** (`dsdEventsCsv`, names resolved by the window, saved through `log:export-csv` as
+  `dsd-<network>-<day>.csv`). The network on show is DSD+'s current one, else the newest recorded. The Data dialog's DSD+ section
+  counts the events recorded this session. Nothing is written into DSD+'s folder. The mock's `dsdDay` stub pictures a P25 day
+  (`docs/img/system-history.png`). Next: the network map proper (sites with their control channels, talkgroups and radios as a
+  tree with cross-links) on top of these summaries, then write-back.
 
 ## Band tab (channel occupancy)
 

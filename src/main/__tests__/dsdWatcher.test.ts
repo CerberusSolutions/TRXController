@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DsdWatcher, EVENT_FILE, GROUPS_FILE, POLL_MS, RADIOS_FILE, SEED_BYTES, SETTLE_MS } from '../dsd/watcher';
 import type { DsdStatus } from '../../shared/dsd';
+import type { DsdEventRow } from '../../shared/dsdEvents';
 import type { NewRadioName } from '../../shared/radioNames';
 
 const EVENTS = [
@@ -22,6 +23,7 @@ describe('DsdWatcher', () => {
   let now: number;
   let named: NewRadioName[][];
   let talkgroups: [string, { tgid: number; name: string }[]][];
+  let recorded: DsdEventRow[][];
   let updates: { status: DsdStatus; radiosChanged: boolean }[];
   let w: DsdWatcher;
   beforeEach(() => {
@@ -30,11 +32,13 @@ describe('DsdWatcher', () => {
     now = new Date(2026, 9, 1, 18, 59, 30).getTime();
     named = [];
     talkgroups = [];
+    recorded = [];
     updates = [];
     w = new DsdWatcher({
       nameRadios: (list) => (named.push(list), list.length),
       nameTalkgroups: (network, list) => (talkgroups.push([network, list]), list.length),
       systemOf: (network) => (network === 'BEE00.169' ? 'USAF Bases UK' : null),
+      record: (rows) => (recorded.push(rows), rows.length),
       onChange: (status, radiosChanged) => updates.push({ status, radiosChanged }),
       now: () => now,
     });
@@ -71,12 +75,17 @@ describe('DsdWatcher', () => {
     expect(updates.some((u) => u.radiosChanged)).toBe(true);
     w.reimportGroups();
     expect(talkgroups).toHaveLength(4);
+    // The seed's events went to the database in one batch; each poll's lines in another (the closing line updates the grant's row).
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.filter((r) => r.kind === 'call')).toHaveLength(1);
+    expect(w.status().recorded).toBe(recorded[0]!.length);
 
     // A line appended, and a fragment that waits for its line end.
     appendFileSync(join(dir, EVENT_FILE), '2026/10/01  18:59:02  NAC=167  Enc Group call; TG=63354  RID=16734081    Alg=AES  KeyID=1405 (5125)  3s\r\n2026/10/01  18:59:06  NAC=167  Enc Group');
     tick();
     s = w.status();
     expect(s.feed.calls[0]).toMatchObject({ rid: 16734081, durationS: 3, open: false });
+    expect(recorded[1]).toMatchObject([{ kind: 'call', rid: 16734081, durationS: 3 }]);
     appendFileSync(join(dir, EVENT_FILE), ' call; TG=63354  RID=16734000    Alg=AES  KeyID=1405 (5125)\r\n');
     tick();
     expect(w.status().feed.calls.map((c) => c.rid)).toEqual([16734000, 16734081]);
