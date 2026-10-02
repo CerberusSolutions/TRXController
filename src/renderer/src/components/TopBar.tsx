@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useScanner } from '../store/scanner';
 import type { LinkStatus } from '../../../shared/ipc';
 import { useUi } from '../store/ui';
+import { useDsd } from '../store/dsd';
 import { DataButton } from './DataMenu';
 import ThemeToggle from './ThemeToggle';
 
@@ -39,6 +40,17 @@ export default function TopBar() {
   const app = useUi((s) => s.app);
   const update = useUi((s) => s.update);
   const openHelp = useUi((s) => s.openHelp);
+  const dsd = useDsd((s) => s.status);
+  const openSystem = useDsd((s) => s.open);
+  // The DSD+ pill: only once a folder is set, green while events arrive, amber when DSD+ has gone quiet, red on a read error.
+  const dsdDot = dsd?.error ? 'bg-red' : dsd?.alive ? 'bg-green' : 'bg-amber';
+  const dsdTitle = dsd?.error
+    ? dsd.error
+    : dsd?.alive
+      ? `DSD+ live${dsd.feed.network ? ` on ${dsd.feed.network.name || dsd.feed.network.id}` : ''}: open the System window`
+      : dsd?.event.found
+        ? 'DSD+ has gone quiet (no event in the last two minutes): open the System window'
+        : 'No DSDPlus.event in the DSD+ folder yet: open the System window';
 
   return (
     <header
@@ -61,6 +73,17 @@ export default function TopBar() {
           BETA
         </span>
         {app && <span className="font-mono text-[11px] text-ink-3">v{app.version}</span>}
+        {dsd?.folder && (
+          <button
+            type="button"
+            className="no-drag flex items-center gap-1.5 rounded border border-edge px-1.5 py-px text-[10px] font-bold tracking-wider text-ink-2 hover:bg-panel-2 hover:text-ink"
+            title={dsdTitle}
+            onClick={openSystem}
+          >
+            <span className={`inline-block h-1.5 w-1.5 rounded-full ${dsdDot}`} />
+            DSD+
+          </button>
+        )}
         {update?.newer && (
           <a
             className="no-drag rounded border border-green/60 px-1.5 py-px text-[10px] font-bold tracking-wider text-green hover:bg-green/10"

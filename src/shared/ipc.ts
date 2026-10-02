@@ -501,6 +501,13 @@ export interface Settings {
   mapWindow: WindowState | null;
   /** CDAT folders the Programming window opened, most recent first (development builds only). */
   programmingRecent: string[];
+  /** The DSD+ link: its folder (DSDPlus.event, .radios and .groups are read there), null = off; the System window's placement. */
+  dsd: DsdSettings;
+}
+
+export interface DsdSettings {
+  folder: string | null;
+  window: WindowState | null;
 }
 
 export type MapDockSide = 'left' | 'right';
@@ -581,6 +588,10 @@ export const IPC = {
   logRadioUnname: 'log:radio-unname',
   logRadioNames: 'log:radio-names',
   logRadioImport: 'log:radio-import',
+  dsdStatus: 'dsd:status',
+  dsdUpdate: 'dsd:update',
+  dsdChooseFolder: 'dsd:choose-folder',
+  dsdOpen: 'dsd:open',
   logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',

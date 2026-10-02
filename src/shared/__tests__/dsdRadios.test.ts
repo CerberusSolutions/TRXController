@@ -25,6 +25,13 @@ describe('parseDsdRadios', () => {
     expect(radios[4]).toMatchObject({ radioId: 16734068, alias: '' });
   });
 
+  it('drops the asterisk DSD+ puts on an alias it generated itself', () => {
+    const { radios } = parseDsdRadios('D-Star,    0,         -1,         2112515704, 50,  Normal,       1,  2025/10/12  9:52,  *"G0LGF/ID31"');
+    expect(radios[0]).toMatchObject({ protocol: 'D-Star', radioId: 2112515704, tgid: null, alias: 'G0LGF/ID31' });
+    // An empty auto alias is still no alias.
+    expect(parseDsdRadios('NEXEDGE48, 0, 12, 5, 50, Normal, 1, 2025/07/05 9:12, *""').radios[0]!.alias).toBe('');
+  });
+
   it('keeps a comma inside a quoted alias', () => {
     const { radios } = parseDsdRadios('DMR, 1.2, 100, 5, 50, Normal, 1, 2026/10/01 19:21, "", "Chatterley, Whitfield", AB12CD34');
     expect(radios[0]).toMatchObject({ protocol: 'DMR', radioId: 5, tgid: 100, alias: 'Chatterley, Whitfield' });
