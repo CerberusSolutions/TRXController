@@ -182,7 +182,10 @@ export default function SystemApp() {
           {frequencyLines.length > 0 && (
             <div className="mt-2">
               <div className="flex items-baseline gap-3">
-                <span className="text-[11px] text-ink-3">For DSDPlus.frequencies in the DSD+ folder (DSD+ reads it while running; check the protocol and site against a line it wrote itself):</span>
+                <span className="text-[11px] text-ink-3">
+                  For DSDPlus.frequencies in the DSD+ folder (DSD+ reads it while running). The protocol{status?.protocol ? ` (${status.protocol})` : ''} is the newest line DSD+'s groups file
+                  has for this network; DSD+ can reclassify a site, so check it and the site number against DSD+'s own status bar before pasting:
+                </span>
                 <button type="button" className="no-drag rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink" onClick={copyLines}>
                   {copied ? 'Copied' : 'Copy'}
                 </button>

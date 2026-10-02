@@ -14,6 +14,8 @@ const EVENTS = [
 ].join('\r\n') + '\r\n';
 const RADIOS = 'P25,       BEE00.169, 63354,      16734046,   50,  Normal,       9,  2026/09/19 17:48,  "", "CRO SFS 007",    0E362A72\r\nP25,       BEE00.169, 63354,      16734000,   50,  Normal,     119,  2026/10/02  8:36,  ""\r\n';
 const GROUPS = 'P25,       BEE00.169, 46226,      50,  Normal,       7,  2023/07/17 19:13,  "RAFC FD Disp"\r\nP25,       BEE00.167, 63354,      50,  Normal,       1,  2024/07/17  7:02,  "Salisbury Plain Army"\r\n';
+// A network DSD+ reclassified: the older lines say TIIIStd, the newer TIIInonStd, which is what its status bar shows now.
+const DMR_GROUPS = 'TIIIStd,   L1,        21,         50,  Normal,      27,  2025/09/03 13:52,  ""\r\nTIIInonStd,L1,        69,         50,  Normal,     193,  2026/10/02  9:25,  ""\r\nTIIInonStd,L1,        32,         50,  Normal,      71,  2026/10/02  9:23,  ""\r\n';
 
 describe('DsdWatcher', () => {
   let dir: string;
@@ -102,6 +104,11 @@ describe('DsdWatcher', () => {
     const s = w.status();
     expect(s.feed.network).toEqual({ id: 'L1', name: 'PTT Systems' });
     expect(s.feed.site).toEqual({ id: 'L1-15', name: '' });
+    expect(s.protocol).toBeNull();
+    // The groups file names the protocol: the newest line's, since DSD+ reclassified the site.
+    writeFileSync(join(dir, GROUPS_FILE), DMR_GROUPS);
+    tick();
+    expect(w.status().protocol).toBe('TIIInonStd');
     expect(s.feed.dcc).toBe(15);
     expect(s.feed.calls.map((c) => [c.tg, c.channel])).toEqual([[69, '306']]);
   });
