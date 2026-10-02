@@ -99,6 +99,7 @@ const api = {
   dsdSummary: (network: string, from: number, to: number): Promise<DsdDaySummary | null> => ipcRenderer.invoke(IPC.dsdSummary, network, from, to),
   dsdEvents: (network: string, from: number, to: number): Promise<DsdEventRow[]> => ipcRenderer.invoke(IPC.dsdEvents, network, from, to),
   dsdNetworks: (): Promise<DsdNetworkSummary[]> => ipcRenderer.invoke(IPC.dsdNetworks),
+  dsdForgetChannel: (channel: string): Promise<void> => ipcRenderer.invoke(IPC.dsdForgetChannel, channel),
   /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
   dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),
   onDsdDockState: (cb: (s: MapDockState) => void): (() => void) => {

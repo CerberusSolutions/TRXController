@@ -60,7 +60,7 @@ function saveChannels(): void {
 }
 /** The squelch as last seen, so each opening (or move while open) is one vote at most. */
 let lastSquelch: { rf: boolean; hz: number } = { rf: false, hz: 0 };
-const mapDock = new WindowDock({
+const mapDock: WindowDock = new WindowDock({
   main: () => win,
   win: () => mapWin,
   minSize: MAP_MIN_WINDOW,
@@ -69,8 +69,9 @@ const mapDock = new WindowDock({
   remember: (side) => settings?.set({ mapDock: side }),
   rememberFree: () => rememberMapBounds(),
   stateChannel: IPC.mapDockState,
+  taken: (): MapDockSide | null => systemDock.docked,
 });
-const systemDock = new WindowDock({
+const systemDock: WindowDock = new WindowDock({
   main: () => win,
   win: () => systemWin,
   minSize: MAP_MIN_WINDOW,
@@ -81,6 +82,7 @@ const systemDock = new WindowDock({
   },
   rememberFree: () => rememberSystemBounds(),
   stateChannel: IPC.dsdDockState,
+  taken: (): MapDockSide | null => mapDock.docked,
 });
 /** Which side of the main window the map is docked to, or null while it floats. */
 /** True while we are placing the map window ourselves, so its move events are not taken for a drag. */
@@ -380,6 +382,18 @@ function registerIpc(): void {
     return db.dsdEvents(network, p.from, p.to);
   });
   ipcMain.handle(IPC.dsdNetworks, () => db?.dsdNetworks() ?? []);
+  ipcMain.handle(IPC.dsdForgetChannel, (_e, channel: unknown) => {
+    const network = dsd?.status().feed.network;
+    if (!channels || !network || typeof channel !== 'string') return;
+    // Votes may sit under the network's key or, from before keys carried names, its bare ID.
+    channels.forget(network.key, channel);
+    channels.forget(network.id, channel);
+    if (channels.takeChanged()) {
+      console.log(`[dsd] forgot channel ${channel} of ${network.key}`);
+      saveChannels();
+    }
+    if (dsd) publishDsd(dsd.status());
+  });
   ipcMain.handle(IPC.dsdChooseFolder, async () => {
     if (!settings) throw new Error('No settings');
     const res = await dialog.showOpenDialog({

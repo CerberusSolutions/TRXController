@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReceptionRow } from '../../../../shared/ipc';
-import { ALPHA_TAG_MAX, EZSCAN_HEADER, LOG_CSV_HEADER, alphaTag, candidatesText, csvCell, ezModeOf, ezObjects, ezToneOf, frequencyTag, logToCsv, objectCode, toCsv } from '../csv';
+import { ALPHA_TAG_MAX, ENTRY_CSV_HEADER, EZSCAN_HEADER, LOG_CSV_HEADER, alphaTag, candidatesText, csvCell, entriesToCsv, ezModeOf, ezObjects, ezToneOf, frequencyTag, logToCsv, objectCode, toCsv } from '../csv';
 
 const base: ReceptionRow = {
   id: 1, startedAt: Date.UTC(2026, 8, 17, 8, 12, 1), endedAt: Date.UTC(2026, 8, 17, 8, 12, 17), frequencyHz: 453_062_500, mode: 'FM', signalType: 'DMR',
@@ -71,6 +71,22 @@ describe('csv', () => {
       [453_062_500, 'CC 3', 3, 1, 2, 275, base.endedAt],
     ]);
     expect(objs[1]!.firstHeard).toBe(base.startedAt);
+  });
+
+  it('writes one line per entry with every column, an open entry timed to now', () => {
+    const open: ReceptionRow = { ...base, id: 2, endedAt: null, radioCallsign: 'G0XYZ', tone: '', candidates: [], distanceKm: null, bearingDeg: null, lat: null, lon: null };
+    const lines = entriesToCsv([open, base], base.startedAt + 90_000).split('\r\n');
+    expect(lines[0]).toBe(ENTRY_CSV_HEADER.join(','));
+    expect(ENTRY_CSV_HEADER).toHaveLength(33);
+    const first = lines[1]!.split(',');
+    expect(first[1]).toBe('');
+    expect(first[2]).toBe('90');
+    expect(first[3]).toBe('453.062500');
+    expect(first[12]).toBe('G0XYZ');
+    expect(first.slice(25, 29)).toEqual(['', '', '', '']);
+    expect(lines[2]).toContain('16,453.062500,FM,DMR,University of Buckingham,,Tune Mode,Search,1,206,,,CC 13,No Tone,,University of Buckingham,RRDB,');
+    expect(lines[2]).toContain(',3.2,47,51.99,-0.99,275,2,28,RRDB University of Buckingham · Bucks · CC 13 ✓ (3.2 km 047°) | WTR ');
+    expect(lines[3]).toBe('');
   });
 
   it("writes EZ Scan's 32 columns as its own export does, then the log's", () => {

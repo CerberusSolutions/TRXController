@@ -210,8 +210,18 @@ export default function SystemApp() {
                   <tr key={l.channel}>
                     <td className="pr-4 text-ink-2">ch {l.channel}</td>
                     <td className={`pr-4 ${l.hz !== null ? 'text-amber' : 'text-ink-3'}`}>{l.hz !== null ? mhz(l.hz) : 'not yet'}</td>
-                    <td className="text-ink-3">
+                    <td className="pr-4 text-ink-3">
                       {l.votes} of {l.total} {l.total === 1 ? 'vote' : 'votes'}
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="font-sans text-[10px] text-ink-3 underline decoration-ink-3/40 underline-offset-2 hover:text-red"
+                        title="Forget this channel's votes (a frequency learned from a coincidence); it is learned afresh from the next matches"
+                        onClick={() => void window.trx?.dsdForgetChannel?.(l.channel)}
+                      >
+                        clear
+                      </button>
                     </td>
                   </tr>
                 ))}

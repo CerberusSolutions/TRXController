@@ -47,6 +47,55 @@ export const LOG_EXTRA_HEADER = [
 
 export const LOG_CSV_HEADER = [...EZSCAN_HEADER, ...LOG_EXTRA_HEADER];
 
+/** One line per log entry, as the table shows them, for a spreadsheet rather than the scanner. */
+export const ENTRY_CSV_HEADER = [
+  'first_heard', 'last_heard', 'duration_s', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'radio_id', 'radio',
+  'radio_alias', 'tone', 'squelch', 'site', 'licensee', 'source', 'scanner_name', 'wtr', 'rruk', 'rr_name', 'rr_system', 'repeater', 'distance_km',
+  'bearing_deg', 'lat', 'lon', 'rssi_peak', 'calls', 'hits', 'candidates',
+];
+
+/** The log's entries one per line (newest first, as shown), every column the table or the Detail view has; RFC 4180, CRLF. */
+export function entriesToCsv(rows: readonly ReceptionRow[], now = Date.now()): string {
+  return toCsv(
+    ENTRY_CSV_HEADER,
+    rows.map((r) => [
+      localStamp(r.startedAt),
+      r.endedAt === null ? '' : localStamp(r.endedAt),
+      Math.max(0, Math.round(((r.endedAt ?? now) - r.startedAt) / 1000)),
+      (r.frequencyHz / 1e6).toFixed(6),
+      r.mode,
+      r.signalType,
+      r.name,
+      r.system,
+      r.scanlist,
+      r.objectType,
+      r.tgid,
+      r.radioId,
+      r.radioCallsign ?? '',
+      r.radioAlias,
+      r.tone,
+      r.squelch,
+      r.site,
+      r.licensee,
+      r.source,
+      r.scannerName,
+      r.wtr,
+      r.rruk,
+      r.rrName,
+      r.rrSystem,
+      r.rpt,
+      r.distanceKm === null ? '' : r.distanceKm.toFixed(1),
+      r.bearingDeg ?? '',
+      r.lat ?? '',
+      r.lon ?? '',
+      r.rssiPeak,
+      r.calls,
+      r.hits,
+      candidatesText(r),
+    ]),
+  );
+}
+
 /** EZ Scan's alpha tag is 16 characters. */
 export const ALPHA_TAG_MAX = 16;
 

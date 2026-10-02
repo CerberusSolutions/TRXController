@@ -394,7 +394,10 @@ captured on 14 Sep 2026.
   paging back until it does or the log runs out. The table is virtualised (`@tanstack/react-virtual`:
   only the rows in view are in the page, rows measured so unfolded ones fit) and `Row` is memoised,
   the per-second duration tick reaching open rows only. Live-updated over `log:upsert`, in a tab
-  that shares the panel under the hero with the Band view (and Debug, diagnostics only). The CSV button saves
+  that shares the panel under the hero with the Band view (and Debug, diagnostics only). The **Entries** button saves the rows as
+  shown one per line with every column (`entriesToCsv`, `ENTRY_CSV_HEADER`: times, duration, frequency, mode, signal, name, system,
+  scanlist, type, TGID, radio ID and the name shown for it, alias, tone, squelch, site, licensee, source, every source's answer, distance,
+  bearing, lat / lon, RSSI, calls, hits, candidates; RFC 4180, CRLF, `trx-log-<stamp>.csv`), for a spreadsheet. The CSV button saves
   the rows as shown (after the filter) through a save dialog (`log:export-csv`,
   `src/renderer/src/lib/csv.ts`) as an **EZ Scan conventional import file**: `EZSCAN_HEADER` is the 32
   columns of a real EZ Scan export, in its order, quoted as it quotes them (text in quotes, numbers and
@@ -541,7 +544,8 @@ captured on 14 Sep 2026.
   first open, `settings.dsd.dock`, free placement in `settings.dsd.window`; Dock / Undock button and the D key, `dsd:dock` /
   `dsd:dock-state`): the docking is `src/main/dock.ts` (`WindowDock`, one instance each for the map and the System window,
   lifted out of main on 2 Oct 2026; both follow the main window's moves and let go when it is maximised or they are
-  dragged by hand; the two can share a side and then overlap, the user docks one left), network · site · NAC / CC in the bar with the link
+  dragged by hand; each host's `taken` names the side the other holds and `dock` flips to the free side when it has room, so the two
+  sit either side of the main window), network · site · NAC / CC in the bar with the link
   state, a table of calls (talkgroup named from `tgNames`, radio by the user's own name via `pickRadioName` keyed to
   the scanner's system tag, else DSD+'s alias, else the number; channel in MHz or `ch N`; slot; ENC with the
   algorithm and key in the tooltip; Emergency and Bcast / TXI / OVCM pills; length, counting while open), the call the
@@ -567,7 +571,8 @@ captured on 14 Sep 2026.
   2.457 and a network carries lines under both names; the first seen said `TIIIStd` for a site DSD+ now calls `TIIInonStd`,
   2 Oct 2026); the System window shows a learned frequency dotted
   (tooltip with the votes), uses it for the TRX marker (`hzOf`; with no talkgroup in the header, a conventional object,
-  the marker matches on frequency alone), and its **Channels** button (C) lists the learned and forming channels with
+  the marker matches on frequency alone), and its **Channels** button (C) lists the learned and forming channels (each with a **clear**
+  link: `dsd:forget-channel` → `ChannelLearner.forget` under the feed network's key and bare ID, saved and republished) with
   `dsdFrequencyLines` (`protocol, network, site, channel, MHz, 0.0, 0`, the comma form of DSD+'s own data files; the
   user checks protocol and site against a line DSD+ wrote) and a Copy button. Nothing is written into DSD+'s folder.
   The mock's `dsddmr` scene pictures it (`docs/img/system-dmr.png`).

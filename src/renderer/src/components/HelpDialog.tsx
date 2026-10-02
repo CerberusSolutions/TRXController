@@ -223,7 +223,8 @@ export default function HelpDialog() {
                 one object per frequency and tone or colour code, named from the log (16 characters, EZ Scan's limit), with the mode, tone or
                 NAC, colour code and slot filled in, so a session's finds go into the scanner without retyping. The scanlist column is left empty, so EZ Scan
               files them under its default import scanlist (normally scanlist 1, and you can change that in EZ Scan). The log's
-                own columns (times, sources, distance, candidates) follow EZ Scan's and are ignored by its importer.
+                own columns (times, sources, distance, candidates) follow EZ Scan's and are ignored by its importer. <b className="text-ink">Entries</b> beside it
+                writes one line per entry with every column the table and the Detail view have, for a spreadsheet.
               </p>
             </Section>
           </div>
@@ -304,7 +305,8 @@ export default function HelpDialog() {
                     reads DSDPlus.event, .radios and .groups as DSD+ writes them: a DSD+ pill appears in the top bar, green while events arrive, and opens the
                     System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio and talkgroup
                     aliases DSD+ learns go into the log as it learns them, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
-                    learns what they are from the scanner's squelch openings, and Channels (C) gives the lines for DSDPlus.frequencies. Every
+                    learns what they are from the scanner's squelch openings, and Channels (C) gives the lines for DSDPlus.frequencies, with a clear link for a
+                    channel learned from a coincidence. Every
                     transmission, registration and affiliation is recorded; History (H) in the System window is the network map: a day, a week, a month or
                     everything, as calls per hour, the sites with their control channel, code and neighbours, the talkgroups with their radios and
                     airtime, the radios with their talkgroups, and CSVs of the map and the events.
