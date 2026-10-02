@@ -504,7 +504,7 @@ captured on 14 Sep 2026.
   `dsd:choose-folder` (a directory dialog) / `dsd:open`; `settingsSet` with `dsd.folder` retargets the watcher; a
   radios import broadcasts `log:changed`.
 - Renderer: `store/dsd.ts`; the top bar's **DSD+** pill (only with a folder set: green alive, amber quiet or no event
-  file yet, red on a read error) opens the **System window** (`#system` route, `components/SystemApp.tsx`; docked to the right of the main window on
+  file yet, red on a read error) opens the **System window** (`#system` route, `components/SystemApp.tsx`, closed with the main window like the map; docked to the right of the main window on
   first open, `settings.dsd.dock`, free placement in `settings.dsd.window`; Dock / Undock button and the D key, `dsd:dock` /
   `dsd:dock-state`): the docking is `src/main/dock.ts` (`WindowDock`, one instance each for the map and the System window,
   lifted out of main on 2 Oct 2026; both follow the main window's moves and let go when it is maximised or they are

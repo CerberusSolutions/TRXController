@@ -916,6 +916,7 @@ function createWindow(): void {
   win.on('closed', () => {
     win = null;
     if (mapWin && !mapWin.isDestroyed()) mapWin.close();
+    if (systemWin && !systemWin.isDestroyed()) systemWin.close();
     if (progWin && !progWin.isDestroyed()) progWin.close();
   });
 
