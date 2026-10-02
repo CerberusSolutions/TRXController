@@ -60,7 +60,7 @@ describe('reduceDsdEvent', () => {
   it('builds the network, site and a transmission per grant, closed by its duration line', () => {
     const feed = feedOf(P25);
     expect(feed.version).toBe('2.523');
-    expect(feed.network).toEqual({ id: 'BEE00.169', name: 'USAF Bases United Kingdom' });
+    expect(feed.network).toEqual({ id: 'BEE00.169', name: 'USAF Bases United Kingdom', key: 'BEE00.169 USAF Bases United Kingdom' });
     // The bare "2.7" site line never replaces the named one.
     expect(feed.site).toEqual({ id: 'BEE00.169-2.7', name: 'RAF Croughton' });
     expect(feed.nac).toBe('167');
@@ -94,7 +94,7 @@ describe('reduceDsdEvent', () => {
       '2026/10/02  10:20:01  DCC=15  Current network:  L1  PTT Systems',
       '2026/10/02  10:20:01  DCC=15  Current site:  L1-15',
     ]);
-    expect(feed.network).toEqual({ id: 'L1', name: 'PTT Systems' });
+    expect(feed.network).toEqual({ id: 'L1', name: 'PTT Systems', key: 'L1 PTT Systems' });
     expect(feed.site).toEqual({ id: 'L1-15', name: '' });
     expect(feed.nac).toBeNull();
     expect(feed.calls).toEqual([]);
@@ -103,6 +103,35 @@ describe('reduceDsdEvent', () => {
     const again = reduceDsdEvent(feedOf(P25), parseDsdEventLine(P25[3]!)!);
     expect(again.calls).toHaveLength(3);
     expect(again.site?.name).toBe('RAF Croughton');
+  });
+
+  it('keeps the system through DSD+ decoding voice on the control channel, and tells two systems both called L1 apart', () => {
+    // TfL, 2 Oct 2026: on a Hytera site the control channel's own slots carry audio, and while DSD+ decodes it the
+    // network line comes without its name and the site as a bare number.
+    const tfl = [
+      '2026/10/02  09:51:00  DCC=15  Current network:  L1  TfL',
+      '2026/10/02  09:51:00  DCC=15  Current site:  L1-1  London Buses 139.53125c',
+      '2026/10/02  09:52:00  DCC=15  Group call; TG=334084  RID=333519  Ch=1716',
+      '2026/10/02  10:42:00  Current network:  L1',
+      '2026/10/02  10:42:00  Current site:  1',
+      '2026/10/02  10:42:35  Private call; Tgt=371931  Src=374513  Slot=2',
+      '2026/10/02  10:42:36  DTMF: 41',
+    ];
+    const feed = feedOf(tfl);
+    expect(feed.network).toEqual({ id: 'L1', name: 'TfL', key: 'L1 TfL' });
+    expect(feed.site).toEqual({ id: 'L1-1', name: 'London Buses 139.53125c' });
+    expect(feed.calls).toHaveLength(2);
+    expect(feed.notes.map((n) => n.text)).toEqual(['DTMF: 41']);
+    // A nameless network seen first takes its name from the line that brings it, without a reset.
+    const late = feedOf([tfl[3]!, tfl[5]!, tfl[0]!]);
+    expect(late.network).toEqual({ id: 'L1', name: 'TfL', key: 'L1 TfL' });
+    expect(late.calls).toHaveLength(1);
+    // Another system that also calls itself L1 is a retune.
+    const moved = feedOf([...tfl, '2026/10/02  11:00:00  DCC=15  Current network:  L1  PTT Systems', '2026/10/02  11:00:00  DCC=15  Current site:  L1-15']);
+    expect(moved.network).toEqual({ id: 'L1', name: 'PTT Systems', key: 'L1 PTT Systems' });
+    expect(moved.site).toEqual({ id: 'L1-15', name: '' });
+    expect(moved.calls).toEqual([]);
+    expect(moved.notes).toEqual([]);
   });
 
   it('gives a channel-less call line no channel unless a call on its talkgroup is open or just ended', () => {

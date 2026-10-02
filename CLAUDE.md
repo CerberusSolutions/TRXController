@@ -510,7 +510,15 @@ captured on 14 Sep 2026.
   `Registration; RID= [alias] TG= ACCEPT`, `Affiliation; …`, `Deregistration; RID=`, `DSD+ 2.523 / Fast Lane Release`,
   anything else `other`. `reduceDsdEvent` folds events into a `DsdFeed`: one `DsdCall` per transmission (a grant
   opens one, its duration line closes it, a line with neither is a new talker on the talkgroup's last channel, a
-  transmission with no closing line is closed after `CALL_OPEN_MS`; a channel-less line takes the channel of the talkgroup's
+  transmission with no closing line is closed after `CALL_OPEN_MS`; **the network's identity is `key`** (`networkKey`: the ID
+  with the name when DSD+ gives one, "L1 PTT Systems", else the ID), since DSD+'s ID is the Tier III logical network number
+  inside each system and two DMR systems both print "L1" (PTT Systems and TfL, 2 Oct 2026); a network line with the same ID
+  and no name, or the same name, keeps the system (on a Hytera site the control channel's own slots carry audio, and while
+  DSD+ decodes it, its status bar reading `(MOT) BS` / `(EMC)`, it prints the network without its name, the site as a bare
+  number and the calls without `Ch=`), a name arriving for a nameless network fills it in, and a bare site number never
+  replaces a site DSD+ has named; the recording, the channel learner and the History view key by `key` (rows recorded before
+  keys carried names stay under the bare ID and show as their own network in the picker), the groups-file aliases, the
+  protocol, the `dsdSystems` tag match and `dsdFrequencyLines` by the ID; a channel-less line takes the channel of the talkgroup's
   call only while that call is open or ended within `CHANNEL_HANG_MS`, 10 s, and on a private call only with the same target:
   on the TfL site on 2 Oct 2026 DSD+ stopped printing `Ch=` altogether for an hour, its channel-activity table empty, and
   every private call was being shown on the channel of one an hour earlier), the newest `FEED_CALLS` kept, plus `FEED_NOTES`
@@ -537,8 +545,10 @@ captured on 14 Sep 2026.
   state, a table of calls (talkgroup named from `tgNames`, radio by the user's own name via `pickRadioName` keyed to
   the scanner's system tag, else DSD+'s alias, else the number; channel in MHz or `ch N`; slot; ENC with the
   algorithm and key in the tooltip; Emergency and Bcast / TXI / OVCM pills; length, counting while open), the call the
-  TRX is on marked **TRX** (newest call on the header's talkgroup and the status frequency, while open or within 15 s
-  of ending), and the notes beneath; the toolbar's mixed sizes sit on one baseline (`items-baseline`, asked for 2 Oct 2026). The Data dialog's **DSD+ link** section (right column) has the folder, Change /
+  TRX is on marked **TRX** (newest call on the scanner's talkgroup, or on a private call its radio, from the header on a trunked
+  object and from the display's alternating TGID / RadioID lines in a search or on a conventional object, held while the squelch
+  is open, plus the status frequency when the call's is known; frequency alone with no IDs; while open or within 15 s of
+  ending), and the notes beneath (registrations, affiliations, alias returns, private call alerts, emergencies, DTMF); the toolbar's mixed sizes sit on one baseline (`items-baseline`, asked for 2 Oct 2026). The Data dialog's **DSD+ link** section (right column) has the folder, Change /
   Off, the link state and the file counts, and an Open button. Preview: `scene=dsd` in the mock, `index.html?scene=dsd#system`
   for the window. Next steps agreed with the user: talkgroup names keyed by network + TGID shown where the scanner
   says UNID, then write-back (our radio names into `DSDPlus.radios`, priorities into `DSDPlus.groups` as the
@@ -593,7 +603,8 @@ captured on 14 Sep 2026.
   counts line, calls-per-hour bars, the sites table (name or id, control in amber or "—" until known, code, neighbour chips,
   calls, active), the talkgroups table (chips for the radios heard on each) and the radios table (chips for talkgroups and
   private partners, an affiliated-but-silent talkgroup dashed, Reg / Aff counts), a talkgroup clicked narrows the radios to its
-  own and the other way about (`selTg` / `selRid`, either side's top list knowing the pair), a filter box, `RADIO_ROWS` 300
+  own and the other way about (`selTg` / `selRid`, either side's top list knowing the pair), a picker of every recorded network
+  when there is more than one (DSD+'s current one unless another is picked), a filter box, `RADIO_ROWS` 300
   shown before "more", a period ending today refetched every `REFRESH_MS` 15 s, times carrying the date outside a single day,
   and two exports through `log:export-csv`: **Map CSV** (`dsdMapCsv`: one flat file, a line per site, talkgroup and radio with its
   partners in `detail`, `dsd-map-<network>-<stamp>.csv`) and **Events CSV** (`dsdEventsCsv`, `dsd-events-…`). The network on

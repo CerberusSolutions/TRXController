@@ -34,7 +34,7 @@ export interface DsdWatcherOptions {
   systemOf?: (network: string) => string | null;
   /** The status changed (throttled by the caller). `namesChanged` says the log's radio or talkgroup names moved. */
   onChange: (status: DsdStatus, namesChanged: boolean) => void;
-  /** A call line as it lands (not from the seed), with the network it belongs to: what the channel learner pairs with the TRX. */
+  /** A call line as it lands (not from the seed), with the network key it belongs to: what the channel learner pairs with the TRX. */
   onCall?: (ev: DsdCallEvent, network: string | null) => void;
   /** The channel learner's view of a network, for the status. */
   channels?: (network: string) => Record<string, LearnedChannel>;
@@ -137,7 +137,8 @@ export class DsdWatcher {
       tgNames,
       system: net ? (this.opts.systemOf?.(net) ?? null) : null,
       protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
-      channels: net && this.opts.channels ? this.opts.channels(net) : {},
+      // Channels learned under the network's key, with any learned under the bare ID before keys carried names.
+      channels: net && this.opts.channels ? { ...this.opts.channels(net), ...this.opts.channels(this.feed.network!.key) } : {},
       feed: this.feed,
       recorded: this.recorded,
       alive: this.folder !== null && this.eventFound && this.feed.lastEventAt !== null && this.now() - this.feed.lastEventAt < ALIVE_MS,
@@ -342,7 +343,7 @@ export class DsdWatcher {
     if (!ev) return;
     const before = this.feed;
     this.feed = reduceDsdEvent(before, ev);
-    if (live && ev.kind === 'call') this.opts.onCall?.(ev, this.feed.network?.id ?? null);
+    if (live && ev.kind === 'call') this.opts.onCall?.(ev, this.feed.network?.key ?? null);
     if (this.opts.record) for (const row of eventRows(before, this.feed, ev)) if (this.throttle.keep(row)) this.pending.push(row);
   }
 

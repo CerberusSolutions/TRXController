@@ -70,7 +70,8 @@ npm run build && npm start    # run the built app
   the sites (control channel once the scanner and DSD+ have been on one call, NAC or colour code, the
   neighbours a DMR site lists), each talkgroup with its calls, radios, airtime, active period and the radios
   heard on it, each radio with its talkgroups, private-call partners and registrations. Click a talkgroup to
-  see its radios, or a radio to see its talkgroups; [ and ] step the period; **Map CSV** saves the summary,
+  see its radios, or a radio to see its talkgroups; [ and ] step the period; a picker chooses the network when more
+  than one has been recorded; **Map CSV** saves the summary,
   **Events CSV** the period's events. Nothing is written to DSD+'s folder. Feed DSD+ from an
   SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
   sees the whole system while the TRX moves to voice channels.

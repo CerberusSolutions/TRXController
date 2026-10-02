@@ -25,7 +25,7 @@ describe('eventRows', () => {
     // The network and site lines are not events; the registration and affiliation are notes with the site attached.
     expect(all[0]).toEqual([]);
     expect(all[1]).toEqual([]);
-    expect(all[2]).toMatchObject([{ kind: 'registration', rid: 16734160, tgid: 63305, accepted: true, network: 'BEE00.169', site: 'BEE00.169-2.7', alias: null }]);
+    expect(all[2]).toMatchObject([{ kind: 'registration', rid: 16734160, tgid: 63305, accepted: true, network: 'BEE00.169 USAF Bases United Kingdom', site: 'BEE00.169-2.7', alias: null }]);
     expect(all[3]).toMatchObject([{ kind: 'affiliation', rid: 16734160, tgid: 63305, alias: 'CRO FIRE 10.3' }]);
     // The grant opens the transmission (no end yet); the closing line updates the same key with its end and length.
     expect(all[4]).toMatchObject([{ kind: 'call', type: 'Group', tgid: 63354, rid: 16734085, hz: 419_475_000, enc: true, endedAt: null, durationS: null, alias: 'CRO SFS 046' }]);
@@ -33,7 +33,7 @@ describe('eventRows', () => {
     expect(all[5]![0]!.key).toBe(all[4]![0]!.key);
     // A private call carries its target and a bare channel number.
     expect(all[6]).toMatchObject([{ kind: 'call', type: 'Private', tgid: null, rid: 300740, target: 296062, channel: '1735', hz: null }]);
-    expect(all[6]![0]!.key).toBe('BEE00.169|call|' + all[6]![0]!.at + '|Private||300740|296062|');
+    expect(all[6]![0]!.key).toBe('BEE00.169 USAF Bases United Kingdom|call|' + all[6]![0]!.at + '|Private||300740|296062|');
   });
 
   it('keys a transmission by its grant time and IDs, and a note by its time and radio', () => {

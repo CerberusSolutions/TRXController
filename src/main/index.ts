@@ -171,8 +171,11 @@ function learnDsdSystem(s: ScannerSnapshot): void {
   const h = s.active?.header;
   if (!dsd || !db || !h || h.recordingType !== 1 || !h.systemTag || !s.status?.squelch.rf) return;
   const status = dsd.status();
+  // Site facts are recorded under the network's key; the alias re-keying and the tag match stay on DSD+'s bare ID,
+  // which is what its groups file keys by.
   const network = status.feed.network?.id;
-  if (!network) return;
+  const networkKey = status.feed.network?.key;
+  if (!network || !networkKey) return;
   const now = Date.now();
   const tgid = h.talkgroupId1;
   if (!status.feed.calls.some((c) => c.tg === tgid && c.type === 'Group' && (c.open || now - c.lastAt < SAME_CALL_MS))) return;
@@ -181,10 +184,10 @@ function learnDsdSystem(s: ScannerSnapshot): void {
   const site = status.feed.site;
   if (site && h.controlFrequencyHz > 0) {
     const code = status.feed.nac ? `NAC ${status.feed.nac}` : status.feed.dcc !== null ? `CC ${status.feed.dcc}` : null;
-    const key = `${network}|${site.id}|${h.controlFrequencyHz}|${code ?? ''}`;
+    const key = `${networkKey}|${site.id}|${h.controlFrequencyHz}|${code ?? ''}`;
     if (!recordedSites.has(key)) {
       recordedSites.add(key);
-      db.recordDsdEvents([siteEventRow(network, site.id, site.name, h.controlFrequencyHz, code, now)]);
+      db.recordDsdEvents([siteEventRow(networkKey, site.id, site.name, h.controlFrequencyHz, code, now)]);
     }
   }
   if (dsdSystems[network] === h.systemTag) return;

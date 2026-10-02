@@ -91,7 +91,12 @@ export interface DsdNote {
 /** What the event file has told us, kept small: the current network and site, recent calls, recent notes. */
 export interface DsdFeed {
   version: string | null;
-  network: { id: string; name: string } | null;
+  /**
+   * DSD+'s network ID and name, and `key`, the identity everything is recorded under: the ID with the name
+   * when DSD+ gives one ("L1 PTT Systems"), else the ID alone. The ID by itself is the Tier III logical network
+   * number inside each system, so two DMR systems both print "L1".
+   */
+  network: { id: string; name: string; key: string } | null;
   site: { id: string; name: string } | null;
   nac: string | null;
   dcc: number | null;
@@ -100,6 +105,9 @@ export interface DsdFeed {
   lastEventAt: number | null;
   nextId: number;
 }
+
+/** The identity a network is recorded under: its ID with its name when DSD+ gives one, else the ID alone. */
+export const networkKey = (id: string, name: string): string => (name ? `${id} ${name}` : id);
 
 export const EMPTY_FEED: DsdFeed = { version: null, network: null, site: null, nac: null, dcc: null, calls: [], notes: [], lastEventAt: null, nextId: 1 };
 
@@ -196,7 +204,7 @@ function noteText(ev: DsdEvent): string | null {
     case 'neighbour':
       return ev.text;
     case 'other':
-      return /^(Private Call Alert|Emerg|Affiliation Request)/.test(ev.text) ? ev.text : null;
+      return /^(Private Call Alert|Emerg|Affiliation Request|DTMF)/.test(ev.text) ? ev.text : null;
     default:
       return null;
   }
@@ -210,14 +218,23 @@ function noteText(ev: DsdEvent): string | null {
 export function reduceDsdEvent(feed: DsdFeed, ev: DsdEvent): DsdFeed {
   const next: DsdFeed = { ...feed, lastEventAt: Math.max(feed.lastEventAt ?? 0, ev.at) };
   switch (ev.kind) {
-    case 'network':
-      // DSD+ retuned to another system: its site, codes, calls and notes (a site's neighbour list) belong to the old one.
-      if (feed.network && feed.network.id !== ev.id) Object.assign(next, { site: null, nac: null, dcc: null, calls: [], notes: [] });
-      next.network = { id: ev.id, name: ev.name };
+    case 'network': {
+      const cur = feed.network;
+      // The same ID with no name, or the same name: DSD+ decoding voice on the control channel's own slots (a Hytera
+      // site carries audio there) prints the network without its name and the site as a bare number, and it is still
+      // the system it was on; a name arriving for a nameless network fills it in. A different ID, or a different name
+      // on the same ID (two DMR systems both print "L1"), is a retune: the site, codes, calls and notes (a site's
+      // neighbour list) belong to the old one.
+      const same = cur !== null && cur.id === ev.id && (ev.name === '' || cur.name === '' || cur.name === ev.name);
+      if (same && (ev.name === '' || ev.name === cur.name)) return next;
+      if (!same && cur) Object.assign(next, { site: null, nac: null, dcc: null, calls: [], notes: [] });
+      next.network = { id: ev.id, name: ev.name, key: networkKey(ev.id, ev.name) };
       return next;
+    }
     case 'site':
-      // DSD+ prints the bare site number first ("2.7") and the full one ("BEE00.169-2.7  RAF Croughton") after.
-      if (feed.site && ev.name === '' && feed.site.id.endsWith(`-${ev.id}`)) return next;
+      // DSD+ prints the bare site number first ("2.7") and the full one ("BEE00.169-2.7  RAF Croughton") after, and a
+      // bare number alone while decoding voice on the control channel: neither replaces a site it has already named.
+      if (feed.site && ev.name === '' && !ev.id.includes('-') && (feed.site.id.endsWith(`-${ev.id}`) || feed.site.name !== '' || feed.site.id.includes('-'))) return next;
       next.site = { id: ev.id, name: ev.name };
       return next;
     case 'start':

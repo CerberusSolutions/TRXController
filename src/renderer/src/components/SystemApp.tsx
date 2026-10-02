@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { NO_ID } from '@trxcontroller/rcip';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { NO_ID, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import { ALIVE_MS, type DsdCall } from '../../../shared/dsd';
 import { MIN_VOTES, dsdFrequencyLines } from '../../../shared/dsdChannels';
 import { pickRadioName } from '../../../shared/radioNames';
@@ -76,8 +76,19 @@ export default function SystemApp() {
   }, [historyOpen, loadNetworks]);
   const feed = status?.feed;
   const h = snapshot.active?.header ?? null;
-  const onTg = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : null;
   const onHz = snapshot.status?.frequencyHz ?? null;
+  const rfOpen = !!snapshot.status?.squelch.rf;
+  // The IDs the scanner shows: the header's on a trunked object; in a search or on a conventional object the display's,
+  // which alternates its TGID and RadioID lines, so each is kept from the last line that showed it while the squelch is open.
+  const screen = snapshot.lcd ? (snapshot.status?.mode === 0x0a ? parseScanScreen(snapshot.lcd) : null) ?? parseSearchScreen(snapshot.lcd) : null;
+  const shown = useRef<{ tg: number | null; rid: number | null }>({ tg: null, rid: null });
+  if (!rfOpen) shown.current = { tg: null, rid: null };
+  else {
+    if (screen?.tgid !== null && screen?.tgid !== undefined) shown.current.tg = screen.tgid;
+    if (screen?.radioId !== null && screen?.radioId !== undefined) shown.current.rid = screen.radioId;
+  }
+  const onTg = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : shown.current.tg;
+  const onRid = h && h.radioId1 !== NO_ID ? h.radioId1 : shown.current.rid;
   // The scanner's system tag keys the user's own radio names; DSD+'s imported names apply on any system.
   const system = h?.systemTag ?? '';
   const now = Date.now();
@@ -92,7 +103,7 @@ export default function SystemApp() {
           ? { dot: 'bg-green', text: 'DSD+ live' }
           : { dot: 'bg-amber animate-pulse', text: quietS !== null ? `DSD+ quiet for ${quietS >= 120 ? `${Math.round(quietS / 60)} min` : `${quietS} s`}` : 'Waiting for DSD+' };
   // A name of the user's own (keyed to the scanner's tag for this network, else the network), else DSD+'s alias.
-  const tgName = (tg: number | null): string => (tg === null ? '' : (pickTgName(tgNames, tg, [status?.system, status?.feed.network?.id])?.name ?? status?.tgNames[tg] ?? ''));
+  const tgName = (tg: number | null): string => (tg === null ? '' : (pickTgName(tgNames, tg, [status?.system, status?.feed.network?.key, status?.feed.network?.id])?.name ?? status?.tgNames[tg] ?? ''));
   const radioLabel = (c: DsdCall): { name: string; sub: string } => {
     const own = pickRadioName(radioNames, c.rid, system)?.name ?? null;
     const name = own ?? c.alias ?? c.callsign ?? (c.rid !== null ? String(c.rid) : '');
@@ -100,27 +111,28 @@ export default function SystemApp() {
     return { name, sub };
   };
   const radioName = (rid: number, alias: string | null): string => pickRadioName(radioNames, rid, system)?.name ?? alias ?? '';
-  const historyNetwork = feed?.network?.id ?? networks[0]?.network ?? null;
+  const historyNetwork = feed?.network?.key ?? networks[0]?.network ?? null;
   const calls = useMemo(() => feed?.calls ?? [], [feed]);
   // A call's frequency: DSD+'s own when the site is in its frequencies file, else the one learned for the channel number.
   const learned = status?.channels ?? {};
   const hzOf = (c: DsdCall): number | null => c.hz ?? (c.channel !== null ? (learned[c.channel]?.hz ?? null) : null);
   const learnedCount = Object.values(learned).filter((l) => l.hz !== null).length;
   const formingCount = Object.values(learned).length - learnedCount;
-  // The call the scanner is on: the newest one on its talkgroup and voice frequency, and only while that call is open or just ended.
-  // With no talkgroup in the header (the scanner on a conventional object that happens to be a site's voice channel) the
-  // frequency alone decides, so a known or learned channel still gets the marker.
-  const rfOpen = !!snapshot.status?.squelch.rf;
+  // The call the scanner is on: the newest one on its talkgroup (or, on a private call, its radio) and voice frequency, and
+  // only while that call is open or just ended. With no IDs at all (a conventional object that happens to be a site's voice
+  // channel) the frequency alone decides, so a known or learned channel still gets the marker.
   const onAirId = useMemo(() => {
     if (onHz === null || !rfOpen) return null;
     const c = calls.find((x) => {
       const hz = hzOf(x);
-      if (onTg !== null) return x.tg === onTg && (hz === null || Math.abs(hz - onHz) < 1000);
-      return hz !== null && Math.abs(hz - onHz) < 1000;
+      const onHzToo = hz === null || Math.abs(hz - onHz) < 1000;
+      if (onTg !== null && x.tg === onTg) return onHzToo;
+      if (onRid !== null && (x.rid === onRid || x.target === onRid)) return onHzToo;
+      return onTg === null && onRid === null && hz !== null && Math.abs(hz - onHz) < 1000;
     });
     return c && (c.open || now - c.lastAt < 15_000) ? c.id : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calls, onTg, onHz, now, learned, rfOpen]);
+  }, [calls, onTg, onRid, onHz, now, learned, rfOpen]);
   const frequencyLines = feed?.network ? dsdFrequencyLines(status?.protocol ?? 'DMR', feed.network.id, feed.site?.id ?? null, learned) : [];
   const copyLines = (): void => {
     void navigator.clipboard.writeText(frequencyLines.join('\r\n') + '\r\n').then(() => {
@@ -223,7 +235,7 @@ export default function SystemApp() {
       )}
 
       {historyOpen ? (
-        <SystemHistory network={historyNetwork} tgName={(tg) => tgName(tg)} radioName={radioName} />
+        <SystemHistory network={historyNetwork} networks={networks.map((n) => n.network)} tgName={(tg) => tgName(tg)} radioName={radioName} />
       ) : (
         <div className="min-h-0 flex-1 overflow-auto">
           {calls.length === 0 ? (

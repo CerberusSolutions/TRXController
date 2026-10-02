@@ -140,7 +140,7 @@ export function noteEventRow(ev: DsdEvent, network: string, site: string | null)
  * "Current network" line can be attributed, so nothing is recorded until then.
  */
 export function eventRows(before: DsdFeed, after: DsdFeed, ev: DsdEvent): DsdEventRow[] {
-  const network = after.network?.id;
+  const network = after.network?.key;
   if (!network) return [];
   const site = after.site?.id ?? null;
   if (ev.kind !== 'call') {
