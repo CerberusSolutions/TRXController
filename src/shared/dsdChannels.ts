@@ -12,6 +12,13 @@ export const PAIR_BEFORE_MS = 1500;
 export const PAIR_AFTER_MS = 4000;
 /** How long unmatched grants and openings are kept waiting for their other half. */
 const KEEP_MS = 10_000;
+/**
+ * An opening counts only when the scanner has just arrived on the frequency: a stop on a voice channel is a move
+ * and an opening together. A scanner parked on a Tier III control channel (a Service Search sat on it) has its
+ * squelch flutter there every few seconds, and every grant DSD+ printed found such a re-opening in its window: on
+ * the TfL site on 2 Oct 2026 the learner "learned" 1701 and 1716 as the control channel, 139.53125, with every vote.
+ */
+export const ARRIVAL_MS = 2000;
 /** Votes needed, and the share the leading frequency must hold, before a channel counts as learned. */
 export const MIN_VOTES = 2;
 export const MIN_SHARE = 0.7;
@@ -56,8 +63,13 @@ export class ChannelLearner {
     this.tick(at);
   }
 
-  /** The TRX's squelch opened on a frequency (or it moved to another while open). */
-  opening(at: number, hz: number): void {
+  /**
+   * The TRX's squelch opened on a frequency (or it moved to another while open). `heldMs` is how long the scanner
+   * had already been sitting on the frequency: a re-opening on a frequency it has been parked on (`ARRIVAL_MS` or
+   * longer) is squelch flutter on a control channel, never a stop, and casts no vote.
+   */
+  opening(at: number, hz: number, heldMs = 0): void {
+    if (heldMs > ARRIVAL_MS) return;
     this.openings.push({ at, hz, used: false });
     this.tick(at);
   }

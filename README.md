@@ -66,8 +66,9 @@ npm run build && npm start    # run the built app
   **Channel map** (or C) goes further on a DMR Tier III network: Tier III numbers its channels in pairs
   (odd LSN slot 1, even slot 2 of one carrier) at a fixed step, so one known channel places every other.
   The panel gathers the anchors it can (a neighbour list's control channel number joined to the control
-  frequency the scanner reported for that site, the channels learned from the scanner, and any LSN and
-  frequency you type), infers the step (6.25 / 12.5 / 25 kHz, or choose it), draws the line, flags an anchor
+  frequency the scanner reported for that site, or sat on for half a minute while DSD+ decoded it, the
+  channels learned from the scanner, and any LSN and frequency you type, a button filling in the frequency
+  the scanner is on), infers the step (6.25 / 12.5 / 25 kHz, or choose it), draws the line, flags an anchor
   off it, lists every channel heard with its slot, LCN and frequency, has an LSN ↔ MHz calculator, and
   writes the `DSDPlus.frequencies` lines for the lot, which is what DSD+ needs to voice-follow the site
   itself. Calls on the map show their frequency dashed. A **clear** link beside a learned channel forgets its

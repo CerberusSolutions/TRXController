@@ -22,7 +22,7 @@ const kHz = (hz: number): string => `${(hz / 1000).toFixed(hz % 1000 === 0 ? 0 :
  * with its frequency on the map, and the `DSDPlus.frequencies` lines that follow. Everything the user types is kept
  * per network in main (`dsd:map-set`); the map itself is built there so every window agrees.
  */
-export default function ChannelMapPanel({ status }: { status: DsdStatus }): React.JSX.Element {
+export default function ChannelMapPanel({ status, scannerHz }: { status: DsdStatus; scannerHz: number | null }): React.JSX.Element {
   const info = status.map;
   const map = info?.map ?? null;
   const settings: ChannelMapSettings = info?.settings ?? { stepHz: null, anchors: [] };
@@ -188,13 +188,23 @@ export default function ChannelMapPanel({ status }: { status: DsdStatus }): Reac
         <span className="text-[11px] text-ink-3">Add anchor</span>
         <input className={INPUT} placeholder="LSN" value={lsnIn} onChange={(e) => setLsnIn(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAnchor()} />
         <input className={INPUT} placeholder="MHz" value={mhzIn} onChange={(e) => setMhzIn(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAnchor()} />
-        <input className={`${INPUT} w-48`} placeholder="Note (optional)" value={noteIn} onChange={(e) => setNoteIn(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAnchor()} />
+        {scannerHz !== null && scannerHz > 0 && (
+          <button
+            type="button"
+            className="no-drag rounded border border-edge px-1.5 py-px font-mono text-[10px] text-amber hover:border-amber/60"
+            title="Use the frequency the scanner is on (parked on a Tier III control channel, that is the control channel's LSN to type)"
+            onClick={() => setMhzIn(mhzText(scannerHz))}
+          >
+            Scanner {mhzText(scannerHz)}
+          </button>
+        )}
+        <input className={`${INPUT} w-40`} placeholder="Note (optional)" value={noteIn} onChange={(e) => setNoteIn(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addAnchor()} />
         <button type="button" className="no-drag rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink" onClick={addAnchor} disabled={!network}>
           Add
         </button>
         {map && (
-          <>
-            <span className="ml-4 text-[11px] text-ink-3">Calculator</span>
+          <span className="flex items-baseline gap-3">
+            <span className="ml-1 text-[11px] text-ink-3">Calculator</span>
             <input
               className={INPUT}
               placeholder="LSN"
@@ -214,7 +224,7 @@ export default function ChannelMapPanel({ status }: { status: DsdStatus }): Reac
               }}
             />
             <span className="font-mono text-[11px] text-ink">{calcOut()}</span>
-          </>
+          </span>
         )}
       </div>
 

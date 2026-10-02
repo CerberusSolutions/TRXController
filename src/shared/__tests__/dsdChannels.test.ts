@@ -24,6 +24,20 @@ describe('ChannelLearner', () => {
     expect(l.hzOf('L1', '305')).toBeNull();
   });
 
+  it('ignores a re-opening on a frequency the scanner has been parked on (the control channel fluttering)', () => {
+    const l = new ChannelLearner();
+    // TfL, 2 Oct 2026: the scanner sat on the control channel 139.53125 in a Service Search; every grant found a flutter there.
+    l.grant(T, 'S1 TfL', '1701');
+    l.opening(T + 400, 139_531_250, 45_000);
+    l.tick(T + 5000);
+    expect(l.learned('S1 TfL')).toEqual({});
+    // A stop: the scanner had just moved onto the frequency.
+    l.grant(T + 10_000, 'S1 TfL', '1701');
+    l.opening(T + 10_300, 140_118_750, 150);
+    l.tick(T + 15_000);
+    expect(l.learned('S1 TfL')['1701']).toEqual({ channel: '1701', hz: null, votes: 1, total: 1 });
+  });
+
   it('casts no vote when two openings or two grants fall in one window, and drops a split channel', () => {
     const l = new ChannelLearner();
     l.grant(T, 'L1', '306');
