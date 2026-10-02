@@ -20,6 +20,8 @@ export interface DockHost {
   rememberFree: () => void;
   /** The IPC channel the window's renderer listens on for `{ docked }`. */
   stateChannel: string;
+  /** The side another docked window already holds, so the two take opposite sides; null when none does. */
+  taken?: () => MapDockSide | null;
 }
 
 export class WindowDock {
@@ -71,14 +73,18 @@ export class WindowDock {
   /**
    * Dock beside the main window: the asked-for side when it has room, else the other, else the two windows
    * share the display, the main one keeping the larger part. 'auto' prefers the side used last time, then
-   * the right.
+   * the right. A side another docked window holds (the map and the System window) is avoided when the other
+   * side has room, so the two sit either side of the main window instead of on top of each other.
    */
   dock(side: MapDockSide | 'auto'): void {
     const main = this.host.main();
     const w = this.host.win();
     if (!main || main.isDestroyed() || !w || w.isDestroyed()) return;
-    const prefer: MapDockSide = side === 'auto' ? (this.docked ?? this.host.remembered() ?? 'right') : side;
-    const other: MapDockSide = prefer === 'right' ? 'left' : 'right';
+    const flip = (s: MapDockSide): MapDockSide => (s === 'right' ? 'left' : 'right');
+    let prefer: MapDockSide = side === 'auto' ? (this.docked ?? this.host.remembered() ?? 'right') : side;
+    const taken = this.host.taken?.() ?? null;
+    if (taken === prefer && this.bounds(flip(prefer))) prefer = flip(prefer);
+    const other = flip(prefer);
     let b = this.bounds(prefer);
     let got: MapDockSide = prefer;
     if (!b) {

@@ -20,6 +20,7 @@ import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
 import { ChannelLearner, type ChannelVotes } from '../shared/dsdChannels';
 import { DSD_KEEP_DAYS, siteEventRow } from '../shared/dsdEvents';
+import { MAP_STEPS, buildChannelMap, neighbourAnchors, type ChannelMapSettings, type MapAnchor } from '../shared/dsdChannelMap';
 import { WindowDock } from './dock';
 import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
@@ -44,6 +45,11 @@ let channels: ChannelLearner | null = null;
  * the same moment), kept beside the channel votes. DSD+'s talkgroup aliases are keyed to the tag from then on.
  */
 let dsdSystems: Record<string, string> = {};
+/** The channel map the user keeps per network key (the step chosen and the anchors typed), beside the votes. */
+let dsdMaps: Record<string, ChannelMapSettings> = {};
+/** The site facts behind a network's neighbour anchors, read at most every few seconds while the status is published. */
+let siteFactsCache: { network: string; at: number; anchors: MapAnchor[] } | null = null;
+const SITE_FACTS_MS = 5000;
 /** A DSD+ call and a scanner header count as the same call when they are this close. */
 const SAME_CALL_MS = 15_000;
 /** Sites whose control channel and code have been recorded this session (key: network | site | control | code). */
@@ -55,12 +61,12 @@ function saveChannels(): void {
   saveChannelsTimer = setTimeout(() => {
     saveChannelsTimer = null;
     if (!channels || !channelsPath) return;
-    writeFile(channelsPath, JSON.stringify({ version: 1, votes: channels.toJSON(), systems: dsdSystems }, null, 1)).catch((e: unknown) => console.log(`[dsd] saving channels: ${(e as Error).message}`));
+    writeFile(channelsPath, JSON.stringify({ version: 1, votes: channels.toJSON(), systems: dsdSystems, maps: dsdMaps }, null, 1)).catch((e: unknown) => console.log(`[dsd] saving channels: ${(e as Error).message}`));
   }, 2000);
 }
 /** The squelch as last seen, so each opening (or move while open) is one vote at most. */
 let lastSquelch: { rf: boolean; hz: number } = { rf: false, hz: 0 };
-const mapDock = new WindowDock({
+const mapDock: WindowDock = new WindowDock({
   main: () => win,
   win: () => mapWin,
   minSize: MAP_MIN_WINDOW,
@@ -69,8 +75,9 @@ const mapDock = new WindowDock({
   remember: (side) => settings?.set({ mapDock: side }),
   rememberFree: () => rememberMapBounds(),
   stateChannel: IPC.mapDockState,
+  taken: (): MapDockSide | null => systemDock.docked,
 });
-const systemDock = new WindowDock({
+const systemDock: WindowDock = new WindowDock({
   main: () => win,
   win: () => systemWin,
   minSize: MAP_MIN_WINDOW,
@@ -81,6 +88,7 @@ const systemDock = new WindowDock({
   },
   rememberFree: () => rememberSystemBounds(),
   stateChannel: IPC.dsdDockState,
+  taken: (): MapDockSide | null => mapDock.docked,
 });
 /** Which side of the main window the map is docked to, or null while it floats. */
 /** True while we are placing the map window ourselves, so its move events are not taken for a drag. */
@@ -365,7 +373,18 @@ function isLogCursor(v: unknown): v is LogCursor {
 
 function registerIpc(): void {
   ipcMain.handle(IPC.mapOpen, (_e, target: unknown) => openMap(isMapTarget(target) ? target : { kind: 'follow' }));
-  ipcMain.handle(IPC.dsdStatus, () => dsd?.status() ?? null);
+  ipcMain.handle(IPC.dsdStatus, () => (dsd ? withMap(dsd.status()) : null));
+  ipcMain.handle(IPC.dsdMapSet, (_e, settings: unknown) => {
+    const network = dsd?.status().feed.network;
+    if (!network) throw new Error('No DSD+ network to map');
+    dsdMaps[network.key] = sanitizeMapSettings(settings);
+    saveChannels();
+    if (dsd) publishDsd(dsd.status());
+  });
+  ipcMain.handle(IPC.dsdChannels, () => {
+    const network = dsd?.status().feed.network;
+    return db && network ? db.dsdChannelsHeard(network.key) : [];
+  });
   ipcMain.handle(IPC.dsdOpen, () => openSystem());
   const period = (from: unknown, to: unknown): { from: number; to: number } | null =>
     typeof from === 'number' && typeof to === 'number' && Number.isFinite(from) && Number.isFinite(to) && to > from ? { from, to } : null;
@@ -380,6 +399,18 @@ function registerIpc(): void {
     return db.dsdEvents(network, p.from, p.to);
   });
   ipcMain.handle(IPC.dsdNetworks, () => db?.dsdNetworks() ?? []);
+  ipcMain.handle(IPC.dsdForgetChannel, (_e, channel: unknown) => {
+    const network = dsd?.status().feed.network;
+    if (!channels || !network || typeof channel !== 'string') return;
+    // Votes may sit under the network's key or, from before keys carried names, its bare ID.
+    channels.forget(network.key, channel);
+    channels.forget(network.id, channel);
+    if (channels.takeChanged()) {
+      console.log(`[dsd] forgot channel ${channel} of ${network.key}`);
+      saveChannels();
+    }
+    if (dsd) publishDsd(dsd.status());
+  });
   ipcMain.handle(IPC.dsdChooseFolder, async () => {
     if (!settings) throw new Error('No settings');
     const res = await dialog.showOpenDialog({
@@ -741,11 +772,21 @@ function openLog(): void {
   let votes: ChannelVotes | null = null;
   try {
     if (existsSync(channelsPath)) {
-      const saved = JSON.parse(readFileSync(channelsPath, 'utf8')) as { votes?: ChannelVotes; systems?: unknown };
+      const saved = JSON.parse(readFileSync(channelsPath, 'utf8')) as { votes?: ChannelVotes; systems?: unknown; maps?: unknown };
       votes = saved.votes ?? null;
       dsdSystems = {};
       if (typeof saved.systems === 'object' && saved.systems !== null) {
         for (const [k, v] of Object.entries(saved.systems as Record<string, unknown>)) if (typeof v === 'string' && v) dsdSystems[k] = v;
+      }
+      dsdMaps = {};
+      if (typeof saved.maps === 'object' && saved.maps !== null) {
+        for (const [k, v] of Object.entries(saved.maps as Record<string, unknown>)) {
+          try {
+            dsdMaps[k] = sanitizeMapSettings(v);
+          } catch {
+            /* a damaged entry is dropped */
+          }
+        }
       }
     }
   } catch (e) {
@@ -881,8 +922,42 @@ function rememberSystemBounds(): void {
 let dsdPublishTimer: ReturnType<typeof setTimeout> | null = null;
 let dsdPending: DsdStatus | null = null;
 /** Push the DSD+ status to every window, at most four times a second (the event file can burst). */
+/** The status with the feed network's channel map on it: the user's anchors, the neighbour lists' and the learned channels', on one line. */
+function withMap(status: DsdStatus): DsdStatus {
+  const network = status.feed.network;
+  if (!network || !db) return status;
+  const key = network.key;
+  const settings = dsdMaps[key] ?? { stepHz: null, anchors: [] };
+  const now = Date.now();
+  if (!siteFactsCache || siteFactsCache.network !== key || now - siteFactsCache.at > SITE_FACTS_MS) {
+    siteFactsCache = { network: key, at: now, anchors: neighbourAnchors(db.dsdSites(key)) };
+  }
+  const learned: MapAnchor[] = Object.values(status.channels)
+    .filter((c) => c.hz !== null && /^\d+$/.test(c.channel))
+    .map((c) => ({ lsn: Number(c.channel), hz: c.hz!, source: 'learned', note: `${c.votes} of ${c.total} vote${c.total === 1 ? '' : 's'} from the scanner's squelch openings` }));
+  return { ...status, map: { map: buildChannelMap([...settings.anchors, ...siteFactsCache.anchors, ...learned], settings.stepHz), settings } };
+}
+
+/** A channel map's settings as the renderer sent them, checked field by field. */
+function sanitizeMapSettings(v: unknown): ChannelMapSettings {
+  if (typeof v !== 'object' || v === null) throw new Error('Bad channel map');
+  const o = v as Record<string, unknown>;
+  const stepHz = o['stepHz'] === null || o['stepHz'] === undefined ? null : (MAP_STEPS as readonly number[]).includes(o['stepHz'] as number) ? (o['stepHz'] as number) : null;
+  const anchors: MapAnchor[] = [];
+  if (Array.isArray(o['anchors'])) {
+    for (const a of o['anchors'] as unknown[]) {
+      if (typeof a !== 'object' || a === null) continue;
+      const { lsn, hz, note } = a as Record<string, unknown>;
+      if (typeof lsn === 'number' && Number.isInteger(lsn) && lsn >= 1 && typeof hz === 'number' && Number.isFinite(hz) && hz > 0 && !anchors.some((x) => x.lsn === lsn)) {
+        anchors.push({ lsn, hz: Math.round(hz), source: 'user', note: typeof note === 'string' ? note.slice(0, 120) : '' });
+      }
+    }
+  }
+  return { stepHz, anchors };
+}
+
 function publishDsd(status: DsdStatus): void {
-  dsdPending = status;
+  dsdPending = withMap(status);
   if (dsdPublishTimer) return;
   dsdPublishTimer = setTimeout(() => {
     dsdPublishTimer = null;

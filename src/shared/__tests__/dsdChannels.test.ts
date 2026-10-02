@@ -59,6 +59,18 @@ describe('ChannelLearner', () => {
     expect(l.learned('L1')).toEqual({});
   });
 
+  it('forgets a channel on request and learns it afresh', () => {
+    const l = new ChannelLearner({ L1: { '306': { '167300000': 5 }, '305': { '167225000': 2 } } });
+    expect(l.learned('L1')['306']!.hz).toBe(167_300_000);
+    l.forget('L1', '306');
+    expect(l.takeChanged()).toBe(true);
+    expect(Object.keys(l.learned('L1'))).toEqual(['305']);
+    l.forget('L1', '999');
+    expect(l.takeChanged()).toBe(false);
+    l.forget('L1', '305');
+    expect(l.toJSON()).toEqual({});
+  });
+
   it('round-trips its votes and writes DSDPlus.frequencies lines for the learned channels', () => {
     const l = new ChannelLearner({ L1: { '306': { '167300000': 3 }, '305': { '167225000': 2, '164700000': 1 }, '310': { '170000000': 1 } } });
     const again = new ChannelLearner(l.toJSON());

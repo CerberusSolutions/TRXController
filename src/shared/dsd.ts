@@ -304,6 +304,7 @@ export interface DsdGroup {
 }
 
 import type { LearnedChannel } from './dsdChannels';
+import type { ChannelMapInfo } from './dsdChannelMap';
 
 /** What the Data dialog and the top-bar pill show about the link. */
 export interface DsdStatus {
@@ -322,6 +323,8 @@ export interface DsdStatus {
   protocol: string | null;
   /** Channel numbers of the feed's current network learned from the TRX's squelch openings, by channel. */
   channels: Record<string, LearnedChannel>;
+  /** The feed's current network's channel map (main builds it from the anchors); null with no network or no anchor. */
+  map: ChannelMapInfo | null;
   feed: DsdFeed;
   /** Events recorded in the log database since the folder was set (`dsd_events`). */
   recorded: number;
@@ -342,6 +345,7 @@ export const EMPTY_DSD_STATUS: DsdStatus = {
   system: null,
   protocol: null,
   channels: {},
+  map: null,
   feed: EMPTY_FEED,
   recorded: 0,
   alive: false,

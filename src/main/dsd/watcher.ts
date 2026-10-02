@@ -137,6 +137,7 @@ export class DsdWatcher {
       tgNames,
       system: net ? (this.opts.systemOf?.(net) ?? null) : null,
       protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
+      map: null,
       // Channels learned under the network's key, with any learned under the bare ID before keys carried names.
       channels: net && this.opts.channels ? { ...this.opts.channels(net), ...this.opts.channels(this.feed.network!.key) } : {},
       feed: this.feed,

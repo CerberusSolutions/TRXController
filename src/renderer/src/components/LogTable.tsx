@@ -8,7 +8,7 @@ import { pickTgName, tgNameSystem } from "../../../shared/tgNames";
 import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
-import { logToCsv } from "../lib/csv";
+import { entriesToCsv, logToCsv } from "../lib/csv";
 import { SOURCE_NAME, SOURCE_PILL, rowSource } from "../lib/sources";
 
 function fmtTime(ms: number): string {
@@ -953,6 +953,17 @@ export default function LogTable() {
           }}
         >
           CSV
+        </button>
+        <button
+          className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-ink disabled:opacity-40"
+          disabled={visible.length === 0 || !window.trx?.logExportCsv}
+          title="Save the entries shown (after the filter) as a CSV file for a spreadsheet: one line per entry with every column the table and the Detail view have"
+          onClick={() => {
+            const stamp = new Date().toISOString().slice(0, 16).replace("T", "-").replace(":", "");
+            void window.trx.logExportCsv(entriesToCsv(visible), `trx-log-${stamp}.csv`);
+          }}
+        >
+          Entries
         </button>
         <button
           className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-3 hover:text-red disabled:opacity-40"

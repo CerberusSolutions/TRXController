@@ -101,6 +101,15 @@ export class ChannelLearner {
     return out;
   }
 
+  /** Drop every vote for a network's channel (a wrong frequency learned from a coincidence); it is learned afresh from the next matches. */
+  forget(network: string, channel: string): void {
+    const net = this.votes[network];
+    if (!net || !(channel in net)) return;
+    delete net[channel];
+    if (Object.keys(net).length === 0) delete this.votes[network];
+    this.changed = true;
+  }
+
   /** The frequency a network's channel has been learned as, or null. */
   hzOf(network: string, channel: string): number | null {
     return this.learned(network)[channel]?.hz ?? null;
