@@ -5,7 +5,10 @@
  *
  * protocol, network / site, the talkgroup last heard on (-2 = none), radio ID, priority, mode, hits,
  * last heard, then the quoted strings DSD+ keeps for the radio (the alias the user typed in DSD+ is the
- * first non-empty one), and a hash. A line with an alias names the radio here; the rest are skipped.
+ * first non-empty one, then the P25 talker alias), and a hash. A line with an alias names the radio here;
+ * the rest are skipped. An alias DSD+ generated itself from over-the-air data (NEXEDGE, D-Star, Fusion)
+ * is written with an asterisk before the quotes, `*"G0LGF/ID31"`; the asterisk is DSD+'s own marker and is
+ * dropped (seen on 111 of 143 named radios in a real file, 2 Oct 2026).
  */
 
 export interface DsdRadio {
@@ -61,7 +64,7 @@ export function parseDsdRadios(text: string): { radios: DsdRadio[]; skipped: num
       continue;
     }
     const tg = Number(f[2]?.value);
-    const alias = f.slice(8).find((x) => x.quoted && x.value !== '')?.value ?? '';
+    const alias = (f.slice(8).find((x) => x.quoted && x.value.replace(/^\*/, '') !== '')?.value ?? '').replace(/^\*/, '');
     radios.push({
       protocol: f[0]!.value,
       network: f[1]?.value ?? '',

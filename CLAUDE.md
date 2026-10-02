@@ -345,7 +345,8 @@ captured on 14 Sep 2026.
   `h.systemTag` on a trunked header), `LogTable`'s `RadioNamer` (the row's radio, or one clicked in the traffic
   list) and the Data dialog's Radios list read. `Import DSD+ radio list` (Data › Confirmed identities) parses
   DSD+'s `DSDPlus.radios` (`src/shared/dsdRadios.ts`: protocol, network, talkgroup or -2, radio ID, priority,
-  mode, hits, last heard, then the quoted strings, the first non-empty one being the alias) and names every
+  mode, hits, last heard, then the quoted strings, the first non-empty one being the alias, a leading `*` being
+  DSD+'s marker for an alias it generated itself and dropped) and names every
   radio with an alias on any system (DSD+ keys by its own network ID, not the scanner's tag). Not in the CSV
   export, which is one object per frequency and code, not per radio.
 - Code matching: `detectedCode` (`src/shared/rr.ts`) is the reception's tone ("CTCSS 94.8", "DCS 023",
