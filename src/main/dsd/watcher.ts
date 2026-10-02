@@ -7,7 +7,8 @@
  */
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALIVE_MS, EMPTY_FEED, parseDsdEventLine, reduceDsdEvent, type DsdFeed, type DsdStatus } from '../../shared/dsd';
+import { ALIVE_MS, EMPTY_FEED, parseDsdEventLine, reduceDsdEvent, type DsdCallEvent, type DsdFeed, type DsdStatus } from '../../shared/dsd';
+import type { LearnedChannel } from '../../shared/dsdChannels';
 import { parseDsdGroups, parseDsdRadios } from '../../shared/dsdRadios';
 import type { NewRadioName } from '../../shared/radioNames';
 
@@ -28,6 +29,10 @@ export interface DsdWatcherOptions {
   nameRadios: (list: NewRadioName[]) => number;
   /** The status changed (throttled by the caller). `radiosChanged` says the log's names moved. */
   onChange: (status: DsdStatus, radiosChanged: boolean) => void;
+  /** A call line as it lands (not from the seed), with the network it belongs to: what the channel learner pairs with the TRX. */
+  onCall?: (ev: DsdCallEvent, network: string | null) => void;
+  /** The channel learner's view of a network, for the status. */
+  channels?: (network: string) => Record<string, LearnedChannel>;
   log?: (msg: string) => void;
   now?: () => number;
 }
@@ -53,6 +58,7 @@ export class DsdWatcher {
   private named = 0;
   private importedAt: number | null = null;
   private groupAliases = new Map<string, string>();
+  private networkProtocols = new Map<string, string>();
   private groupCount = 0;
   private error: string | null = null;
   /** What the last status pushed out said about liveness, so going quiet (or waking) is announced once. */
@@ -78,6 +84,7 @@ export class DsdWatcher {
     this.named = 0;
     this.importedAt = null;
     this.groupAliases.clear();
+    this.networkProtocols.clear();
     this.groupCount = 0;
     this.error = null;
     if (!folder) {
@@ -112,6 +119,8 @@ export class DsdWatcher {
       radios: { found: this.radios.size >= 0, named: this.named, importedAt: this.importedAt },
       groups: { found: this.groups.size >= 0, count: this.groupCount },
       tgNames,
+      protocol: net ? (this.networkProtocols.get(net) ?? null) : null,
+      channels: net && this.opts.channels ? this.opts.channels(net) : {},
       feed: this.feed,
       alive: this.folder !== null && this.eventFound && this.feed.lastEventAt !== null && this.now() - this.feed.lastEventAt < ALIVE_MS,
     };
@@ -184,7 +193,7 @@ export class DsdWatcher {
           const text = this.partial + this.read(path, this.offset, size - this.offset);
           const lines = text.split(/\r?\n/);
           this.partial = lines.pop() ?? '';
-          for (const line of lines) this.ingest(line);
+          for (const line of lines) this.ingest(line, true);
           this.offset = size;
           changed = true;
         }
@@ -274,16 +283,22 @@ export class DsdWatcher {
     try {
       const { groups } = parseDsdGroups(readFileSync(join(this.folder!, GROUPS_FILE), 'utf8'));
       this.groupAliases.clear();
-      for (const g of groups) if (g.alias) this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
+      this.networkProtocols.clear();
+      for (const g of groups) {
+        if (g.alias) this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
+        if (!this.networkProtocols.has(g.network)) this.networkProtocols.set(g.network, g.protocol);
+      }
       this.groupCount = groups.length;
     } catch (e) {
       this.opts.log?.(`[dsd] ${GROUPS_FILE}: ${(e as Error).message}`);
     }
   }
 
-  private ingest(line: string): void {
+  private ingest(line: string, live = false): void {
     const ev = parseDsdEventLine(line);
-    if (ev) this.feed = reduceDsdEvent(this.feed, ev);
+    if (!ev) return;
+    this.feed = reduceDsdEvent(this.feed, ev);
+    if (live && ev.kind === 'call') this.opts.onCall?.(ev, this.feed.network?.id ?? null);
   }
 
   private read(path: string, from: number, length: number): string {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NO_ID } from '@trxcontroller/rcip';
 import { ALIVE_MS, type DsdCall } from '../../../shared/dsd';
+import { MIN_VOTES, dsdFrequencyLines } from '../../../shared/dsdChannels';
 import { pickRadioName } from '../../../shared/radioNames';
 import { attachDsdEvents, useDsd } from '../store/dsd';
 import { attachLogEvents, useLog } from '../store/log';
@@ -22,6 +23,8 @@ export default function SystemApp() {
   const radioNames = useLog((s) => s.radioNames);
   const [, setTick] = useState(0);
   const [docked, setDocked] = useState<'left' | 'right' | null>(null);
+  const [channelsOpen, setChannelsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   const toggleDock = useCallback(() => {
     const p = window.trx?.dsdDock?.(docked ? 'off' : 'auto');
     if (p) void p.then((s) => setDocked(s.docked));
@@ -50,6 +53,8 @@ export default function SystemApp() {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.target as HTMLElement)?.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key.toLowerCase() === 'd') toggleDock();
+      if (e.key.toLowerCase() === 'c') setChannelsOpen((o) => !o);
+      if (e.key === 'Escape') setChannelsOpen(false);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -80,12 +85,32 @@ export default function SystemApp() {
     return { name, sub };
   };
   const calls = useMemo(() => feed?.calls ?? [], [feed]);
+  // A call's frequency: DSD+'s own when the site is in its frequencies file, else the one learned for the channel number.
+  const learned = status?.channels ?? {};
+  const hzOf = (c: DsdCall): number | null => c.hz ?? (c.channel !== null ? (learned[c.channel]?.hz ?? null) : null);
+  const learnedCount = Object.values(learned).filter((l) => l.hz !== null).length;
+  const formingCount = Object.values(learned).length - learnedCount;
   // The call the scanner is on: the newest one on its talkgroup and voice frequency, and only while that call is open or just ended.
+  // With no talkgroup in the header (the scanner on a conventional object that happens to be a site's voice channel) the
+  // frequency alone decides, so a known or learned channel still gets the marker.
+  const rfOpen = !!snapshot.status?.squelch.rf;
   const onAirId = useMemo(() => {
-    if (onTg === null) return null;
-    const c = calls.find((x) => x.tg === onTg && (x.hz === null || onHz === null || Math.abs(x.hz - onHz) < 1000));
+    if (onHz === null || !rfOpen) return null;
+    const c = calls.find((x) => {
+      const hz = hzOf(x);
+      if (onTg !== null) return x.tg === onTg && (hz === null || Math.abs(hz - onHz) < 1000);
+      return hz !== null && Math.abs(hz - onHz) < 1000;
+    });
     return c && (c.open || now - c.lastAt < 15_000) ? c.id : null;
-  }, [calls, onTg, onHz, now]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calls, onTg, onHz, now, learned, rfOpen]);
+  const frequencyLines = feed?.network ? dsdFrequencyLines(status?.protocol ?? 'DMR', feed.network.id, feed.site?.id ?? null, learned) : [];
+  const copyLines = (): void => {
+    void navigator.clipboard.writeText(frequencyLines.join('\r\n') + '\r\n').then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   const isOnAir = (c: DsdCall): boolean => c.id === onAirId;
 
   return (
@@ -110,6 +135,17 @@ export default function SystemApp() {
           <span className="max-w-[18rem] truncate">{linkState.text}</span>
           {feed?.lastEventAt && <span className="font-mono text-ink-3">{hms(feed.lastEventAt)}</span>}
         </div>
+        {(learnedCount > 0 || formingCount > 0) && (
+          <button
+            type="button"
+            className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${channelsOpen ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+            title="Channel numbers learned from the scanner's squelch openings, and the lines for DSDPlus.frequencies (C)"
+            onClick={() => setChannelsOpen((o) => !o)}
+          >
+            Channels {learnedCount}
+            {formingCount > 0 ? ` +${formingCount}` : ''}
+          </button>
+        )}
         <button
           type="button"
           className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
@@ -119,6 +155,43 @@ export default function SystemApp() {
           {docked ? 'Undock' : 'Dock'}
         </button>
       </header>
+
+      {channelsOpen && (
+        <div className="shrink-0 border-b border-edge bg-panel px-4 py-3 text-[12px] text-ink-2">
+          <div className="flex items-baseline gap-3">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Learned channels</span>
+            <span className="text-[11px] text-ink-3">
+              Each time the scanner's squelch opens within a moment of a grant DSD+ could not put a frequency to, that is one vote; {MIN_VOTES} consistent votes learn the channel.
+            </span>
+          </div>
+          <table className="mt-2 font-mono text-[12px]">
+            <tbody>
+              {Object.values(learned)
+                .sort((a, b) => Number(a.channel) - Number(b.channel))
+                .map((l) => (
+                  <tr key={l.channel}>
+                    <td className="pr-4 text-ink-2">ch {l.channel}</td>
+                    <td className={`pr-4 ${l.hz !== null ? 'text-amber' : 'text-ink-3'}`}>{l.hz !== null ? mhz(l.hz) : 'not yet'}</td>
+                    <td className="text-ink-3">
+                      {l.votes} of {l.total} {l.total === 1 ? 'vote' : 'votes'}
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+          {frequencyLines.length > 0 && (
+            <div className="mt-2">
+              <div className="flex items-baseline gap-3">
+                <span className="text-[11px] text-ink-3">For DSDPlus.frequencies in the DSD+ folder (DSD+ reads it while running; check the protocol and site against a line it wrote itself):</span>
+                <button type="button" className="no-drag rounded border border-edge px-1.5 py-px font-sans text-[10px] text-ink-3 hover:text-ink" onClick={copyLines}>
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+              <pre className="mt-1 select-text rounded-md bg-panel-2 px-3 py-2 font-mono text-[11px] leading-relaxed text-ink-2">{frequencyLines.join('\n')}</pre>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="min-h-0 flex-1 overflow-auto">
         {calls.length === 0 ? (
@@ -171,7 +244,19 @@ export default function SystemApp() {
                       {r.sub && <span className="text-ink-3"> {r.sub}</span>}
                     </td>
                     <td className="whitespace-nowrap px-2 py-1">
-                      {c.hz !== null ? <span className="text-amber">{mhz(c.hz)}</span> : c.channel ? <span className="text-ink-2">ch {c.channel}</span> : <span className="text-ink-3">—</span>}
+                      {c.hz !== null ? (
+                        <span className="text-amber">{mhz(c.hz)}</span>
+                      ) : c.channel && learned[c.channel]?.hz ? (
+                        <span className="text-amber underline decoration-dotted decoration-amber/50 underline-offset-2" title={`ch ${c.channel}, learned from ${learned[c.channel]!.votes} match${learned[c.channel]!.votes === 1 ? '' : 'es'} with the scanner`}>
+                          {mhz(learned[c.channel]!.hz!)}
+                        </span>
+                      ) : c.channel ? (
+                        <span className="text-ink-2" title={learned[c.channel] ? `${learned[c.channel]!.votes} of ${MIN_VOTES} matches with the scanner so far` : 'DSD+ has no frequency for this channel; the scanner opening on it teaches the app which it is'}>
+                          ch {c.channel}
+                        </span>
+                      ) : (
+                        <span className="text-ink-3">—</span>
+                      )}
                       {c.slot !== null && <span className="text-ink-3"> · slot {c.slot}</span>}
                       {c.enc && (
                         <span className={`${PILL} ml-1.5 bg-red/15 text-red`} title={[c.alg, c.keyId ? `key ${c.keyId}` : ''].filter(Boolean).join(' ') || 'Encrypted'}>

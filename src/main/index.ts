@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, nativeTheme, net, safeStorage, screen, shell, type Rectangle } from 'electron';
 import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Key, isKeyCode } from '@trxcontroller/rcip';
 import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
@@ -16,6 +17,7 @@ import type { NewConfirmation } from '../shared/confirm';
 import type { NewRadioName } from '../shared/radioNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
+import { ChannelLearner, type ChannelVotes } from '../shared/dsdChannels';
 import { WindowDock } from './dock';
 import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
@@ -33,6 +35,20 @@ let mapWin: BrowserWindow | null = null;
 /** The System window: what DSD+ sees on the trunked system's control channel. */
 let systemWin: BrowserWindow | null = null;
 let dsd: DsdWatcher | null = null;
+/** Channel numbers of DSD+'s trunked sites learned from the TRX's squelch openings; votes kept in userData/dsd-channels.json. */
+let channels: ChannelLearner | null = null;
+let channelsPath = '';
+let saveChannelsTimer: ReturnType<typeof setTimeout> | null = null;
+function saveChannels(): void {
+  if (saveChannelsTimer) clearTimeout(saveChannelsTimer);
+  saveChannelsTimer = setTimeout(() => {
+    saveChannelsTimer = null;
+    if (!channels || !channelsPath) return;
+    writeFile(channelsPath, JSON.stringify({ version: 1, votes: channels.toJSON() }, null, 1)).catch((e: unknown) => console.log(`[dsd] saving channels: ${(e as Error).message}`));
+  }, 2000);
+}
+/** The squelch as last seen, so each opening (or move while open) is one vote at most. */
+let lastSquelch: { rf: boolean; hz: number } = { rf: false, hz: 0 };
 const mapDock = new WindowDock({
   main: () => win,
   win: () => mapWin,
@@ -199,6 +215,19 @@ const session = new ScannerSession(serialTransportFactory, {
     const s = enrich(raw);
     broadcast(IPC.snapshot, s);
     logger?.onSnapshot(s);
+    // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant.
+    if (channels) {
+      const now = Date.now();
+      const rf = !!s.status?.squelch.rf;
+      const hz = s.status?.frequencyHz ?? 0;
+      if (rf && (!lastSquelch.rf || lastSquelch.hz !== hz)) channels.opening(now, hz);
+      lastSquelch = { rf, hz };
+      channels.tick(now);
+      if (channels.takeChanged()) {
+        saveChannels();
+        if (dsd) publishDsd(dsd.status());
+      }
+    }
     // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
     const limit = settings?.get().scanTimeoutS ?? null;
     if (scanTimeout.update(s, limit === null ? null : limit * 1000)) {
@@ -618,8 +647,21 @@ function openLog(): void {
   db = new LogDb(path);
   logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
   console.log(`[log] ${path} (${db.count()} log entries)`);
+  channelsPath = join(app.getPath('userData'), 'dsd-channels.json');
+  let votes: ChannelVotes | null = null;
+  try {
+    if (existsSync(channelsPath)) votes = (JSON.parse(readFileSync(channelsPath, 'utf8')) as { votes?: ChannelVotes }).votes ?? null;
+  } catch (e) {
+    console.log(`[dsd] reading channels: ${(e as Error).message}`);
+  }
+  channels = new ChannelLearner(votes);
   dsd = new DsdWatcher({
     nameRadios: (list) => db!.nameRadios(list),
+    // A grant DSD+ could not put a frequency to: the learner pairs it with the TRX's next squelch opening.
+    onCall: (ev, network) => {
+      if (network && ev.channel && ev.hz === null) channels?.grant(ev.at, network, ev.channel);
+    },
+    channels: (network) => channels?.learned(network) ?? {},
     onChange: (status, radiosChanged) => {
       publishDsd(status);
       // The names joined into every log row moved: every window reloads its log.
