@@ -212,7 +212,9 @@ captured on 14 Sep 2026.
   `USAF Bases UK` / `Radio 7`, the radio ID itself coming from the `a` header; a TRX-2 on a DMR trunked system,
   1 Oct 2026, alternates line 5 between the alias and `RadioID:       5` and line 3 between the talkgroup name and
   its bare number, `100`, which `parseScanScreen` takes as the TGID on a TGRP object). `parseScanScreen` /
-  `parseSearchScreen` return any free text on line 5 as `SignalDetails.radioAlias`; `holdDetails` keeps it while
+  `parseSearchScreen` return any free text on line 5 as `SignalDetails.radioAlias`, except the detail lines (TGID,
+  RadioID, slot, tone) and the `VC: 419.4750` / `CC:` channel line a trunked screen shows when the radio has no alias
+  (seen 2 Oct 2026, it was logged as an alias); `holdDetails` keeps it while
   that radio talks and drops it when a "RadioID:" line names another; the hero shows it ahead of radioid.net; the
   tracker stores it as `radio_alias` on the row (`ReceptionRow.radioAlias`), and the row's `radioCallsign` is the
   alias when set (`COALESCE` in the selects, `radioName` then ''), so the log, the Name column and the tooltips show

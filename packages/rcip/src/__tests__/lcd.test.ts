@@ -133,6 +133,13 @@ describe('parseScanScreen', () => {
     expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', '100', 'DMR   456.025000', ''] })).toMatchObject({ name: '100', tgid: null });
   });
 
+  it('never takes the voice-channel line of a trunked screen for an alias', () => {
+    // Seen on a P25 system, 2 Oct 2026: with no alias for the radio the scanner shows the voice channel on line 5.
+    const s = parseScanScreen({ lines: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'VC: 419.4750'] });
+    expect(s).toMatchObject({ name: 'UNID', radioAlias: null, radioId: null });
+    expect(parseScanScreen({ lines: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'CC: 417.7250'] })!.radioAlias).toBeNull();
+  });
+
   it('never takes a RadioID, slot or tone line for an alias', () => {
     expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] })!.radioAlias).toBeNull();
     expect(parseScanScreen({ lines: ['', 'Shopwatch', 'CONV        psDr', 'Resound Ayles', 'DMR   456.025000', 'Slot:2  Color: 7'] })!.radioAlias).toBeNull();

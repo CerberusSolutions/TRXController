@@ -197,6 +197,8 @@ const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
 const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
 const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
 const TONE_RE = /^(CTCSS|DCS|NAC)\s+(\S+)(?:\s+([A-Za-z]))?\s*$/i;
+/** The voice / control channel a trunked screen shows on line 5 when the radio has no alias ("VC: 419.4750", seen on a P25 system, 2 Oct 2026). */
+const CHANNEL_RE = /^(VC|CC):\s*\d/i;
 
 /** What the DMR / tone detail lines carry, shared by the Scan and Search screens. */
 export interface SignalDetails {
@@ -214,7 +216,7 @@ export interface SignalDetails {
 
 /** True when the line is one of the structured detail lines (TGID, RadioID, slot / colour, tone). */
 function isDetailLine(line: string): boolean {
-  return TGID_RE.test(line) || RADIO_ID_RE.test(line) || SLOT_RE.test(line) || TONE_RE.test(line);
+  return TGID_RE.test(line) || RADIO_ID_RE.test(line) || SLOT_RE.test(line) || TONE_RE.test(line) || CHANNEL_RE.test(line);
 }
 
 /**
