@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { LCD_CURSOR_BYTE, describeIcons, isFrequencyLabel, isModeFrequencyText, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, parseSearchScreen, renderLcd } from '../lcd';
+import { LCD_CURSOR_BYTE, describeIcons, isFrequencyLabel, isModeFrequencyText, isPlaceholderName, lcdChar, parseLcd, parseLcdIcons, parseScanObjectLine, parseScanScreen, parseSearchScreen, renderLcd } from '../lcd';
 import { fromHex } from '../frame';
 
 function lcdData(lines: string[], icons: [number, number, number], nul = true): Uint8Array {
@@ -212,6 +212,13 @@ describe('parseSearchScreen', () => {
       expect(isFrequencyLabel(t), t).toBe(true);
     for (const t of ['', 'Fire Dispatch', 'Taxis 453', '453.0625 Taxis', 'Bucks Fire 1', 'RBW18', '453', 'TC NW Deps', 'Tune Mode', 'Site 453.0625 Ops'])
       expect(isFrequencyLabel(t), t).toBe(false);
+  });
+
+  it('knows when a name says nothing: blank, UNID, a wildcard, a bare talkgroup number or the frequency', () => {
+    for (const t of ['', '  ', 'UNID', 'unid', 'Wildcard', 'Wildcard!', 'TG 100', 'TGID 63354', '100', '63354', '453.0625 CC15', 'DMRs 145.637500'])
+      expect(isPlaceholderName(t), t).toBe(true);
+    for (const t of ['Fire Dispatch', 'TC NW Deps', 'Taxis 453', 'Unidentified Ops', 'TG 100 Ops', 'Radio 7', '123456789'])
+      expect(isPlaceholderName(t), t).toBe(false);
   });
 });
 

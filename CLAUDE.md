@@ -334,6 +334,25 @@ captured on 14 Sep 2026.
   (the hero shows it with a CONF pill after the name, so the name never shifts, and "Scanner: X" beneath when the scanner disagrees). Withdrawing
   one (`unconfirm`) puts the rows back to the scanner's name, else unnamed with the licensee credited.
   The Data dialog lists them with a remove link.
+- Talkgroup names (`src/shared/tgNames.ts`, `tg_names` table, UNIQUE(system, tgid, source)): a name of the user's own for a
+  talkgroup (`source` USER), and DSD+'s aliases from `DSDPlus.groups` (`source` DSD), since the scanner shows UNID for a talkgroup
+  its wildcard caught (`isPlaceholderName` in `packages/rcip/src/lcd.ts`: blank, UNID, Wildcard, a bare number, a frequency label;
+  `describe()` treats such a scanner name as none so a lookup may name the row, and keeps UNID on the row when nothing does) and
+  cuts its alpha tags to 16 characters. Keyed by TGID plus `system`: the scanner's system tag on a trunked object, '' for any
+  (`tgNameSystem`); `pickTgName(list, tgid, systems)` takes the user's name on the most specific system, else DSD+'s. Rank: CONF >
+  USER name (`LookupSource` `TG`, solid green pill) > the scanner's own name > DSD alias (`DSD`, `--t-dsd` violet) > the lookups:
+  `TG_SQL` joins `tg_label` / `tg_source` into every select and `toRow` puts the name into `name` / `source` (USER always, DSD only
+  when the scanner's word, or the MEM name, is a placeholder, never over CONF); `ReceptionRow.tgLabel` carries it. `LogDb.nameTalkgroup`
+  (upsert by key), `replaceDsdTalkgroups(system, list)` (one system's DSD rows become the list; USER rows untouched), `unnameTalkgroup`,
+  `tgNames`, `tgNameFor`; IPC `log:tg-name` / `log:tg-unname` / `log:tg-names`, every change broadcasts `log:changed`; the log store
+  carries `tgNames`. DSD+ keys aliases by its network ID: the watcher's `nameTalkgroups(network, list)` runs once per change of the
+  groups file's alias set (and on `reimportGroups`), and main keys them to `dsdSystems[network]`, the scanner's system tag learned in
+  `learnDsdSystem` when the scanner's trunked header and a DSD+ group call carry the same talkgroup within `SAME_CALL_MS` (15 s),
+  kept as `systems` in `dsd-channels.json`, else to the network ID itself; `DsdStatus.system` shows the tag in the System window's bar
+  ("= SOT Council"). The hero looks the name up by `[header systemTag, DSD+ network]` (`TgParam`'s ✎ editor beside the TGID; the name
+  line shows it with the pill and "Scanner: UNID" beneath), `LogTable`'s `TgNamer` line sits above the RID line, the Data dialog lists
+  them (typed ones removable), `SystemApp` names calls by `pickTgName` then `status.tgNames`. A move to another DSD+ network drops the
+  feed's site, codes, calls and notes (`reduceDsdEvent`), since a site's neighbour list belongs to the old one.
 - Radio names (`src/shared/radioNames.ts`, `radio_names` table): a name of the user's own for a radio ID, since
   the scanner's Radio ID list is cut to the display's 16 characters ("Chatterley Whitf") and radioid.net knows only
   amateurs (asked for on 1 Oct 2026). Keyed by radio ID plus `system`: the scanner's system tag on a trunked object

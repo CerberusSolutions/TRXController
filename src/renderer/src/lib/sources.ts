@@ -11,6 +11,8 @@ export const SOURCE_PILL: Readonly<Record<Exclude<LookupSource, ''>, string>> = 
   RID: 'bg-panel-2 text-ink-2',
   MEM: 'bg-panel-2 text-ink-3',
   CONF: 'bg-green text-bg',
+  TG: 'bg-green text-bg',
+  DSD: 'bg-dsd/15 text-dsd',
 };
 
 /**

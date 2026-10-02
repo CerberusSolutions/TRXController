@@ -334,6 +334,18 @@ export function isFrequencyLabel(text: string): boolean {
   return start > 0 && tokens.slice(start).every((t) => FINGERPRINT_TOKEN_RE.test(t));
 }
 
+const PLACEHOLDER_RE = /^(?:unid|unknown|wildcard!?|tg(?:id)?\s*\d+|\d{1,8})$/i;
+
+/**
+ * True when an object's name says nothing about who it is: blank, the frequency (`isFrequencyLabel`), the
+ * "UNID" the scanner shows for a talkgroup its wildcard object caught, "Wildcard", or a bare talkgroup
+ * number. A talkgroup name of the user's own, DSD+'s alias or a lookup may stand in for such a name.
+ */
+export function isPlaceholderName(text: string): boolean {
+  const t = text.trim();
+  return t === '' || PLACEHOLDER_RE.test(t) || isFrequencyLabel(t);
+}
+
 /** Render the LCD as a boxed multi-line string for terminals. */
 export function renderLcd(lcd: Lcd): string {
   const bar = '+' + '-'.repeat(LCD_COLUMNS) + '+';

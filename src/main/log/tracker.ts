@@ -16,7 +16,7 @@
  *   open reception keeps absorbing better information until it closes.
  */
 import { point } from '../../shared/geo';
-import { NO_ID, isFrequencyLabel, isModeFrequencyText, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
+import { NO_ID, isFrequencyLabel, isModeFrequencyText, isPlaceholderName, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
 import type { ScannerSnapshot } from '../../shared/ipc';
 import type { NewReception } from './db';
 import { candidatesFor, placed as isPlaced, rrukName, storedCandidates } from '../../shared/listed';
@@ -276,9 +276,10 @@ export function describe(s: ScannerSnapshot): Description {
   const desc = descs.sort((a, b) => mScore(a.match) - mScore(b.match) || Number(b.placed) - Number(a.placed) || rank(a.src) - rank(b.src))[0];
   const scannerName = (search && isModeFrequencyText(tag) ? '' : tag) || screen?.name || '';
   // An object named only by its frequency, with or without the fingerprint notes a user adds while
-  // identifying it ("453.0625 CC15"), carries no identity: the lookups name it as if it were blank,
-  // while the Detail view's Scanner column keeps the scanner's text.
-  const named = isFrequencyLabel(scannerName) ? '' : scannerName;
+  // identifying it ("453.0625 CC15"), or by the scanner's UNID for a talkgroup its wildcard caught,
+  // carries no identity: the lookups name it as if it were blank, while the Detail view's Scanner
+  // column keeps the scanner's text.
+  const named = isPlaceholderName(scannerName) ? '' : scannerName;
   // The licensee: the higher-ranked of the register and the repeater list that has a match. Amateur
   // bands are not in the WTR; the repeater whose tone matches (or the nearest) stands in there.
   const wtr = rank('WTR') !== Infinity ? s.licences?.[0]?.licensee || '' : '';
@@ -298,7 +299,8 @@ export function describe(s: ScannerSnapshot): Description {
   // talkgroups), else the channel description unless the licensee will show in its place.
   const descName = rrTalkgroup || (desc && !licenseeWins ? desc.name : '');
   const descSrc: LookupSource = rrTalkgroup ? 'RRDB' : desc && !licenseeWins ? desc.src : '';
-  const name = named || descName;
+  // Nothing better: the scanner's UNID stays on the row (it says what happened), a frequency label does not.
+  const name = named || descName || (isFrequencyLabel(scannerName) ? '' : scannerName);
   const system = h?.systemTag || rrSys?.name || '';
   // What the log should credit: the lookup behind the name, or behind the system when the scanner
   // named the object itself, or behind the licensee when that is all there is to show.

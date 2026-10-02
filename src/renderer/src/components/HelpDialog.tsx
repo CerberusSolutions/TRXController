@@ -278,6 +278,22 @@ export default function HelpDialog() {
                 </li>
                 <li className="rounded-lg border border-edge bg-panel-2 p-3">
                   <div className="flex items-baseline justify-between gap-3">
+                    <span className="font-semibold text-ink">Your own talkgroup names</span>
+                    <span className="shrink-0 font-mono text-[11px] text-ink-3">DSDPlus.groups · optional</span>
+                  </div>
+                  <p className="mt-1 text-ink-3">
+                    The scanner shows UNID for a talkgroup its wildcard object caught and cuts its own alpha tags to 16 characters, so a talkgroup can be
+                    given a name of your own: ✎ beside the hero's TGID, or unfold a log entry and name the talkgroup there. It is keyed to the trunked system
+                    and outranks the scanner's alpha tag (a green TG pill); a confirmed identity still outranks it.
+                  </p>
+                  <p className="mt-2">
+                    <span className="text-ink-3">Then: </span>
+                    With the DSD+ link set up, the aliases in its DSDPlus.groups file come in by themselves and stand in wherever the scanner shows UNID (a
+                    violet DSD pill), in the hero, the log and the System window. Data › Confirmed identities lists them.
+                  </p>
+                </li>
+                <li className="rounded-lg border border-edge bg-panel-2 p-3">
+                  <div className="flex items-baseline justify-between gap-3">
                     <span className="font-semibold text-ink">DSD+ link</span>
                     <a className="shrink-0 font-mono text-[11px] text-cyan underline decoration-cyan/40 underline-offset-2" href="https://www.dsdplus.com/" target="_blank" rel="noreferrer">
                       dsdplus.com
@@ -286,8 +302,8 @@ export default function HelpDialog() {
                   <p className="mt-1 text-ink-3">
                     DSD+ on a trunked system's control channel sees every call; the TRX follows one. Point the app at the DSD+ folder (Data › DSD+ link) and it
                     reads DSDPlus.event, .radios and .groups as DSD+ writes them: a DSD+ pill appears in the top bar, green while events arrive, and opens the
-                    System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio aliases DSD+
-                    learns go into the log as it learns them, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
+                    System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio and talkgroup
+                    aliases DSD+ learns go into the log as it learns them, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
                     learns what they are from the scanner's squelch openings, and Channels (C) gives the lines for DSDPlus.frequencies.
                   </p>
                   <p className="mt-2">

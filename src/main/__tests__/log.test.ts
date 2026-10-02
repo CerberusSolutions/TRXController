@@ -219,6 +219,10 @@ describe('describe()', () => {
     const d = describeSnapshot(snap({ lcd: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'Radio 7'] }));
     expect(d.radioAlias).toBe('Radio 7');
     expect(d.scanlist).toBe('P25 Sites');
+    // UNID is no name: RadioReference's talkgroup names the row, the scanner's word kept for the Detail view.
+    expect(d).toMatchObject({ name: 'UNID', scannerName: 'UNID', source: '' });
+    const rr = { frequencyHz: 456_025_000, conventional: [], systems: [{ sid: 1, name: 'USAF', city: '', site: null, distanceKm: 3, talkgroup: { tgDec: 63354, alpha: 'CRO', descr: 'Croughton Dispatch', mode: 'D', enc: 0, category: '' } }], fetchedAt: 1, pending: false, error: null };
+    expect(describeSnapshot({ ...snap({ lcd: ['', 'P25 Sites', 'TGRP        psDr', 'UNID', 'USAF Bases UK', 'Radio 7'] }), rr })).toMatchObject({ name: 'Croughton Dispatch', scannerName: 'UNID', source: 'RRDB' });
     expect(describeSnapshot(snap({ lcd: ['', 'Shopwatch', 'CONV        psDr', 'TGID:        251', 'DMR   456.025000', 'RadioID:     104'] })).radioAlias).toBe('');
   });
 
@@ -516,6 +520,55 @@ describe('LogDb', () => {
     expect(plain.radioCallsign).toBe('G0XYZ');
     expect(plain.radioName).toBe('Someone');
     expect(db.update(plain.id, { radioAlias: 'Radio 7' })?.radioCallsign).toBe('Radio 7');
+  });
+
+  it('names a talkgroup from the user ahead of the scanner, and from DSD+ only where the scanner showed a placeholder', () => {
+    const db = new LogDb(':memory:');
+    const base = { startedAt: 5, endedAt: null, frequencyHz: 167_300_000, mode: 'NFM', signalType: 'DG', name: 'UNID', system: 'SOT Council', scanlist: 'Trunk DMR', objectType: 'TGRP', tgid: 100, radioId: null, site: '', squelch: '', tone: '', licensee: '', source: '' as const, scannerName: 'UNID', wtr: '', rrName: '', rrSystem: '', rpt: '', rruk: '', distanceKm: null, bearingDeg: null, lat: null, lon: null, candidates: [], rssiPeak: 0, calls: 1 };
+    const unid = db.insert(base);
+    const named = db.insert({ ...base, name: 'SOT Council Sec', scannerName: 'SOT Council Sec' });
+    const lookedUp = db.insert({ ...base, name: 'Highways (RRDB)', source: 'RRDB', rrName: 'Highways (RRDB)' });
+    const other = db.insert({ ...base, system: 'Other Net' });
+    const conv = db.insert({ ...base, system: '', objectType: 'CONV', scannerName: '', name: '' });
+    expect(db.get(unid.id)).toMatchObject({ name: 'UNID', source: '', tgLabel: '' });
+
+    // DSD+'s alias on the system: stands in for UNID, a blank and a lookup's name, never for the scanner's own alpha tag.
+    expect(db.replaceDsdTalkgroups('SOT Council', [{ tgid: 100, name: 'HWY' }, { tgid: 200, name: '' }, { tgid: 100, name: 'twice' }])).toBe(1);
+    expect(db.get(unid.id)).toMatchObject({ name: 'HWY', source: 'DSD', scannerName: 'UNID', tgLabel: 'HWY' });
+    expect(db.get(named.id)).toMatchObject({ name: 'SOT Council Sec', source: '', tgLabel: 'HWY' });
+    expect(db.get(lookedUp.id)).toMatchObject({ name: 'HWY', source: 'DSD', rrName: 'Highways (RRDB)' });
+    expect(db.get(other.id)).toMatchObject({ name: 'UNID', tgLabel: '' });
+    expect(db.get(conv.id)).toMatchObject({ name: '', tgLabel: '' });
+
+    // The user's own name outranks the scanner's alpha tag and DSD+'s alias; keyed to the system, else any.
+    const own = db.nameTalkgroup({ tgid: 100, system: 'SOT Council', name: 'Highways Depot', source: 'USER' }, 5000);
+    expect(own).toMatchObject({ tgid: 100, system: 'SOT Council', name: 'Highways Depot', source: 'USER', namedAt: 5000 });
+    expect(db.get(unid.id)).toMatchObject({ name: 'Highways Depot', source: 'TG' });
+    expect(db.get(named.id)).toMatchObject({ name: 'Highways Depot', source: 'TG', scannerName: 'SOT Council Sec' });
+    expect(db.get(other.id)).toMatchObject({ name: 'UNID', source: '' });
+    db.nameTalkgroup({ tgid: 100, system: '', name: 'Any hundred', source: 'USER' });
+    expect(db.get(other.id)).toMatchObject({ name: 'Any hundred', source: 'TG' });
+    expect(db.get(conv.id)).toMatchObject({ name: 'Any hundred', source: 'TG' });
+    expect(db.recent().find((r) => r.id === unid.id)).toMatchObject({ name: 'Highways Depot', source: 'TG' });
+    // Renaming keeps the id; the DSD import never touches a typed name; the list has the typed ones first.
+    expect(db.nameTalkgroup({ tgid: 100, system: 'SOT Council', name: 'Highways', source: 'USER' }).id).toBe(own.id);
+    db.replaceDsdTalkgroups('SOT Council', [{ tgid: 100, name: 'HWY2' }]);
+    expect(db.tgNames().map((n) => [n.system, n.name, n.source])).toEqual([['', 'Any hundred', 'USER'], ['SOT Council', 'Highways', 'USER'], ['SOT Council', 'HWY2', 'DSD']]);
+    expect(db.tgNameFor(100, ['SOT Council', 'L1'])).toMatchObject({ name: 'Highways' });
+    expect(db.tgNameFor(100, ['L1'])).toMatchObject({ name: 'Any hundred' });
+    expect(db.tgNameFor(null, ['SOT Council'])).toBeNull();
+
+    // A confirmation still outranks everything; withdrawing the typed name drops back to DSD+, then to the scanner.
+    db.confirm({ frequencyHz: 167_300_000, tone: '', tgid: 100, name: 'Confirmed Ops', system: '', source: 'USER', detail: '', distanceKm: null, bearingDeg: null, lat: null, lon: null });
+    expect(db.get(unid.id)).toMatchObject({ name: 'Confirmed Ops', source: 'CONF' });
+    db.unconfirm(db.confirmations()[0]!.id);
+    db.unnameTalkgroup(own.id);
+    db.unnameTalkgroup(db.tgNames().find((n) => n.system === '')!.id);
+    expect(db.get(unid.id)).toMatchObject({ name: 'HWY2', source: 'DSD' });
+    expect(db.get(named.id)).toMatchObject({ name: 'SOT Council Sec', source: '' });
+    expect(db.replaceDsdTalkgroups('SOT Council', [])).toBe(0);
+    expect(db.get(unid.id)).toMatchObject({ name: 'UNID', source: '' });
+    db.close();
   });
 
   it('closes receptions left open by a previous run', () => {

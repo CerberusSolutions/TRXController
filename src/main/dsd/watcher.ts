@@ -27,8 +27,12 @@ export const SETTLE_MS = 1500;
 export interface DsdWatcherOptions {
   /** Name radios from the radios file's aliases; returns how many were written. */
   nameRadios: (list: NewRadioName[]) => number;
-  /** The status changed (throttled by the caller). `radiosChanged` says the log's names moved. */
-  onChange: (status: DsdStatus, radiosChanged: boolean) => void;
+  /** Name one DSD+ network's talkgroups from the groups file's aliases (the whole list each time); returns how many were written. */
+  nameTalkgroups?: (network: string, list: { tgid: number; name: string }[]) => number;
+  /** The scanner's system tag a DSD+ network is known as, if learned. */
+  systemOf?: (network: string) => string | null;
+  /** The status changed (throttled by the caller). `namesChanged` says the log's radio or talkgroup names moved. */
+  onChange: (status: DsdStatus, namesChanged: boolean) => void;
   /** A call line as it lands (not from the seed), with the network it belongs to: what the channel learner pairs with the TRX. */
   onCall?: (ev: DsdCallEvent, network: string | null) => void;
   /** The channel learner's view of a network, for the status. */
@@ -120,6 +124,7 @@ export class DsdWatcher {
       radios: { found: this.radios.size >= 0, named: this.named, importedAt: this.importedAt },
       groups: { found: this.groups.size >= 0, count: this.groupCount },
       tgNames,
+      system: net ? (this.opts.systemOf?.(net) ?? null) : null,
       protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
       channels: net && this.opts.channels ? this.opts.channels(net) : {},
       feed: this.feed,
@@ -219,7 +224,7 @@ export class DsdWatcher {
     }
     if (this.track(this.groups, join(this.folder, GROUPS_FILE), now)) {
       changed = true;
-      if (this.groups.changedAt === null) this.readGroups();
+      if (this.groups.changedAt === null) radiosChanged = this.readGroups() || radiosChanged;
     }
     // Going quiet (or coming back) changes the pill without any file changing.
     const alive = this.status().alive;
@@ -280,19 +285,41 @@ export class DsdWatcher {
     }
   }
 
-  private readGroups(): void {
+  /** Read the groups file again and hand its aliases over afresh (a network has just been matched to a scanner system tag). */
+  reimportGroups(): void {
+    if (!this.folder || this.groups.size < 0) return;
+    this.groups.signature = '';
+    this.readGroups();
+  }
+
+  /** Read the groups file: aliases and protocols per network, and the log's talkgroup names when the aliases moved. */
+  private readGroups(): boolean {
     try {
       const { groups } = parseDsdGroups(readFileSync(join(this.folder!, GROUPS_FILE), 'utf8'));
       this.groupAliases.clear();
       this.networkProtocols.clear();
+      const byNetwork = new Map<string, { tgid: number; name: string }[]>();
       for (const g of groups) {
-        if (g.alias) this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
+        if (g.alias) {
+          this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
+          const list = byNetwork.get(g.network) ?? [];
+          list.push({ tgid: g.tgid, name: g.alias });
+          byNetwork.set(g.network, list);
+        }
         const known = this.networkProtocols.get(g.network);
         if (!known || g.lastHeard > known.lastHeard) this.networkProtocols.set(g.network, { protocol: g.protocol, lastHeard: g.lastHeard });
       }
       this.groupCount = groups.length;
+      const signature = [...this.groupAliases].map(([k, v]) => `${k}=${v}`).sort().join('\n');
+      if (signature === this.groups.signature || !this.opts.nameTalkgroups) return false;
+      this.groups.signature = signature;
+      let n = 0;
+      for (const [network, list] of byNetwork) n += this.opts.nameTalkgroups(network, list);
+      this.opts.log?.(`[dsd] ${n} talkgroup names from ${GROUPS_FILE}`);
+      return true;
     } catch (e) {
       this.opts.log?.(`[dsd] ${GROUPS_FILE}: ${(e as Error).message}`);
+      return false;
     }
   }
 

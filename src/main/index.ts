@@ -15,6 +15,7 @@ import { MIN_WINDOW, SettingsStore } from './settings';
 import { DEFAULT_LOOKUPS, lookupEnabled, type LookupPref } from '../shared/sources';
 import type { NewConfirmation } from '../shared/confirm';
 import type { NewRadioName } from '../shared/radioNames';
+import type { NewTgName } from '../shared/tgNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
 import { ChannelLearner, type ChannelVotes } from '../shared/dsdChannels';
@@ -37,6 +38,13 @@ let systemWin: BrowserWindow | null = null;
 let dsd: DsdWatcher | null = null;
 /** Channel numbers of DSD+'s trunked sites learned from the TRX's squelch openings; votes kept in userData/dsd-channels.json. */
 let channels: ChannelLearner | null = null;
+/**
+ * The scanner's system tag each DSD+ network is known as, learned when both report one call (the same talkgroup, at
+ * the same moment), kept beside the channel votes. DSD+'s talkgroup aliases are keyed to the tag from then on.
+ */
+let dsdSystems: Record<string, string> = {};
+/** A DSD+ call and a scanner header count as the same call when they are this close. */
+const SAME_CALL_MS = 15_000;
 let channelsPath = '';
 let saveChannelsTimer: ReturnType<typeof setTimeout> | null = null;
 function saveChannels(): void {
@@ -44,7 +52,7 @@ function saveChannels(): void {
   saveChannelsTimer = setTimeout(() => {
     saveChannelsTimer = null;
     if (!channels || !channelsPath) return;
-    writeFile(channelsPath, JSON.stringify({ version: 1, votes: channels.toJSON() }, null, 1)).catch((e: unknown) => console.log(`[dsd] saving channels: ${(e as Error).message}`));
+    writeFile(channelsPath, JSON.stringify({ version: 1, votes: channels.toJSON(), systems: dsdSystems }, null, 1)).catch((e: unknown) => console.log(`[dsd] saving channels: ${(e as Error).message}`));
   }, 2000);
 }
 /** The squelch as last seen, so each opening (or move while open) is one vote at most. */
@@ -151,6 +159,31 @@ function enrich(s: ScannerSnapshot): ScannerSnapshot {
   return { ...s, radioUser, licences, repeaters, rr: lookupEnabled(prefs, 'RRDB') ? rrFor(s) : null, rruk: rrukInfo, lookups: prefs, confirmed };
 }
 
+/**
+ * Match DSD+'s network to the scanner's system tag: the scanner on a trunked call whose talkgroup DSD+ has a call on
+ * at the same moment. Once known, DSD+'s talkgroup aliases are re-keyed to the tag, so the log's rows on that system
+ * pick them up.
+ */
+function learnDsdSystem(s: ScannerSnapshot): void {
+  const h = s.active?.header;
+  if (!dsd || !db || !h || h.recordingType !== 1 || !h.systemTag || !s.status?.squelch.rf) return;
+  const status = dsd.status();
+  const network = status.feed.network?.id;
+  if (!network || dsdSystems[network] === h.systemTag) return;
+  const now = Date.now();
+  const tgid = h.talkgroupId1;
+  if (!status.feed.calls.some((c) => c.tg === tgid && c.type === 'Group' && (c.open || now - c.lastAt < SAME_CALL_MS))) return;
+  const was = dsdSystems[network];
+  dsdSystems[network] = h.systemTag;
+  console.log(`[dsd] network ${network} is the scanner's "${h.systemTag}" (talkgroup ${tgid} on both)`);
+  saveChannels();
+  // The aliases were keyed to the network ID (or an earlier tag): move them onto the tag.
+  db.replaceDsdTalkgroups(was ?? network, []);
+  dsd.reimportGroups();
+  broadcast(IPC.logChanged, null);
+  publishDsd(dsd.status());
+}
+
 /** The identity the user confirmed for the current frequency, tone and talkgroup, if any. */
 function confirmedFor(s: ScannerSnapshot): ScannerSnapshot['confirmed'] {
   const d = describeSnapshot(s);
@@ -166,6 +199,17 @@ function sanitizeRadioName(v: unknown): NewRadioName {
   if (typeof radioId !== 'number' || !Number.isInteger(radioId) || radioId < 0) throw new Error('Bad radio ID');
   if (!name) throw new Error('A radio name needs a name');
   return { radioId, system: typeof o['system'] === 'string' ? o['system'].trim() : '', name };
+}
+
+/** A talkgroup name as the renderer sent it, checked field by field; always the user's own. */
+function sanitizeTgName(v: unknown): NewTgName {
+  if (typeof v !== 'object' || v === null) throw new Error('Bad talkgroup name');
+  const o = v as Record<string, unknown>;
+  const tgid = o['tgid'];
+  const name = typeof o['name'] === 'string' ? o['name'].trim() : '';
+  if (typeof tgid !== 'number' || !Number.isInteger(tgid) || tgid < 0) throw new Error('Bad talkgroup ID');
+  if (!name) throw new Error('A talkgroup name needs a name');
+  return { tgid, system: typeof o['system'] === 'string' ? o['system'].trim() : '', name, source: 'USER' };
 }
 
 /** A confirmation as the renderer sent it, checked field by field. */
@@ -228,6 +272,7 @@ const session = new ScannerSession(serialTransportFactory, {
         if (dsd) publishDsd(dsd.status());
       }
     }
+    learnDsdSystem(s);
     // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
     const limit = settings?.get().scanTimeoutS ?? null;
     if (scanTimeout.update(s, limit === null ? null : limit * 1000)) {
@@ -431,6 +476,18 @@ function registerIpc(): void {
     // Every row joins the name in, so every window's log reloads; the hero reads the list from the store.
     broadcast(IPC.logChanged, null);
     return saved;
+  });
+  ipcMain.handle(IPC.logTgNames, () => db?.tgNames() ?? []);
+  ipcMain.handle(IPC.logTgName, (_e, n: unknown) => {
+    if (!db) throw new Error('No log');
+    const saved = db.nameTalkgroup(sanitizeTgName(n));
+    broadcast(IPC.logChanged, null);
+    return saved;
+  });
+  ipcMain.handle(IPC.logTgUnname, (_e, id: unknown) => {
+    if (!db || typeof id !== 'number') throw new Error('Bad talkgroup name');
+    db.unnameTalkgroup(id);
+    broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.logRadioImport, async (): Promise<ImportResult | null> => {
     if (!db) throw new Error('No log');
@@ -650,22 +707,32 @@ function openLog(): void {
   channelsPath = join(app.getPath('userData'), 'dsd-channels.json');
   let votes: ChannelVotes | null = null;
   try {
-    if (existsSync(channelsPath)) votes = (JSON.parse(readFileSync(channelsPath, 'utf8')) as { votes?: ChannelVotes }).votes ?? null;
+    if (existsSync(channelsPath)) {
+      const saved = JSON.parse(readFileSync(channelsPath, 'utf8')) as { votes?: ChannelVotes; systems?: unknown };
+      votes = saved.votes ?? null;
+      dsdSystems = {};
+      if (typeof saved.systems === 'object' && saved.systems !== null) {
+        for (const [k, v] of Object.entries(saved.systems as Record<string, unknown>)) if (typeof v === 'string' && v) dsdSystems[k] = v;
+      }
+    }
   } catch (e) {
     console.log(`[dsd] reading channels: ${(e as Error).message}`);
   }
   channels = new ChannelLearner(votes);
   dsd = new DsdWatcher({
     nameRadios: (list) => db!.nameRadios(list),
+    // DSD+'s aliases, keyed to the scanner's system tag once the network has been matched to one, else to the network ID.
+    nameTalkgroups: (network, list) => db!.replaceDsdTalkgroups(dsdSystems[network] ?? network, list),
+    systemOf: (network) => dsdSystems[network] ?? null,
     // A grant DSD+ could not put a frequency to: the learner pairs it with the TRX's next squelch opening.
     onCall: (ev, network) => {
       if (network && ev.channel && ev.hz === null) channels?.grant(ev.at, network, ev.channel);
     },
     channels: (network) => channels?.learned(network) ?? {},
-    onChange: (status, radiosChanged) => {
+    onChange: (status, namesChanged) => {
       publishDsd(status);
       // The names joined into every log row moved: every window reloads its log.
-      if (radiosChanged) broadcast(IPC.logChanged, null);
+      if (namesChanged) broadcast(IPC.logChanged, null);
     },
     log: (msg) => console.log(msg),
   });

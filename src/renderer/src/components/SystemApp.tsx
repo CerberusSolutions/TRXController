@@ -3,6 +3,7 @@ import { NO_ID } from '@trxcontroller/rcip';
 import { ALIVE_MS, type DsdCall } from '../../../shared/dsd';
 import { MIN_VOTES, dsdFrequencyLines } from '../../../shared/dsdChannels';
 import { pickRadioName } from '../../../shared/radioNames';
+import { pickTgName } from '../../../shared/tgNames';
 import { attachDsdEvents, useDsd } from '../store/dsd';
 import { attachLogEvents, useLog } from '../store/log';
 import { attachScannerEvents, useScanner } from '../store/scanner';
@@ -21,6 +22,7 @@ export default function SystemApp() {
   const status = useDsd((s) => s.status);
   const snapshot = useScanner((s) => s.snapshot);
   const radioNames = useLog((s) => s.radioNames);
+  const tgNames = useLog((s) => s.tgNames);
   const [, setTick] = useState(0);
   const [docked, setDocked] = useState<'left' | 'right' | null>(null);
   const [channelsOpen, setChannelsOpen] = useState(false);
@@ -77,7 +79,8 @@ export default function SystemApp() {
         : status.alive
           ? { dot: 'bg-green', text: 'DSD+ live' }
           : { dot: 'bg-amber animate-pulse', text: quietS !== null ? `DSD+ quiet for ${quietS >= 120 ? `${Math.round(quietS / 60)} min` : `${quietS} s`}` : 'Waiting for DSD+' };
-  const tgName = (tg: number | null): string => (tg === null ? '' : (status?.tgNames[tg] ?? ''));
+  // A name of the user's own (keyed to the scanner's tag for this network, else the network), else DSD+'s alias.
+  const tgName = (tg: number | null): string => (tg === null ? '' : (pickTgName(tgNames, tg, [status?.system, status?.feed.network?.id])?.name ?? status?.tgNames[tg] ?? ''));
   const radioLabel = (c: DsdCall): { name: string; sub: string } => {
     const own = pickRadioName(radioNames, c.rid, system)?.name ?? null;
     const name = own ?? c.alias ?? c.callsign ?? (c.rid !== null ? String(c.rid) : '');
@@ -123,6 +126,7 @@ export default function SystemApp() {
             <span className="min-w-0 truncate text-sm" title={`${feed.network.id}${feed.site ? ` · ${feed.site.id}` : ''}`}>
               <span className="text-ink">{feed.network.name || feed.network.id}</span>
               {feed.site && <span className="text-ink-3"> · {feed.site.name || feed.site.id}</span>}
+              {status?.system && <span className="text-ink-3" title="The scanner's system tag for this network, matched on a call both saw"> = {status.system}</span>}
             </span>
           ) : (
             <span className="text-sm text-ink-3">{status?.folder ? 'No system seen yet' : 'Set the DSD+ folder under Data'}</span>

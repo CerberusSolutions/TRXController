@@ -41,6 +41,15 @@ npm run build && npm start    # run the built app
   system is not radio 5 on another); on a conventional channel it applies everywhere. Radios already
   named in DSD+ come in with Data > Import DSD+ radio list (its `DSDPlus.radios` file), or by
   themselves with the DSD+ link below.
+- **Your own talkgroup names**: the scanner shows UNID for a talkgroup its wildcard object caught and cuts
+  its own alpha tags to 16 characters, so a talkgroup can carry a name of your own: ✎ beside the hero's
+  TGID, or name it in an unfolded log entry. It is keyed to the trunked system and outranks the scanner's
+  own alpha tag (a green TG pill); a confirmed identity still outranks it. The aliases in DSD+'s
+  `DSDPlus.groups` file come in by themselves with the DSD+ link and stand in wherever the scanner shows
+  UNID or nothing (a violet DSD pill), in the hero, the log and the System window. DSD+ keys them by its
+  own network ID; once the scanner and DSD+ have been seen on one call the network is matched to the
+  scanner's system tag and the aliases apply to the log's entries on that system. Data > Confirmed
+  identities lists them.
 - **DSD+ link**: DSD+ (dsdplus.com) on a trunked system's control channel sees every call, while the
   TRX follows one. Data > DSD+ link > Choose folder points the app at the DSD+ folder, and it reads
   `DSDPlus.event`, `DSDPlus.radios` and `DSDPlus.groups` as DSD+ writes them. A **DSD+** pill appears in
@@ -54,8 +63,8 @@ npm run build && npm start    # run the built app
   opens within a moment of such a grant is a vote, two consistent votes learn the channel, and from then
   on the window shows the frequency (dotted, to say it was learned) and the TRX marker can match on it.
   **Channels** (or C) lists them with the lines to paste into `DSDPlus.frequencies`, which is what DSD+
-  needs to voice-follow the site itself. The votes are kept in `dsd-channels.json` beside the log. Radio aliases
-  DSD+ learns go into the log as it learns them. Nothing is written to DSD+'s folder. Feed DSD+ from an
+  needs to voice-follow the site itself. The votes are kept in `dsd-channels.json` beside the log. Radio and
+  talkgroup aliases DSD+ learns go into the log as it learns them. Nothing is written to DSD+'s folder. Feed DSD+ from an
   SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
   sees the whole system while the TRX moves to voice channels.
 - **Ofcom Wireless Telegraphy Register**: download the WTR CSV from Ofcom

@@ -87,6 +87,24 @@ describe('reduceDsdEvent', () => {
     ]);
   });
 
+  it('drops the old site, codes, calls and notes when DSD+ moves to another network', () => {
+    const feed = feedOf([
+      ...P25,
+      '2026/10/02  10:20:00  DCC=15  RAS  L1-15 neighbor:  Site L1-3; CC=63',
+      '2026/10/02  10:20:01  DCC=15  Current network:  L1  PTT Systems',
+      '2026/10/02  10:20:01  DCC=15  Current site:  L1-15',
+    ]);
+    expect(feed.network).toEqual({ id: 'L1', name: 'PTT Systems' });
+    expect(feed.site).toEqual({ id: 'L1-15', name: '' });
+    expect(feed.nac).toBeNull();
+    expect(feed.calls).toEqual([]);
+    expect(feed.notes).toEqual([]);
+    // The same network announced again keeps everything.
+    const again = reduceDsdEvent(feedOf(P25), parseDsdEventLine(P25[3]!)!);
+    expect(again.calls).toHaveLength(3);
+    expect(again.site?.name).toBe('RAF Croughton');
+  });
+
   it('closes a transmission that never got a closing line once it goes quiet', () => {
     const grant = parseDsdEventLine('2026/10/02  10:00:00  DCC=12  Group call; TG=69  RID=1430  Ch=306')!;
     const later = parseDsdEventLine('2026/10/02  10:01:00  DCC=12  Group call; TG=32  RID=1503  Ch=307')!;
