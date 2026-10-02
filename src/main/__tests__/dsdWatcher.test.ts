@@ -2,7 +2,7 @@ import { mkdtempSync, writeFileSync, appendFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DsdWatcher, EVENT_FILE, GROUPS_FILE, POLL_MS, RADIOS_FILE, SETTLE_MS } from '../dsd/watcher';
+import { DsdWatcher, EVENT_FILE, GROUPS_FILE, POLL_MS, RADIOS_FILE, SEED_BYTES, SETTLE_MS } from '../dsd/watcher';
 import type { DsdStatus } from '../../shared/dsd';
 import type { NewRadioName } from '../../shared/radioNames';
 
@@ -89,6 +89,21 @@ describe('DsdWatcher', () => {
     tick(130_000);
     expect(w.status().alive).toBe(false);
     expect(updates.length).toBeGreaterThan(0);
+  });
+
+  it('finds the network and site lines beyond the tail window on a chatty DMR site', () => {
+    const chatter = Array.from({ length: 4000 }, (_, i) => `2026/10/02  09:${String(Math.floor(i / 100)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}  DCC=15  RAS  NAK: REGISTRATION DENIED  Tgt=${400 + (i % 50)}  Src=REGI`).join('\r\n');
+    expect(chatter.length).toBeGreaterThan(SEED_BYTES);
+    writeFileSync(
+      join(dir, EVENT_FILE),
+      ['2026/10/02  08:58:00  NAC=167  Current network:  L1  PTT Systems', '2026/10/02  08:58:00  NAC=167  Current site:  L1-4.3', '2026/10/02  08:58:06  Current site:  L1-15', chatter, '2026/10/02  09:48:52  DCC=15  RAS  Group call; TG=69  RID=1425  Ch=306', ''].join('\r\n'),
+    );
+    w.setFolder(dir);
+    const s = w.status();
+    expect(s.feed.network).toEqual({ id: 'L1', name: 'PTT Systems' });
+    expect(s.feed.site).toEqual({ id: 'L1-15', name: '' });
+    expect(s.feed.dcc).toBe(15);
+    expect(s.feed.calls.map((c) => [c.tg, c.channel])).toEqual([[69, '306']]);
   });
 
   it('copes with an empty folder, a truncated event file and switching off', () => {

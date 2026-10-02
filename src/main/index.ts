@@ -16,6 +16,7 @@ import type { NewConfirmation } from '../shared/confirm';
 import type { NewRadioName } from '../shared/radioNames';
 import { parseDsdRadios } from '../shared/dsdRadios';
 import { DsdWatcher } from './dsd/watcher';
+import { WindowDock } from './dock';
 import type { DsdStatus } from '../shared/dsd';
 import { checkForUpdate, type FetchLike } from './updates';
 import { LogDb } from './log/db';
@@ -32,10 +33,30 @@ let mapWin: BrowserWindow | null = null;
 /** The System window: what DSD+ sees on the trunked system's control channel. */
 let systemWin: BrowserWindow | null = null;
 let dsd: DsdWatcher | null = null;
+const mapDock = new WindowDock({
+  main: () => win,
+  win: () => mapWin,
+  minSize: MAP_MIN_WINDOW,
+  mainMin: MIN_WINDOW,
+  remembered: () => settings?.get().mapDock ?? null,
+  remember: (side) => settings?.set({ mapDock: side }),
+  rememberFree: () => rememberMapBounds(),
+  stateChannel: IPC.mapDockState,
+});
+const systemDock = new WindowDock({
+  main: () => win,
+  win: () => systemWin,
+  minSize: MAP_MIN_WINDOW,
+  mainMin: MIN_WINDOW,
+  remembered: () => settings?.get().dsd.dock ?? null,
+  remember: (side) => {
+    if (settings) settings.set({ dsd: { ...settings.get().dsd, dock: side } });
+  },
+  rememberFree: () => rememberSystemBounds(),
+  stateChannel: IPC.dsdDockState,
+});
 /** Which side of the main window the map is docked to, or null while it floats. */
-let mapDocked: MapDockSide | null = null;
 /** True while we are placing the map window ourselves, so its move events are not taken for a drag. */
-let placingMap = false;
 
 /** Window chrome colours per theme, matching the renderer's tokens. */
 const CHROME = {
@@ -291,9 +312,14 @@ function registerIpc(): void {
     });
   }
   ipcMain.handle(IPC.mapDock, (_e, side: unknown) => {
-    if (side === 'off') undockMap();
-    else dockMap(side === 'left' || side === 'right' ? side : 'auto');
-    return { docked: mapDocked };
+    if (side === 'off') mapDock.undock();
+    else mapDock.dock(side === 'left' || side === 'right' ? side : 'auto');
+    return mapDock.state();
+  });
+  ipcMain.handle(IPC.dsdDock, (_e, side: unknown) => {
+    if (side === 'off') systemDock.undock();
+    else systemDock.dock(side === 'left' || side === 'right' ? side : 'auto');
+    return systemDock.state();
   });
   ipcMain.handle(IPC.listPorts, async (): Promise<PortsResult> => {
     // A system that cannot enumerate ports (no udev on a minimal Linux, say) gets an empty list with the
@@ -698,6 +724,16 @@ function loadRenderer(w: BrowserWindow, hash?: string): void {
   else void w.loadFile(join(__dirname, '../renderer/index.html'), hash ? { hash } : undefined);
 }
 
+let saveSystemBoundsTimer: ReturnType<typeof setTimeout> | null = null;
+function rememberSystemBounds(): void {
+  if (saveSystemBoundsTimer) clearTimeout(saveSystemBoundsTimer);
+  saveSystemBoundsTimer = setTimeout(() => {
+    saveSystemBoundsTimer = null;
+    if (!systemWin || systemWin.isDestroyed() || systemWin.isMinimized() || systemDock.docked) return;
+    settings?.set({ dsd: { ...settings.get().dsd, window: { ...systemWin.getNormalBounds(), maximized: false } } });
+  }, 400);
+}
+
 let dsdPublishTimer: ReturnType<typeof setTimeout> | null = null;
 let dsdPending: DsdStatus | null = null;
 /** Push the DSD+ status to every window, at most four times a second (the event file can burst). */
@@ -729,21 +765,19 @@ function openSystem(): void {
     minHeight: MAP_MIN_WINDOW.height,
     title: 'TRXController system',
   });
-  systemWin.on('ready-to-show', () => systemWin?.show());
+  systemWin.on('ready-to-show', () => {
+    // Docked beside the main window where it was last time (the right, until the user sets it free).
+    if (settings?.get().dsd.dock) systemDock.dock(settings.get().dsd.dock!);
+    systemWin?.show();
+  });
   systemWin.on('closed', () => {
     systemWin = null;
+    systemDock.reset();
   });
-  let saveTimer: ReturnType<typeof setTimeout> | null = null;
-  const remember = (): void => {
-    if (saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => {
-      saveTimer = null;
-      if (!systemWin || systemWin.isDestroyed() || systemWin.isMinimized()) return;
-      settings?.set({ dsd: { ...settings.get().dsd, window: { ...systemWin.getNormalBounds(), maximized: false } } });
-    }, 400);
-  };
-  systemWin.on('move', remember);
-  systemWin.on('resize', remember);
+  // Dragged or resized by hand: a docked window lets go; a free one remembers its place.
+  systemWin.on('move', () => systemDock.onMoved());
+  systemWin.on('resize', () => systemDock.onMoved());
+  systemWin.webContents.once('did-finish-load', () => systemWin?.webContents.send(IPC.dsdDockState, systemDock.state()));
   systemWin.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
@@ -775,33 +809,23 @@ function openMap(target: MapTarget): void {
   mapWin.webContents.setUserAgent(`TRXController/${app.getVersion()} (+https://cerberussolutions.github.io/TRXController/)`);
   mapWin.on('ready-to-show', () => {
     // Reopen docked where it was docked last time.
-    if (settings?.get().mapDock) dockMap(settings.get().mapDock!);
+    if (settings?.get().mapDock) mapDock.dock(settings.get().mapDock!);
     mapWin?.show();
   });
   mapWin.on('closed', () => {
     mapWin = null;
-    mapDocked = null;
+    mapDock.reset();
   });
   // Dragged or resized by hand: a docked map lets go; a free one remembers its place.
-  const onMapMoved = (): void => {
-    if (!mapWin || placingMap) return;
-    if (mapDocked) {
-      const want = dockedBounds(mapDocked);
-      const b = mapWin.getBounds();
-      if (!want || Math.abs(b.x - want.x) > 4 || Math.abs(b.y - want.y) > 4 || Math.abs(b.width - want.width) > 4 || Math.abs(b.height - want.height) > 4) undockMap();
-      return;
-    }
-    rememberMapBounds();
-  };
-  mapWin.on('move', onMapMoved);
-  mapWin.on('resize', onMapMoved);
+  mapWin.on('move', () => mapDock.onMoved());
+  mapWin.on('resize', () => mapDock.onMoved());
   mapWin.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: 'deny' };
   });
   mapWin.webContents.once('did-finish-load', () => {
     mapWin?.webContents.send(IPC.mapTarget, target);
-    mapWin?.webContents.send(IPC.mapDockState, { docked: mapDocked });
+    mapWin?.webContents.send(IPC.mapDockState, mapDock.state());
   });
   loadRenderer(mapWin, 'map');
 }
@@ -811,90 +835,15 @@ function rememberMapBounds(): void {
   if (saveMapBoundsTimer) clearTimeout(saveMapBoundsTimer);
   saveMapBoundsTimer = setTimeout(() => {
     saveMapBoundsTimer = null;
-    if (!mapWin || mapWin.isDestroyed() || mapWin.isMinimized() || mapDocked) return;
+    if (!mapWin || mapWin.isDestroyed() || mapWin.isMinimized() || mapDock.docked) return;
     settings?.set({ mapWindow: { ...mapWin.getNormalBounds(), maximized: false } });
   }, 400);
 }
 
-/**
- * Where the map goes on one side of the main window: the main window's height, and square (as wide as it
- * is tall) or as wide as the room allows, whichever is less, so an ultrawide display does not hand it a
- * mile of map. Null when the side has no room for the smallest useful map.
- */
-function dockedBounds(side: MapDockSide): Rectangle | null {
-  if (!win || win.isDestroyed()) return null;
-  const main = win.getBounds();
-  const area = screen.getDisplayMatching(main).workArea;
-  const right = area.x + area.width - (main.x + main.width);
-  const left = main.x - area.x;
-  const room = side === 'right' ? right : left;
-  if (room < MAP_MIN_WINDOW.width) return null;
-  const width = Math.min(room, Math.max(MAP_MIN_WINDOW.width, main.height));
-  return { x: side === 'right' ? main.x + main.width : main.x - width, y: main.y, width, height: main.height };
-}
-
-function placeMap(b: Rectangle): void {
-  if (!mapWin || mapWin.isDestroyed()) return;
-  placingMap = true;
-  if (mapWin.isMaximized()) mapWin.unmaximize();
-  mapWin.setBounds(b);
-  setTimeout(() => {
-    placingMap = false;
-  }, 300);
-}
-
-function setDock(side: MapDockSide | null): void {
-  mapDocked = side;
-  settings?.set({ mapDock: side });
-  if (mapWin && !mapWin.isDestroyed()) mapWin.webContents.send(IPC.mapDockState, { docked: side });
-}
-
-/**
- * Dock the map beside the main window: the asked-for side when it has room, else the other, else the
- * two windows share the display, the main one keeping the larger part. 'auto' prefers the side used
- * last time, then the right.
- */
-function dockMap(side: MapDockSide | 'auto'): void {
-  if (!win || win.isDestroyed() || !mapWin || mapWin.isDestroyed()) return;
-  const prefer: MapDockSide = side === 'auto' ? (mapDocked ?? settings?.get().mapDock ?? 'right') : side;
-  const other: MapDockSide = prefer === 'right' ? 'left' : 'right';
-  let b = dockedBounds(prefer);
-  let got: MapDockSide = prefer;
-  if (!b) {
-    b = dockedBounds(other);
-    if (b) got = other;
-  }
-  if (!b) {
-    // No room either side: split the display between the two, the main window keeping about 62%.
-    if (win.isMaximized()) win.unmaximize();
-    const area = screen.getDisplayMatching(win.getBounds()).workArea;
-    // A square map of the display's height, the main window keeping the rest (never below its own minimum).
-    const mapW = Math.min(Math.max(MAP_MIN_WINDOW.width, area.height), area.width - MIN_WINDOW.width);
-    const mainW = area.width - mapW;
-    got = prefer;
-    if (got === 'left') {
-      win.setBounds({ x: area.x + mapW, y: area.y, width: mainW, height: area.height });
-      b = { x: area.x, y: area.y, width: mapW, height: area.height };
-    } else {
-      win.setBounds({ x: area.x, y: area.y, width: mainW, height: area.height });
-      b = { x: area.x + mainW, y: area.y, width: mapW, height: area.height };
-    }
-  }
-  placeMap(b);
-  setDock(got);
-}
-
-function undockMap(): void {
-  if (!mapDocked) return;
-  setDock(null);
-  rememberMapBounds();
-}
-
-/** The main window moved or resized: a docked map goes with it while its side still has room. */
+/** The main window moved or resized: the docked windows go with it. */
 function followDock(): void {
-  if (!mapDocked || !mapWin || mapWin.isDestroyed()) return;
-  const b = dockedBounds(mapDocked);
-  if (b) placeMap(b);
+  mapDock.follow();
+  systemDock.follow();
 }
 
 let progWin: BrowserWindow | null = null;
@@ -957,11 +906,12 @@ function createWindow(): void {
   win.on('move', remember);
   win.on('maximize', remember);
   win.on('unmaximize', remember);
-  // A docked map follows the main window; maximising the main window takes the whole display, so the map lets go.
+  // The docked windows follow the main window; maximising the main window takes the whole display, so they let go.
   win.on('move', followDock);
   win.on('resize', followDock);
   win.on('maximize', () => {
-    if (mapDocked) undockMap();
+    mapDock.undock();
+    systemDock.undock();
   });
   win.on('closed', () => {
     win = null;

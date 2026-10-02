@@ -18,6 +18,8 @@ export const GROUPS_FILE = 'DSDPlus.groups';
 export const POLL_MS = 1000;
 /** How much of the event file's tail is replayed when the folder is set, to seed the site and recent calls. */
 export const SEED_BYTES = 256 * 1024;
+/** How many seed windows back the network and site lines are looked for (8 MB), when the tail has none. */
+export const SEED_WINDOWS = 32;
 /** A rewritten radios or groups file is read once it has sat unchanged this long (DSD+ writes them in one go, but be sure). */
 export const SETTLE_MS = 1500;
 
@@ -130,9 +132,36 @@ export class DsdWatcher {
       this.offset = size;
       this.eventFound = true;
       this.eventSize = size;
+      // A busy DMR site writes 500 registration lines a minute, so the tail may not reach back to the
+      // "Current network" line: look further back, a window at a time, for the latest one and its site.
+      if (!this.feed.network) this.seedContext(path, from);
     } catch (e) {
       this.error = `Cannot read ${EVENT_FILE}: ${(e as Error).message}`;
     }
+  }
+
+  /** Scan backwards from `end` for the most recent network and site lines and fold them in. */
+  private seedContext(path: string, end: number): void {
+    const NETWORK = /  Current network:  /;
+    const SITE = /  Current site:  \S+-/;
+    let network: string | null = null;
+    let site: string | null = null;
+    for (let windows = 0; end > 0 && windows < SEED_WINDOWS && !network; windows++) {
+      const from = Math.max(0, end - SEED_BYTES);
+      const lines = this.read(path, from, end - from).split(/\r?\n/);
+      if (from > 0) lines.shift();
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]!;
+        if (!site && SITE.test(line)) site = line;
+        if (NETWORK.test(line)) {
+          network = line;
+          break;
+        }
+      }
+      end = from;
+    }
+    if (network) this.ingest(network);
+    if (site) this.ingest(site);
   }
 
   private poll(): void {

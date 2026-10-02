@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { NO_ID } from '@trxcontroller/rcip';
 import { ALIVE_MS, type DsdCall } from '../../../shared/dsd';
 import { pickRadioName } from '../../../shared/radioNames';
@@ -21,22 +21,39 @@ export default function SystemApp() {
   const snapshot = useScanner((s) => s.snapshot);
   const radioNames = useLog((s) => s.radioNames);
   const [, setTick] = useState(0);
+  const [docked, setDocked] = useState<'left' | 'right' | null>(null);
+  const toggleDock = useCallback(() => {
+    const p = window.trx?.dsdDock?.(docked ? 'off' : 'auto');
+    if (p) void p.then((s) => setDocked(s.docked));
+  }, [docked]);
 
   useEffect(() => {
     const offTheme = initTheme();
     const offScanner = attachScannerEvents();
     const offLog = attachLogEvents();
     const offDsd = attachDsdEvents();
+    const offDock = window.trx?.onDsdDockState ? window.trx.onDsdDockState((s) => setDocked(s.docked)) : () => undefined;
     // Durations of open calls and the "quiet for" figure move by the second.
     const t = setInterval(() => setTick((n) => n + 1), 1000);
     return () => {
       clearInterval(t);
+      offDock();
       offDsd();
       offLog();
       offScanner();
       offTheme();
     };
   }, []);
+
+  // D docks the window beside the main one, or sets it free, as in the map.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT' || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key.toLowerCase() === 'd') toggleDock();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [toggleDock]);
 
   const feed = status?.feed;
   const h = snapshot.active?.header ?? null;
@@ -74,22 +91,33 @@ export default function SystemApp() {
   return (
     <div className="flex h-screen flex-col bg-bg text-ink">
       <header className="app-drag flex h-[46px] shrink-0 items-center gap-3 border-b border-edge bg-panel px-4" style={window.trx?.platform === 'darwin' ? { paddingLeft: '84px' } : window.trx?.platform === 'linux' ? undefined : { paddingRight: 'calc(100vw - env(titlebar-area-width, 100vw) + 12px)' }}>
-        <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">System</span>
-        {feed?.network ? (
-          <span className="min-w-0 truncate text-sm" title={`${feed.network.id}${feed.site ? ` · ${feed.site.id}` : ''}`}>
-            <span className="text-ink">{feed.network.name || feed.network.id}</span>
-            {feed.site && <span className="text-ink-3"> · {feed.site.name || feed.site.id}</span>}
-          </span>
-        ) : (
-          <span className="text-sm text-ink-3">{status?.folder ? 'No system seen yet' : 'Set the DSD+ folder under Data'}</span>
-        )}
-        {feed?.nac && <span className="font-mono text-[11px] text-ink-3">NAC {feed.nac}</span>}
-        {feed?.dcc !== null && feed?.dcc !== undefined && <span className="font-mono text-[11px] text-ink-3">CC {feed.dcc}</span>}
-        <span className="ml-auto flex items-center gap-2 text-[11px] text-ink-2" title={status?.folder ?? undefined}>
-          <span className={`inline-block h-2 w-2 rounded-full ${linkState.dot}`} />
+        {/* Mixed sizes and faces sit on one baseline, as the top bar's title does. */}
+        <div className="flex min-w-0 items-baseline gap-3">
+          <span className="text-[11px] font-bold uppercase tracking-widest text-ink-2">System</span>
+          {feed?.network ? (
+            <span className="min-w-0 truncate text-sm" title={`${feed.network.id}${feed.site ? ` · ${feed.site.id}` : ''}`}>
+              <span className="text-ink">{feed.network.name || feed.network.id}</span>
+              {feed.site && <span className="text-ink-3"> · {feed.site.name || feed.site.id}</span>}
+            </span>
+          ) : (
+            <span className="text-sm text-ink-3">{status?.folder ? 'No system seen yet' : 'Set the DSD+ folder under Data'}</span>
+          )}
+          {feed?.nac && <span className="font-mono text-[11px] text-ink-3">NAC {feed.nac}</span>}
+          {feed?.dcc !== null && feed?.dcc !== undefined && <span className="font-mono text-[11px] text-ink-3">CC {feed.dcc}</span>}
+        </div>
+        <div className="ml-auto flex items-baseline gap-2 text-[11px] text-ink-2" title={status?.folder ?? undefined}>
+          <span className={`inline-block h-2 w-2 self-center rounded-full ${linkState.dot}`} />
           <span className="max-w-[18rem] truncate">{linkState.text}</span>
           {feed?.lastEventAt && <span className="font-mono text-ink-3">{hms(feed.lastEventAt)}</span>}
-        </span>
+        </div>
+        <button
+          type="button"
+          className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+          title={docked ? `Docked to the ${docked} of the main window; click (or D) to set it free` : 'Dock beside the main window and follow it (D)'}
+          onClick={toggleDock}
+        >
+          {docked ? 'Undock' : 'Dock'}
+        </button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto">
