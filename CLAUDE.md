@@ -98,6 +98,9 @@ condensed, code-oriented reading of it. Read both before touching the protocol c
 - The `L` icon byte's **Trunk2** bit (icons3 bit 4) is lit while the scanner sits on a trunked system's control channel and
   clear during a voice call (P25 site, 1 Oct 2026: `4C 00 1D` parked on the control channel, `4D 40 0E` on a call); the strip's
   hover text and the Debug tab say so. **TrunkS** (bit 6) has not been seen lit.
+- In a DMR service search the TRX-1e labels the radio **`RadID1:` / `RadID2:`** (the digit is the slot) rather than
+  `RadioID:` (TfL site, 2 Oct 2026: `Slot:2  Color: 0` / `RadID2: 327739`); `RADIO_ID_RE` takes both, the digit filling the
+  slot when no Slot line has. Before that the line was logged as the radio's alias and shown as the name.
 - The volume / squelch bar the scanner draws while a knob is turned is **not** in the `L`
   text or icon bytes (checked with `probe --log`): nothing to show for it.
 - Switching the scanner off makes it send its **`P`** power-status reply unprompted (one data byte, 0 = off;
@@ -507,7 +510,10 @@ captured on 14 Sep 2026.
   `Registration; RID= [alias] TG= ACCEPT`, `Affiliation; …`, `Deregistration; RID=`, `DSD+ 2.523 / Fast Lane Release`,
   anything else `other`. `reduceDsdEvent` folds events into a `DsdFeed`: one `DsdCall` per transmission (a grant
   opens one, its duration line closes it, a line with neither is a new talker on the talkgroup's last channel, a
-  transmission with no closing line is closed after `CALL_OPEN_MS`), the newest `FEED_CALLS` kept, plus `FEED_NOTES`
+  transmission with no closing line is closed after `CALL_OPEN_MS`; a channel-less line takes the channel of the talkgroup's
+  call only while that call is open or ended within `CHANNEL_HANG_MS`, 10 s, and on a private call only with the same target:
+  on the TfL site on 2 Oct 2026 DSD+ stopped printing `Ch=` altogether for an hour, its channel-activity table empty, and
+  every private call was being shown on the channel of one an hour earlier), the newest `FEED_CALLS` kept, plus `FEED_NOTES`
   of registrations / affiliations / alias returns, a repeated note (a DMR site's neighbour list, reprinted every few
   seconds) kept once at its newest time. `parseDsdGroups` in `dsdRadios.ts` shares the tokenizer. The seed replays the
   last `SEED_BYTES` of the event file and, when no `Current network` line is in it (a busy DMR site writes 500

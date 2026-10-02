@@ -108,6 +108,8 @@ export const FEED_CALLS = 60;
 export const FEED_NOTES = 24;
 /** A transmission with no closing line is taken as over after this long. */
 export const CALL_OPEN_MS = 30_000;
+/** A channel-less call line this soon after a call on the same talkgroup ended is a talker on that call's channel (P25 hang time). */
+export const CHANNEL_HANG_MS = 10_000;
 
 const LINE_RE = /^(\d{4})\/(\d\d)\/(\d\d)\s+(\d{1,2}):(\d\d):(\d\d)\s+(.*)$/;
 const PREFIX_RE = /^(?:NAC=([0-9A-Fa-f]+)\s+|DCC=(\d+)\s+|RAN=(\d+)\s+)?(?:RAS\s+)?/;
@@ -235,8 +237,11 @@ export function reduceDsdEvent(feed: DsdFeed, ev: DsdEvent): DsdFeed {
         next.calls = calls;
         return next;
       }
-      // A new transmission; with no channel of its own it is on the channel the talkgroup last used.
-      const last = calls.find((c) => c.tg === ev.tg && c.type === ev.type && c.channel !== null);
+      // A new transmission. With no channel of its own it is a talker joining the talkgroup's call, open or
+      // just ended (P25 prints those without a channel), so it takes that call's channel; a channel-less line
+      // with no such call (DSD+ in a state where it prints no channels at all, seen on a TfL site on 2 Oct
+      // 2026, when every private call took the channel of one an hour earlier) gets none.
+      const last = calls.find((c) => c.tg === ev.tg && c.type === ev.type && c.channel !== null && (ev.type !== 'Private' || c.target === ev.target) && (c.open || ev.at - c.lastAt <= CHANNEL_HANG_MS));
       const call: DsdCall = {
         id: feed.nextId,
         startedAt: ev.at,

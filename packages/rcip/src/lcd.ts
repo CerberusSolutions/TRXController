@@ -193,7 +193,8 @@ export interface ScanScreen extends SignalDetails {
 const TGID_RE = /^TGID:\s*(\d+)\s*$/i;
 /** The bare talkgroup number a TRX-2 shows on line 3 of a trunked talkgroup, in turn with its name. */
 const BARE_TGID_RE = /^\d{1,8}$/;
-const RADIO_ID_RE = /^RadioID:\s*(\d+)\s*$/i;
+/** "RadioID: 104", or the TRX-1e's "RadID1: 366354" / "RadID2: 327739" in a DMR search, the digit being the slot (seen 2 Oct 2026). */
+const RADIO_ID_RE = /^Rad(?:io)?ID(\d)?:\s*(\d+)\s*$/i;
 const SLOT_RE = /^Slot:\s*(\d+)\s+Color:\s*(\d+)\s*$/i;
 const MODE_FREQ_RE = /^(\S+)\s+(\d{1,4}\.\d{3,6})\s*$/;
 const TONE_RE = /^(CTCSS|DCS|NAC)\s+(\S+)(?:\s+([A-Za-z]))?\s*$/i;
@@ -230,8 +231,10 @@ export function parseSignalDetails(lines: readonly string[]): SignalDetails {
     const line = raw.trim();
     let m: RegExpExecArray | null;
     if ((m = TGID_RE.exec(line))) d.tgid = Number(m[1]);
-    else if ((m = RADIO_ID_RE.exec(line))) d.radioId = Number(m[1]);
-    else if ((m = SLOT_RE.exec(line))) {
+    else if ((m = RADIO_ID_RE.exec(line))) {
+      d.radioId = Number(m[2]);
+      if (m[1] !== undefined && d.slot === null) d.slot = Number(m[1]);
+    } else if ((m = SLOT_RE.exec(line))) {
       d.slot = Number(m[1]);
       d.colorCode = Number(m[2]);
     } else if ((m = TONE_RE.exec(line))) {
