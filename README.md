@@ -49,7 +49,12 @@ npm run build && npm start    # run the built app
   radio (your name, else DSD+'s alias, else the number), channel, slot, an ENC pill and its length, the
   call the TRX is on marked TRX, and registrations, affiliations and alias returns beneath. It opens docked
   to the right of the main window, as tall as it is, and follows it; **Dock** / **Undock** (or D) sets it
-  free or docks it again, as with the map. Radio aliases
+  free or docks it again, as with the map. On a site that is not in DSD+'s frequencies file DSD+ prints
+  channel numbers ("ch 306"); the app learns what they are from the TRX: each time the scanner's squelch
+  opens within a moment of such a grant is a vote, two consistent votes learn the channel, and from then
+  on the window shows the frequency (dotted, to say it was learned) and the TRX marker can match on it.
+  **Channels** (or C) lists them with the lines to paste into `DSDPlus.frequencies`, which is what DSD+
+  needs to voice-follow the site itself. The votes are kept in `dsd-channels.json` beside the log. Radio aliases
   DSD+ learns go into the log as it learns them. Nothing is written to DSD+'s folder. Feed DSD+ from an
   SDR dongle on the control channel rather than the TRX's IF output, so the TRX keeps its audio and DSD+
   sees the whole system while the TRX moves to voice channels.

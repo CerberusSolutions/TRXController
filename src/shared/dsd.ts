@@ -274,6 +274,8 @@ export interface DsdGroup {
   alias: string;
 }
 
+import type { LearnedChannel } from './dsdChannels';
+
 /** What the Data dialog and the top-bar pill show about the link. */
 export interface DsdStatus {
   /** The DSD+ folder, or null when the link is off. */
@@ -285,6 +287,10 @@ export interface DsdStatus {
   groups: { found: boolean; count: number };
   /** Talkgroup aliases from the groups file for the feed's current network, by TGID. */
   tgNames: Record<number, string>;
+  /** The protocol DSD+'s groups file records for the feed's current network ("TIIInonStd", "P25"), for its frequencies-file lines. */
+  protocol: string | null;
+  /** Channel numbers of the feed's current network learned from the TRX's squelch openings, by channel. */
+  channels: Record<string, LearnedChannel>;
   feed: DsdFeed;
   /** True while events keep arriving: the newest is younger than `ALIVE_MS`. */
   alive: boolean;
@@ -300,6 +306,8 @@ export const EMPTY_DSD_STATUS: DsdStatus = {
   radios: { found: false, named: 0, importedAt: null },
   groups: { found: false, count: 0 },
   tgNames: {},
+  protocol: null,
+  channels: {},
   feed: EMPTY_FEED,
   alive: false,
 };

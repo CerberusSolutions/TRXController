@@ -517,7 +517,23 @@ captured on 14 Sep 2026.
   Off, the link state and the file counts, and an Open button. Preview: `scene=dsd` in the mock, `index.html?scene=dsd#system`
   for the window. Next steps agreed with the user: talkgroup names keyed by network + TGID shown where the scanner
   says UNID, then write-back (our radio names into `DSDPlus.radios`, priorities into `DSDPlus.groups` as the
-  "follow this" control), then docking like the map.
+  "follow this" control).
+- Channel learning (`src/shared/dsdChannels.ts`, `ChannelLearner`; built 2 Oct 2026 after the first DMR run): a site that is
+  not in `DSDPlus.frequencies` gets grants as channel numbers (`Ch=306`, `hz` null). The watcher's `onCall` hands every
+  live call line with a channel and no frequency to the learner as a `grant(at, network, channel)`; main's `onSnapshot`
+  hands each squelch opening (or a move to another frequency while open, `lastSquelch`) as an `opening(now, hz)` and
+  calls `tick(now)` every snapshot. A grant is settled only once its window has closed (`PAIR_BEFORE_MS` 1.5 s before it,
+  DSD+ stamps whole seconds; `PAIR_AFTER_MS` 4 s after, the TRX stops a moment later): exactly one frequency among the
+  openings in the window, and no other grant on another channel claiming them, is one vote for channel = frequency; two
+  openings on different frequencies or two grants are ambiguous and cast none. `MIN_VOTES` (2) with `MIN_SHARE` (70 %)
+  makes the channel learned. Votes are per DSD+ network (`ChannelVotes`), kept in `userData/dsd-channels.json`
+  (`saveChannels`, 2 s debounce, on every change). `DsdStatus.channels` is the feed network's learned map and
+  `DsdStatus.protocol` the network's protocol from the groups file; the System window shows a learned frequency dotted
+  (tooltip with the votes), uses it for the TRX marker (`hzOf`; with no talkgroup in the header, a conventional object,
+  the marker matches on frequency alone), and its **Channels** button (C) lists the learned and forming channels with
+  `dsdFrequencyLines` (`protocol, network, site, channel, MHz, 0.0, 0`, the comma form of DSD+'s own data files; the
+  user checks protocol and site against a line DSD+ wrote) and a Copy button. Nothing is written into DSD+'s folder.
+  The mock's `dsddmr` scene pictures it (`docs/img/system-dmr.png`).
 
 ## Band tab (channel occupancy)
 
