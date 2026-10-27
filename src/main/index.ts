@@ -427,6 +427,15 @@ function registerIpc(): void {
     saveChannels();
     if (dsd) publishDsd(dsd.status());
   });
+  ipcMain.handle(IPC.dsdWriteNames, () => {
+    if (!dsd) throw new Error('No DSD+ link');
+    return dsd.writeNames(true);
+  });
+  ipcMain.handle(IPC.dsdTgFollow, (_e, tgid: unknown, mode: unknown) => {
+    if (!dsd) throw new Error('No DSD+ link');
+    if (typeof tgid !== 'number' || !Number.isInteger(tgid) || (mode !== 'follow' && mode !== 'normal' && mode !== 'lockout')) throw new Error('Bad talkgroup follow');
+    return dsd.setTalkgroupFollow(tgid, mode);
+  });
   ipcMain.handle(IPC.dsdChannels, () => {
     const network = dsd?.status().feed.network;
     return db && network ? db.dsdChannelsHeard(network.key) : [];
@@ -583,6 +592,7 @@ function registerIpc(): void {
     const saved = db.nameRadio(sanitizeRadioName(n));
     // Every row joins the name in, so every window's log reloads; the hero reads the list from the store.
     broadcast(IPC.logChanged, null);
+    dsd?.namesChanged();
     return saved;
   });
   ipcMain.handle(IPC.logTgNames, () => db?.tgNames() ?? []);
@@ -590,12 +600,14 @@ function registerIpc(): void {
     if (!db) throw new Error('No log');
     const saved = db.nameTalkgroup(sanitizeTgName(n));
     broadcast(IPC.logChanged, null);
+    dsd?.namesChanged();
     return saved;
   });
   ipcMain.handle(IPC.logTgUnname, (_e, id: unknown) => {
     if (!db || typeof id !== 'number') throw new Error('Bad talkgroup name');
     db.unnameTalkgroup(id);
     broadcast(IPC.logChanged, null);
+    dsd?.namesChanged();
   });
   ipcMain.handle(IPC.logRadioImport, async (): Promise<ImportResult | null> => {
     if (!db) throw new Error('No log');
@@ -624,6 +636,7 @@ function registerIpc(): void {
     if (!db || typeof id !== 'number') throw new Error('Bad radio name');
     db.unnameRadio(id);
     broadcast(IPC.logChanged, null);
+    dsd?.namesChanged();
   });
   ipcMain.handle(IPC.logUnconfirm, (_e, id: unknown) => {
     if (!db || typeof id !== 'number') throw new Error('Bad confirmation');
@@ -688,8 +701,9 @@ function registerIpc(): void {
     // The renderer never carries the password or the RRUK key; only rr:account-set / rruk:key-set change them.
     if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
     if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey, tested: settings.get().rruk.tested };
-    if (p.dsd) p.dsd = { ...settings.get().dsd, folder: p.dsd.folder ?? null };
+    if (p.dsd) p.dsd = { ...settings.get().dsd, folder: p.dsd.folder ?? null, writeBack: p.dsd.writeBack === true };
     const next = settings.set(p);
+    dsd?.setWriteBack(next.dsd.writeBack);
     dsd?.setFolder(next.dsd.folder);
     licenceCache = null;
     repeaterCache = null;
@@ -851,6 +865,25 @@ function openLog(): void {
     channels: (network) => channels?.learned(network) ?? {},
     // Every transmission, registration, affiliation and alias return goes into the log database, idempotently.
     record: (rows) => db!.recordDsdEvents(rows),
+    // The user's own names, for DSD+'s files: a radio's by its system (the scanner's tag the network is known as,
+    // else any system), a talkgroup's by the tag, the network ID it was keyed to before the match, or any system.
+    names: () => {
+      const radios = db!.radioNames();
+      const tgs = db!.tgNames().filter((t) => t.source === 'USER');
+      const pick = <T extends { system: string; name: string }>(list: T[], network: string): string | null => {
+        const tag = dsdSystems[network] ?? null;
+        for (const sys of [tag, network, '']) {
+          if (sys === null) continue;
+          const hit = list.find((x) => x.system === sys);
+          if (hit) return hit.name;
+        }
+        return null;
+      };
+      return {
+        radio: (network, radioId) => pick(radios.filter((r) => r.radioId === radioId), network),
+        talkgroup: (network, tgid) => pick(tgs.filter((t) => t.tgid === tgid), network),
+      };
+    },
     onChange: (status, namesChanged) => {
       publishDsd(status);
       // The names joined into every log row moved: every window reloads its log.
@@ -858,6 +891,7 @@ function openLog(): void {
     },
     log: (msg) => console.log(msg),
   });
+  dsd.setWriteBack(settings.get().dsd.writeBack);
   dsd.setFolder(settings.get().dsd.folder);
   rr = new RrService({
     db,

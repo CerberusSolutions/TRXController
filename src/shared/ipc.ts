@@ -509,6 +509,8 @@ export interface Settings {
 
 export interface DsdSettings {
   folder: string | null;
+  /** Write the names given here into DSDPlus.radios / .groups, and let the System window set talkgroup priorities there. Off by default: it edits DSD+'s files. */
+  writeBack: boolean;
   /** Which side of the main window the System window docks to ('right' on first use); null when it floats free. */
   dock: MapDockSide | null;
   window: WindowState | null;
@@ -607,6 +609,8 @@ export const IPC = {
   dsdForgetChannel: 'dsd:forget-channel',
   dsdMapSet: 'dsd:map-set',
   dsdChannels: 'dsd:channels',
+  dsdWriteNames: 'dsd:write-names',
+  dsdTgFollow: 'dsd:tg-follow',
   logTraffic: 'log:traffic',
   identityStats: 'identities:stats',
   identityImport: 'identities:import',

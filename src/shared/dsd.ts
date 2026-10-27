@@ -305,6 +305,7 @@ export interface DsdGroup {
 
 import type { LearnedChannel } from './dsdChannels';
 import type { ChannelMapInfo } from './dsdChannelMap';
+import type { FollowMode } from './dsdWrite';
 
 /** What the Data dialog and the top-bar pill show about the link. */
 export interface DsdStatus {
@@ -325,6 +326,10 @@ export interface DsdStatus {
   channels: Record<string, LearnedChannel>;
   /** The feed's current network's channel map (main builds it from the anchors); null with no network or no anchor. */
   map: ChannelMapInfo | null;
+  /** Each talkgroup's follow mode on the feed's current network, from the groups file's priority / override fields. */
+  tgFollow: Record<number, FollowMode>;
+  /** Writing names and priorities into DSD+'s files: whether it is on, what the last write did, and what stopped it. */
+  writeBack: WriteBackStatus;
   feed: DsdFeed;
   /** Events recorded in the log database since the folder was set (`dsd_events`). */
   recorded: number;
@@ -334,6 +339,20 @@ export interface DsdStatus {
 
 /** How recent the newest event must be for the link to count as live. */
 export const ALIVE_MS = 120_000;
+
+export interface WriteBackStatus {
+  enabled: boolean;
+  /** When the files were last written, and what went in then. */
+  lastAt: number | null;
+  radios: number;
+  groups: number;
+  /** Lines left alone because DSD+ had a different alias typed in. */
+  kept: number;
+  /** Why writing stopped, or null. */
+  error: string | null;
+}
+
+export const EMPTY_WRITE_BACK: WriteBackStatus = { enabled: false, lastAt: null, radios: 0, groups: 0, kept: 0, error: null };
 
 export const EMPTY_DSD_STATUS: DsdStatus = {
   folder: null,
@@ -346,6 +365,8 @@ export const EMPTY_DSD_STATUS: DsdStatus = {
   protocol: null,
   channels: {},
   map: null,
+  tgFollow: {},
+  writeBack: EMPTY_WRITE_BACK,
   feed: EMPTY_FEED,
   recorded: 0,
   alive: false,

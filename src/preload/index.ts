@@ -31,7 +31,8 @@ import {
 import type { Confirmation, NewConfirmation } from '../shared/confirm';
 import type { NewRadioName, RadioName } from '../shared/radioNames';
 import type { NewTgName, TgName } from '../shared/tgNames';
-import type { DsdStatus } from '../shared/dsd';
+import type { DsdStatus, WriteBackStatus } from '../shared/dsd';
+import type { FollowMode } from '../shared/dsdWrite';
 import type { DsdDaySummary, DsdEventRow, DsdNetworkSummary } from '../shared/dsdEvents';
 import type { ChannelMapSettings, HeardChannel } from '../shared/dsdChannelMap';
 import type { CdatCandidate, ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
@@ -103,6 +104,8 @@ const api = {
   dsdForgetChannel: (channel: string): Promise<void> => ipcRenderer.invoke(IPC.dsdForgetChannel, channel),
   dsdMapSet: (settings: ChannelMapSettings): Promise<void> => ipcRenderer.invoke(IPC.dsdMapSet, settings),
   dsdChannels: (): Promise<HeardChannel[]> => ipcRenderer.invoke(IPC.dsdChannels),
+  dsdWriteNames: (): Promise<WriteBackStatus> => ipcRenderer.invoke(IPC.dsdWriteNames),
+  dsdTgFollow: (tgid: number, mode: FollowMode): Promise<WriteBackStatus> => ipcRenderer.invoke(IPC.dsdTgFollow, tgid, mode),
   /** Dock the System window beside the main window ('auto': the side used last, else the right), or set it free ('off'). */
   dsdDock: (side: MapDockSide | 'auto' | 'off'): Promise<MapDockState> => ipcRenderer.invoke(IPC.dsdDock, side),
   onDsdDockState: (cb: (s: MapDockState) => void): (() => void) => {

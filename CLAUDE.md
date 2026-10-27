@@ -554,9 +554,33 @@ captured on 14 Sep 2026.
   is open, plus the status frequency when the call's is known; frequency alone with no IDs; while open or within 15 s of
   ending), and the notes beneath (registrations, affiliations, alias returns, private call alerts, emergencies, DTMF); the toolbar's mixed sizes sit on one baseline (`items-baseline`, asked for 2 Oct 2026). The Data dialog's **DSD+ link** section (right column) has the folder, Change /
   Off, the link state and the file counts, and an Open button. Preview: `scene=dsd` in the mock, `index.html?scene=dsd#system`
-  for the window. Next steps agreed with the user: talkgroup names keyed by network + TGID shown where the scanner
-  says UNID, then write-back (our radio names into `DSDPlus.radios`, priorities into `DSDPlus.groups` as the
-  "follow this" control).
+  for the window.
+- Write-back (`src/shared/dsdWrite.ts`, built 27 Oct 2026 on the user's go-ahead; the one thing that writes into DSD+'s folder, and
+  **off by default**, `settings.dsd.writeBack`, Data › DSD+ link "Write names back to DSD+"): DSD+'s own header says its radios and
+  groups files may be edited while it runs (users have since 1.092; it re-reads an edited file and keeps the edit through its
+  rewrites), so the user's names (`radio_names`, `tg_names` source USER) go into the alias field of the matching lines, and a
+  talkgroup's priority / override is DSD+'s "follow this" when it voice-follows with its own SDR (lower number = followed first, 50
+  the default, override `L/O` locks the group out). Line formats from the files' headers: groups `protocol, networkID, group,
+  priority, override, hits, timestamp, "group alias"`; radios `protocol, networkID, group, radio, priority, override, hits, timestamp,
+  "radio alias"[, "talker alias", hash]` (the P25 talker alias and its hash sit after the user's alias and are left alone).
+  `applyAliases(text, kind, resolve)` edits only the alias span of each entry line (every other byte, comments, spacing and CRLF kept;
+  a short line gets the field appended): an empty alias, DSD+'s own auto alias (`*"…"`, the asterisk dropped since DSD+ overwrites an
+  asterisked alias with the next over-the-air one) or the same name takes the name, a different alias typed in DSD+ is `kept`;
+  `aliasesOf` reads them back; `setGroupFollow(text, protocol, network, tgid, mode, at)` sets priority / override (`followFields`:
+  follow = 1 / Normal, normal = 50 / Normal, lockout = 50 / L/O; `followModeOf` reads them) or adds a line after the network's last
+  one (else before the trailing "; N records" comment). The watcher (`DsdWatcherOptions.names`: main resolves a radio's name by the
+  scanner's tag the network is known as, then the network ID, then any system; a talkgroup's the same) writes `WRITE_DEBOUNCE_MS`
+  2 s after a names change (`namesChanged()`, poked by the name / unname IPC handlers) or a file re-read (DSD+ adds lines for new
+  radios), and on "Write now" (`dsd:write-names`, which also clears a stop); `writeFile` reads the file afresh, refuses one changed
+  within `SETTLE_MS` (DSD+ mid-rewrite), copies it to `<file>.trx-backup` before the first write of the session, overwrites in
+  place (DSD+ keeps the files open, so never a rename over) and notes the new size / mtime so its own write is not read as DSD+'s;
+  the names written (`wroteRadios` / `wroteGroups`) are skipped on import so a name keyed to a system is not copied back keyed to
+  '' and `noteLosses` counts a rewrite that dropped them, `MAX_LOSSES` 3 in a row stopping writes with a message (DSD+ not reading
+  the file). `DsdStatus.writeBack` (`WriteBackStatus`: enabled, lastAt, radios, groups, kept, error) is what the Data dialog shows,
+  `DsdStatus.tgFollow` the feed network's non-normal modes from the groups file; `dsd:tg-follow(tgid, mode)` →
+  `setTalkgroupFollow` (needs write-back on; protocol from the groups file for a new line). `SystemApp` shows a **Follow** /
+  **Following** / **L/O** pill before each group call's talkgroup while write-back is on, cycling normal → follow → lockout, the
+  error (if any) in a red strip. `store/dsd.ts`: `setWriteBack`, `writeNames`, `tgFollow`.
 - Channel learning (`src/shared/dsdChannels.ts`, `ChannelLearner`; built 2 Oct 2026 after the first DMR run): a site that is
   not in `DSDPlus.frequencies` gets grants as channel numbers (`Ch=306`, `hz` null). The watcher's `onCall` hands every
   live call line with a channel and no frequency to the learner as a `grant(at, network, channel)`; main's `onSnapshot`

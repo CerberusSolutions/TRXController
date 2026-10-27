@@ -304,7 +304,8 @@ export default function HelpDialog() {
                     DSD+ on a trunked system's control channel sees every call; the TRX follows one. Point the app at the DSD+ folder (Data › DSD+ link) and it
                     reads DSDPlus.event, .radios and .groups as DSD+ writes them: a DSD+ pill appears in the top bar, green while events arrive, and opens the
                     System window, every call on the system with its talkgroup, radio, channel and encryption, the one the TRX is on marked. Radio and talkgroup
-                    aliases DSD+ learns go into the log as it learns them, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
+                    aliases DSD+ learns go into the log as it learns them, and with Data › DSD+ link › Write names back to DSD+ the names you give go the other
+                    way, into its files, with a Follow button beside each talkgroup in the System window setting its priority there, no import needed. On a site DSD+ has no frequencies for it prints channel numbers; the app
                     learns what they are from the scanner's squelch openings, and Channel map (C) builds the Tier III channel plan from every anchor it has (neighbour
                     lists, the scanner's matches, your own), with a calculator and the lines for DSDPlus.frequencies, and a clear link for a channel learned from a
                     coincidence. Every

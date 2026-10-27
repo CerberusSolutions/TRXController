@@ -28,6 +28,8 @@ export default function SystemApp() {
   const tgNames = useLog((s) => s.tgNames);
   const [, setTick] = useState(0);
   const [docked, setDocked] = useState<'left' | 'right' | null>(null);
+  const tgFollow = useDsd((s) => s.tgFollow);
+  const [followError, setFollowError] = useState<string | null>(null);
   const [channelsOpen, setChannelsOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const networks = useDsd((s) => s.networks);
@@ -139,6 +141,22 @@ export default function SystemApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [calls, onTg, onRid, onHz, now, learned, map, rfOpen]);
   const isOnAir = (c: DsdCall): boolean => c.id === onAirId;
+  // DSD+'s "follow this": the talkgroup's priority / override in its groups file, cycled normal → follow → lockout.
+  const follows = status?.tgFollow ?? {};
+  const writeBackOn = status?.writeBack.enabled ?? false;
+  const cycleFollow = (tg: number): void => {
+    const cur = follows[tg] ?? 'normal';
+    const next = cur === 'normal' ? 'follow' : cur === 'follow' ? 'lockout' : 'normal';
+    void tgFollow(tg, next).then((err) => {
+      setFollowError(err);
+      if (err) setTimeout(() => setFollowError(null), 8000);
+    });
+  };
+  const FOLLOW_UI = {
+    normal: { label: 'Follow', cls: 'border-edge text-ink-3 hover:text-ink', title: 'Priority 50 in DSDPlus.groups; click to have DSD+ follow this talkgroup first (priority 1)' },
+    follow: { label: 'Following', cls: 'border-green/60 text-green', title: 'Priority 1 in DSDPlus.groups: DSD+ follows this talkgroup first; click to lock it out' },
+    lockout: { label: 'L/O', cls: 'border-red/60 text-red', title: 'Locked out in DSDPlus.groups: DSD+ never follows this talkgroup; click to set it back to normal' },
+  } as const;
 
   return (
     <div className="flex h-screen flex-col bg-bg text-ink">
@@ -155,8 +173,8 @@ export default function SystemApp() {
           ) : (
             <span className="text-sm text-ink-3">{status?.folder ? 'No system seen yet' : 'Set the DSD+ folder under Data'}</span>
           )}
-          {feed?.nac && <span className="font-mono text-[11px] text-ink-3">NAC {feed.nac}</span>}
-          {feed?.dcc !== null && feed?.dcc !== undefined && <span className="font-mono text-[11px] text-ink-3">CC {feed.dcc}</span>}
+          {feed?.nac && <span className="whitespace-nowrap font-mono text-[11px] text-ink-3">NAC {feed.nac}</span>}
+          {feed?.dcc !== null && feed?.dcc !== undefined && <span className="whitespace-nowrap font-mono text-[11px] text-ink-3">CC {feed.dcc}</span>}
         </div>
         <div className="ml-auto flex items-baseline gap-2 text-[11px] text-ink-2" title={status?.folder ?? undefined}>
           <span className={`inline-block h-2 w-2 self-center rounded-full ${linkState.dot}`} />
@@ -166,7 +184,7 @@ export default function SystemApp() {
         {feed?.network && (
           <button
             type="button"
-            className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${channelsOpen ? 'border-cyan/60 text-cyan' : misfitCount > 0 ? 'border-red/60 text-red' : 'border-edge text-ink-3 hover:text-ink'}`}
+            className={`no-drag self-center whitespace-nowrap rounded-md border px-2 py-1 text-[11px] ${channelsOpen ? 'border-cyan/60 text-cyan' : misfitCount > 0 ? 'border-red/60 text-red' : 'border-edge text-ink-3 hover:text-ink'}`}
             title="The network's Tier III channel map: which frequency each channel number is on, from the neighbour lists, the scanner's matches and your own anchors, with a calculator and the lines for DSDPlus.frequencies (C)"
             onClick={() => setChannelsOpen((o) => !o)}
           >
@@ -176,7 +194,7 @@ export default function SystemApp() {
         )}
         <button
           type="button"
-          className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${historyOpen ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+          className={`no-drag self-center whitespace-nowrap rounded-md border px-2 py-1 text-[11px] ${historyOpen ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
           title="The recorded day: talkgroups, radios and sites with counts, airtime and busy hours (H)"
           onClick={() => setHistoryOpen((o) => !o)}
         >
@@ -184,7 +202,7 @@ export default function SystemApp() {
         </button>
         <button
           type="button"
-          className={`no-drag self-center rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
+          className={`no-drag self-center whitespace-nowrap rounded-md border px-2 py-1 text-[11px] ${docked ? 'border-cyan/60 text-cyan' : 'border-edge text-ink-3 hover:text-ink'}`}
           title={docked ? `Docked to the ${docked} of the main window; click (or D) to set it free` : 'Dock beside the main window and follow it (D)'}
           onClick={toggleDock}
         >
@@ -230,6 +248,16 @@ export default function SystemApp() {
                         </span>
                       ) : c.tg !== null ? (
                         <>
+                          {writeBackOn && (
+                            <button
+                              type="button"
+                              className={`${PILL} no-drag mr-1.5 border bg-transparent align-middle ${FOLLOW_UI[follows[c.tg] ?? 'normal'].cls}`}
+                              title={FOLLOW_UI[follows[c.tg] ?? 'normal'].title}
+                              onClick={() => cycleFollow(c.tg!)}
+                            >
+                              {FOLLOW_UI[follows[c.tg] ?? 'normal'].label}
+                            </button>
+                          )}
                           <span className="font-sans text-[13px] text-ink">{tgName(c.tg) || `TG ${c.tg}`}</span>
                           {tgName(c.tg) && <span className="text-ink-3"> {c.tg}</span>}
                         </>
@@ -292,6 +320,7 @@ export default function SystemApp() {
           ))}
         </div>
       )}
+      {followError && <div className="shrink-0 border-t border-edge bg-panel px-3 py-1 text-[11px] text-red">{followError}</div>}
       {status && !status.alive && status.folder && status.event.found && (
         <div className="shrink-0 border-t border-edge bg-panel px-3 py-1 text-[11px] text-ink-3">
           Events count as live for {ALIVE_MS / 1000} s. DSD+ writes to the file as the control channel speaks; a quiet system looks the same as a stopped DSD+.

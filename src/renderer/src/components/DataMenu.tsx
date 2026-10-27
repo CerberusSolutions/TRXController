@@ -214,7 +214,10 @@ function DsdForm() {
   const chooseFolder = useDsd((s) => s.chooseFolder);
   const clearFolder = useDsd((s) => s.clearFolder);
   const open = useDsd((s) => s.open);
+  const setWriteBack = useDsd((s) => s.setWriteBack);
+  const writeNames = useDsd((s) => s.writeNames);
   const when = (t: number | null): string => (t ? new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }) : '');
+  const wb = status?.writeBack;
   return (
     <div className="mt-1">
       <p className="text-[11px] text-ink-3">
@@ -258,6 +261,34 @@ function DsdForm() {
             {status.recorded.toLocaleString()} events recorded this session
           </li>
         </ul>
+      )}
+      {status?.folder && (
+        <div className="mt-2 border-t border-edge pt-2">
+          <label className="flex items-start gap-2 text-[12px] text-ink">
+            <input type="checkbox" className="mt-0.5 accent-cyan" checked={wb?.enabled ?? false} onChange={(e) => void setWriteBack(e.target.checked)} />
+            <span>
+              Write names back to DSD+
+              <span className="block text-[11px] text-ink-3">
+                Your radio and talkgroup names go into DSDPlus.radios and .groups as their aliases, and the System window's Follow button sets a talkgroup's
+                priority there. An alias typed in DSD+ is never overwritten; a copy of each file is kept first.
+              </span>
+            </span>
+          </label>
+          {wb?.enabled && (
+            <div className="mt-1.5 flex items-center gap-2 text-[11px]">
+              <span className={`min-w-0 flex-1 ${wb.error ? 'text-red' : 'text-ink-3'}`}>
+                {wb.error
+                  ? wb.error
+                  : wb.lastAt
+                    ? `Written at ${when(wb.lastAt)}: ${wb.radios} radio${wb.radios === 1 ? '' : 's'}, ${wb.groups} talkgroup${wb.groups === 1 ? '' : 's'}${wb.kept ? `; ${wb.kept} typed in DSD+ kept` : ''}`
+                    : 'Nothing written yet'}
+              </span>
+              <button className="shrink-0 rounded-md border border-edge px-2.5 py-1 text-[12px] text-ink-2 hover:text-ink" title="Write every name now (and start again after a stop)" onClick={() => void writeNames()}>
+                Write now
+              </button>
+            </div>
+          )}
+        </div>
       )}
       {status?.folder && (
         <button className="mt-2 w-full rounded-md border border-edge px-3 py-1.5 text-sm text-ink-2 hover:text-ink" onClick={open}>
