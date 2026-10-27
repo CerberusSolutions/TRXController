@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { DsdStatus } from '../../../shared/dsd';
+import type { FollowMode } from '../../../shared/dsdWrite';
 import type { DsdDaySummary, DsdNetworkSummary } from '../../../shared/dsdEvents';
 
 interface DsdState {
@@ -9,6 +10,11 @@ interface DsdState {
   chooseFolder: () => Promise<void>;
   clearFolder: () => Promise<void>;
   open: () => void;
+  /** Data › DSD+ link: write the names given here into DSD+'s files, and let the System window set talkgroup priorities there. */
+  setWriteBack: (on: boolean) => Promise<void>;
+  writeNames: () => Promise<void>;
+  /** Set a talkgroup's follow mode on the feed's network (DSD+'s priority / override); the error, if any, is returned. */
+  tgFollow: (tgid: number, mode: FollowMode) => Promise<string | null>;
   /** The History view's summary for `dayKey` (the period as "from-to") on `dayNetwork`; null until fetched or when nothing is recorded. */
   day: DsdDaySummary | null;
   dayKey: string | null;
@@ -29,10 +35,34 @@ export const useDsd = create<DsdState>((set, get) => ({
   },
   clearFolder: async () => {
     if (!window.trx?.settingsSet) return;
-    await window.trx.settingsSet({ dsd: { folder: null, dock: 'right', window: null } });
+    await window.trx.settingsSet({ dsd: { folder: null, writeBack: false, dock: 'right', window: null } });
     set({ status: (await window.trx.dsdStatus?.()) ?? null });
   },
   open: () => void window.trx?.dsdOpen?.(),
+  setWriteBack: async (on) => {
+    if (!window.trx?.settingsSet) return;
+    const cur = get().status;
+    await window.trx.settingsSet({ dsd: { folder: cur?.folder ?? null, writeBack: on, dock: 'right', window: null } });
+    set({ status: (await window.trx.dsdStatus?.()) ?? null });
+  },
+  writeNames: async () => {
+    if (!window.trx?.dsdWriteNames) return;
+    try {
+      await window.trx.dsdWriteNames();
+    } catch {
+      /* the status carries the error */
+    }
+    set({ status: (await window.trx.dsdStatus?.()) ?? null });
+  },
+  tgFollow: async (tgid, mode) => {
+    if (!window.trx?.dsdTgFollow) return null;
+    try {
+      await window.trx.dsdTgFollow(tgid, mode);
+      return null;
+    } catch (e) {
+      return (e as Error).message.replace(/^.*Error: /, '');
+    }
+  },
   day: null,
   dayKey: null,
   dayNetwork: null,

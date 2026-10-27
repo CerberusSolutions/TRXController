@@ -5,9 +5,10 @@
  * second: DSD+ keeps the files open and appends, and a stat poll is the one method that behaves the
  * same on Windows, macOS and Linux, including a folder on a network share.
  */
-import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
+import { closeSync, copyFileSync, existsSync, openSync, readFileSync, readSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { ALIVE_MS, EMPTY_FEED, parseDsdEventLine, reduceDsdEvent, type DsdCallEvent, type DsdFeed, type DsdStatus } from '../../shared/dsd';
+import { ALIVE_MS, EMPTY_FEED, EMPTY_WRITE_BACK, parseDsdEventLine, reduceDsdEvent, type DsdCallEvent, type DsdFeed, type DsdStatus, type WriteBackStatus } from '../../shared/dsd';
+import { aliasesOf, applyAliases, followModeOf, setGroupFollow, type FollowMode } from '../../shared/dsdWrite';
 import { NoteThrottle, eventRows, type DsdEventRow } from '../../shared/dsdEvents';
 import type { LearnedChannel } from '../../shared/dsdChannels';
 import { parseDsdGroups, parseDsdRadios } from '../../shared/dsdRadios';
@@ -24,6 +25,18 @@ export const SEED_BYTES = 256 * 1024;
 export const SEED_WINDOWS = 32;
 /** A rewritten radios or groups file is read once it has sat unchanged this long (DSD+ writes them in one go, but be sure). */
 export const SETTLE_MS = 1500;
+/** Names are written this long after the last change that calls for it (several names typed in a row go in one write). */
+export const WRITE_DEBOUNCE_MS = 2000;
+/** DSD+ rewrites without our names this many times in a row and writing stops: it is not reading the file, so writing again would only loop. */
+export const MAX_LOSSES = 3;
+/** The copy taken of each file before the first write of a session, beside it. */
+export const BACKUP_SUFFIX = '.trx-backup';
+
+/** The names to write: what the user called a radio or a talkgroup on a DSD+ network, or null for no name of ours. */
+export interface NameSource {
+  radio: (network: string, radioId: number) => string | null;
+  talkgroup: (network: string, tgid: number) => string | null;
+}
 
 export interface DsdWatcherOptions {
   /** Name radios from the radios file's aliases; returns how many were written. */
@@ -40,6 +53,8 @@ export interface DsdWatcherOptions {
   channels?: (network: string) => Record<string, LearnedChannel>;
   /** Record events (one batch per poll, the seed included); returns how many were written. */
   record?: (rows: DsdEventRow[]) => number;
+  /** The names to write back into DSD+'s files (asked for at each write, so they are always current). */
+  names?: () => NameSource;
   log?: (msg: string) => void;
   now?: () => number;
 }
@@ -76,6 +91,17 @@ export class DsdWatcher {
   private error: string | null = null;
   /** What the last status pushed out said about liveness, so going quiet (or waking) is announced once. */
   private lastAlive = false;
+  /** Each talkgroup's priority / override as the groups file has it, by `network|tgid`. */
+  private groupFollow = new Map<string, FollowMode>();
+  // --- write-back
+  private writeBackOn = false;
+  private writeBack: WriteBackStatus = { ...EMPTY_WRITE_BACK };
+  private writeTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The names last written into each file, by `network|id`, so our own write is not re-imported as DSD+'s and a loss can be seen. */
+  private wroteRadios = new Map<string, string>();
+  private wroteGroups = new Map<string, string>();
+  private backedUp = new Set<string>();
+  private losses = 0;
   private readonly now: () => number;
 
   constructor(private readonly opts: DsdWatcherOptions) {
@@ -102,7 +128,15 @@ export class DsdWatcher {
     this.groupAliases.clear();
     this.networkProtocols.clear();
     this.groupCount = 0;
+    this.groupFollow.clear();
     this.error = null;
+    this.writeBack = { ...EMPTY_WRITE_BACK, enabled: this.writeBackOn };
+    this.wroteRadios.clear();
+    this.wroteGroups.clear();
+    this.backedUp.clear();
+    this.losses = 0;
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.writeTimer = null;
     if (!folder) {
       this.opts.onChange(this.status(), false);
       return;
@@ -117,6 +151,8 @@ export class DsdWatcher {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.writeTimer = null;
   }
 
   status(): DsdStatus {
@@ -126,6 +162,13 @@ export class DsdWatcher {
       for (const [key, alias] of this.groupAliases) {
         const [network, tg] = key.split('|');
         if (network === net) tgNames[Number(tg)] = alias;
+      }
+    }
+    const tgFollow: Record<number, FollowMode> = {};
+    if (net) {
+      for (const [key, mode] of this.groupFollow) {
+        const [network, tg] = key.split('|');
+        if (network === net && mode !== 'normal') tgFollow[Number(tg)] = mode;
       }
     }
     return {
@@ -138,6 +181,8 @@ export class DsdWatcher {
       system: net ? (this.opts.systemOf?.(net) ?? null) : null,
       protocol: net ? (this.networkProtocols.get(net)?.protocol ?? null) : null,
       map: null,
+      tgFollow,
+      writeBack: { ...this.writeBack, enabled: this.writeBackOn },
       // Channels learned under the network's key, with any learned under the bare ID before keys carried names.
       channels: net && this.opts.channels ? { ...this.opts.channels(net), ...this.opts.channels(this.feed.network!.key) } : {},
       feed: this.feed,
@@ -285,8 +330,11 @@ export class DsdWatcher {
   /** Name the log's radios from the file's aliases; true when the set of names moved. */
   private importRadios(): boolean {
     try {
-      const { radios } = parseDsdRadios(readFileSync(join(this.folder!, RADIOS_FILE), 'utf8'));
-      const named = radios.filter((r) => r.alias !== '');
+      const text = readFileSync(join(this.folder!, RADIOS_FILE), 'utf8');
+      const { radios } = parseDsdRadios(text);
+      this.noteLosses(text, 'radios');
+      // A name we wrote is ours already (keyed to its system); importing it would add a copy keyed to any system.
+      const named = radios.filter((r) => r.alias !== '' && this.wroteRadios.get(`${r.network}|${r.radioId}`) !== r.alias);
       const signature = named.map((r) => `${r.radioId}=${r.alias}`).sort().join('\n');
       if (signature === this.radios.signature) return false;
       this.radios.signature = signature;
@@ -294,6 +342,7 @@ export class DsdWatcher {
       this.named = this.opts.nameRadios(named.map((r) => ({ radioId: r.radioId, system: '', name: r.alias })));
       this.importedAt = this.now();
       this.opts.log?.(`[dsd] ${this.named} radio names from ${RADIOS_FILE}`);
+      this.scheduleWrite();
       return true;
     } catch (e) {
       this.opts.log?.(`[dsd] ${RADIOS_FILE}: ${(e as Error).message}`);
@@ -311,12 +360,16 @@ export class DsdWatcher {
   /** Read the groups file: aliases and protocols per network, and the log's talkgroup names when the aliases moved. */
   private readGroups(): boolean {
     try {
-      const { groups } = parseDsdGroups(readFileSync(join(this.folder!, GROUPS_FILE), 'utf8'));
+      const text = readFileSync(join(this.folder!, GROUPS_FILE), 'utf8');
+      const { groups } = parseDsdGroups(text);
+      this.noteLosses(text, 'groups');
       this.groupAliases.clear();
+      this.groupFollow.clear();
       this.networkProtocols.clear();
       const byNetwork = new Map<string, { tgid: number; name: string }[]>();
       for (const g of groups) {
-        if (g.alias) {
+        this.groupFollow.set(`${g.network}|${g.tgid}`, followModeOf(g.priority, g.override));
+        if (g.alias && this.wroteGroups.get(`${g.network}|${g.tgid}`) !== g.alias) {
           this.groupAliases.set(`${g.network}|${g.tgid}`, g.alias);
           const list = byNetwork.get(g.network) ?? [];
           list.push({ tgid: g.tgid, name: g.alias });
@@ -326,6 +379,7 @@ export class DsdWatcher {
         if (!known || g.lastHeard > known.lastHeard) this.networkProtocols.set(g.network, { protocol: g.protocol, lastHeard: g.lastHeard });
       }
       this.groupCount = groups.length;
+      this.scheduleWrite();
       const signature = [...this.groupAliases].map(([k, v]) => `${k}=${v}`).sort().join('\n');
       if (signature === this.groups.signature || !this.opts.nameTalkgroups) return false;
       this.groups.signature = signature;
@@ -336,6 +390,169 @@ export class DsdWatcher {
     } catch (e) {
       this.opts.log?.(`[dsd] ${GROUPS_FILE}: ${(e as Error).message}`);
       return false;
+    }
+  }
+
+  // --- write-back ------------------------------------------------------------
+
+  /** Switch writing on or off (Data › DSD+ link); on, the names go in at once. */
+  setWriteBack(on: boolean): void {
+    if (on === this.writeBackOn) return;
+    this.writeBackOn = on;
+    this.losses = 0;
+    this.writeBack = { ...this.writeBack, enabled: on, error: null };
+    if (on) this.scheduleWrite();
+    else if (this.writeTimer) {
+      clearTimeout(this.writeTimer);
+      this.writeTimer = null;
+    }
+    this.opts.onChange(this.status(), false);
+  }
+
+  /** The user's names moved (a radio or talkgroup named or unnamed): write them soon. */
+  namesChanged(): void {
+    this.scheduleWrite();
+  }
+
+  private scheduleWrite(): void {
+    if (!this.writeBackOn || !this.folder || !this.opts.names || this.writeBack.error) return;
+    if (this.writeTimer) clearTimeout(this.writeTimer);
+    this.writeTimer = setTimeout(() => {
+      this.writeTimer = null;
+      this.writeNames();
+    }, WRITE_DEBOUNCE_MS);
+  }
+
+  /**
+   * Write the user's names into both files now (`force` clears a stop). Each file is read afresh, the names
+   * applied, and written only when a line changes; a file DSD+ is mid-rewrite (changed in the last
+   * `SETTLE_MS`) waits for the next poll. Returns the status.
+   */
+  writeNames(force = false): WriteBackStatus {
+    if (force) {
+      this.losses = 0;
+      this.writeBack = { ...this.writeBack, error: null };
+    }
+    if (!this.folder || !this.opts.names) return this.status().writeBack;
+    if (!this.writeBackOn) {
+      this.writeBack = { ...this.writeBack, error: 'Write-back is off' };
+      return this.status().writeBack;
+    }
+    const names = this.opts.names();
+    const now = this.now();
+    // DSD+ mid-rewrite of either file: try again once it has settled, without a word.
+    if ([this.radios, this.groups].some((t) => t.changedAt !== null && now - t.changedAt < SETTLE_MS)) {
+      if (this.writeTimer) clearTimeout(this.writeTimer);
+      this.writeTimer = setTimeout(() => {
+        this.writeTimer = null;
+        this.writeNames(force);
+      }, SETTLE_MS);
+      return this.status().writeBack;
+    }
+    let radios = 0;
+    let groups = 0;
+    let kept = 0;
+    let wrote = false;
+    try {
+      const r = this.writeFile(RADIOS_FILE, this.radios, now, (text) => {
+        const res = applyAliases(text, 'radios', names.radio);
+        radios = res.written + res.unchanged;
+        kept += res.kept;
+        this.wroteRadios = new Map([...aliasesOf(res.text, 'radios')].filter(([k, v]) => v !== '' && names.radio(k.split('|')[0]!, Number(k.split('|')[1])) === v));
+        return res.written > 0 ? res.text : null;
+      });
+      const g = this.writeFile(GROUPS_FILE, this.groups, now, (text) => {
+        const res = applyAliases(text, 'groups', names.talkgroup);
+        groups = res.written + res.unchanged;
+        kept += res.kept;
+        this.wroteGroups = new Map([...aliasesOf(res.text, 'groups')].filter(([k, v]) => v !== '' && names.talkgroup(k.split('|')[0]!, Number(k.split('|')[1])) === v));
+        return res.written > 0 ? res.text : null;
+      });
+      wrote = r || g;
+      this.writeBack = { ...this.writeBack, lastAt: wrote || this.writeBack.lastAt === null ? now : this.writeBack.lastAt, radios, groups, kept, error: null };
+      if (wrote) this.opts.log?.(`[dsd] wrote ${radios} radio and ${groups} talkgroup names into DSD+'s files${kept ? ` (${kept} typed in DSD+ kept)` : ''}`);
+    } catch (e) {
+      this.writeBack = { ...this.writeBack, error: `Cannot write: ${(e as Error).message}` };
+      this.opts.log?.(`[dsd] write-back: ${(e as Error).message}`);
+    }
+    this.opts.onChange(this.status(), false);
+    return this.status().writeBack;
+  }
+
+  /**
+   * Set a talkgroup's follow mode on the feed's current network: its priority and override in the groups file,
+   * a line added when DSD+ has none for it yet. Needs write-back on.
+   */
+  setTalkgroupFollow(tgid: number, mode: FollowMode): WriteBackStatus {
+    const network = this.feed.network?.id;
+    if (!this.folder || !network) throw new Error('No DSD+ network');
+    if (!this.writeBackOn) throw new Error('Turn on write-back in Data › DSD+ link first');
+    const protocol = this.networkProtocols.get(network)?.protocol ?? null;
+    const now = this.now();
+    try {
+      this.writeFile(GROUPS_FILE, this.groups, now, (text) => {
+        const res = setGroupFollow(text, protocol ?? '', network, tgid, mode, now);
+        if (res.appended && protocol === null) throw new Error("DSD+ has no line for this talkgroup yet and its groups file has not named the network's protocol; try once DSD+ has heard it");
+        return res.changed ? res.text : null;
+      });
+      this.groupFollow.set(`${network}|${tgid}`, mode);
+      this.writeBack = { ...this.writeBack, lastAt: now, error: null };
+      this.opts.log?.(`[dsd] talkgroup ${tgid} on ${network}: ${mode}`);
+    } catch (e) {
+      this.writeBack = { ...this.writeBack, error: `Cannot write: ${(e as Error).message}` };
+      throw e;
+    } finally {
+      this.opts.onChange(this.status(), false);
+    }
+    return this.status().writeBack;
+  }
+
+  /**
+   * Read a file, let `change` produce its new text (null for nothing to write), and write it: a backup copy
+   * beside it before the first write of the session, then the text in place (DSD+ keeps the file open, so it
+   * is overwritten, never renamed over). True when written. A file still settling after a rewrite throws.
+   */
+  private writeFile(name: string, tracked: Tracked, now: number, change: (text: string) => string | null): boolean {
+    const path = join(this.folder!, name);
+    if (!existsSync(path)) return false;
+    if (tracked.changedAt !== null && now - tracked.changedAt < SETTLE_MS) throw new Error(`${name} is being rewritten by DSD+; trying again shortly`);
+    const text = readFileSync(path, 'utf8');
+    const next = change(text);
+    if (next === null || next === text) return false;
+    if (!this.backedUp.has(name)) {
+      copyFileSync(path, path + BACKUP_SUFFIX);
+      this.backedUp.add(name);
+    }
+    writeFileSync(path, next, 'utf8');
+    // Our own write is a change the tracker will see; note it so the next read is not taken for DSD+'s.
+    const st = statSync(path);
+    tracked.size = st.size;
+    tracked.mtimeMs = st.mtimeMs;
+    tracked.changedAt = null;
+    return true;
+  }
+
+  /**
+   * DSD+ rewrote a file: are the names we wrote still in it? A rewrite that drops them means DSD+ never read our
+   * edit (an old version, or a copy it keeps in memory); after `MAX_LOSSES` in a row writing stops with a message,
+   * since writing again would only loop. A file that still carries them resets the count.
+   */
+  private noteLosses(text: string, kind: 'radios' | 'groups'): void {
+    const wrote = kind === 'radios' ? this.wroteRadios : this.wroteGroups;
+    if (!this.writeBackOn || wrote.size === 0) return;
+    const now = aliasesOf(text, kind);
+    let lost = 0;
+    for (const [key, name] of wrote) if (now.has(key) && now.get(key) !== name) lost++;
+    if (lost === 0) {
+      this.losses = 0;
+      return;
+    }
+    this.losses++;
+    this.opts.log?.(`[dsd] DSD+ rewrote ${kind === 'radios' ? RADIOS_FILE : GROUPS_FILE} without ${lost} name${lost === 1 ? '' : 's'} written to it (${this.losses} of ${MAX_LOSSES})`);
+    if (this.losses >= MAX_LOSSES) {
+      this.writeBack = { ...this.writeBack, error: `DSD+ keeps rewriting its files without the names written to them; restart DSD+ so it reads them, then Write now` };
+      if (this.writeTimer) clearTimeout(this.writeTimer);
+      this.writeTimer = null;
     }
   }
 

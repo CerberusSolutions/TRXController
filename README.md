@@ -74,7 +74,12 @@ npm run build && npm start    # run the built app
   itself. Calls on the map show their frequency dashed. A **clear** link beside a learned channel forgets its
   votes, for a frequency learned from a coincidence. The votes and anchors are kept in `dsd-channels.json`
   beside the log. Radio and
-  talkgroup aliases DSD+ learns go into the log as it learns them. Every transmission, registration,
+  talkgroup aliases DSD+ learns go into the log as it learns them. The other way too, when you ask: Data › DSD+
+  link › **Write names back to DSD+** puts the names you give radios and talkgroups into `DSDPlus.radios` and
+  `DSDPlus.groups` as their aliases (an alias typed in DSD+ itself is never overwritten; a copy of each file is
+  kept beside it before the first write; DSD+ reads the edits as it runs), and a **Follow** button beside each
+  talkgroup in the System window sets its priority there, DSD+'s "follow this" when it is voice-following with its
+  own SDR: Following (priority 1), normal (50) or L/O (locked out). Every transmission, registration,
   affiliation and alias return is also **recorded** in the log database as it lands, and **History** (or H)
   in the System window is the network map: a day, a week, a month or everything recorded, as calls per hour,
   the sites (control channel once the scanner and DSD+ have been on one call, NAC or colour code, the
