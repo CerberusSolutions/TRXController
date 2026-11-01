@@ -15,7 +15,7 @@ import { normaliseCandidates } from '../../shared/listed';
 import { isFrequencyLabel, isPlaceholderName } from '@trxcontroller/rcip';
 import type { RrCounty, RrFreqHit, RrSite, RrSystemSummary, RrTalkgroup } from '../identities/radioreference';
 
-export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias' | 'radioLabel' | 'tgLabel'> & { radioAlias?: string };
+export type NewReception = Omit<ReceptionRow, 'id' | 'hits' | 'radioCallsign' | 'radioName' | 'radioAlias' | 'radioLabel' | 'tgLabel' | 'rx'> & { rx?: number; radioAlias?: string };
 
 /** How far a heard frequency may be from a licensed one to count as the same channel. */
 export const WTR_TOLERANCE_HZ = 3_125;
@@ -233,6 +233,7 @@ export class LogDb {
     if (!cols.includes('lat')) this.db.exec('ALTER TABLE receptions ADD COLUMN lat REAL');
     if (!cols.includes('lon')) this.db.exec('ALTER TABLE receptions ADD COLUMN lon REAL');
     if (!cols.includes('radio_alias')) this.db.exec("ALTER TABLE receptions ADD COLUMN radio_alias TEXT NOT NULL DEFAULT ''");
+    if (!cols.includes('rx')) this.db.exec('ALTER TABLE receptions ADD COLUMN rx INTEGER NOT NULL DEFAULT 0');
     const ccols = (this.db.prepare('PRAGMA table_info(confirmations)').all() as { name: string }[]).map((c) => c.name);
     if (!ccols.includes('lat')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lat REAL');
     if (!ccols.includes('lon')) this.db.exec('ALTER TABLE confirmations ADD COLUMN lon REAL');
@@ -243,14 +244,14 @@ export class LogDb {
       .prepare(
         `INSERT INTO receptions (started_at, ended_at, frequency_hz, mode, signal_type, name, system, scanlist,
            object_type, tgid, radio_id, site, squelch, tone, licensee, source, scanner_name, wtr, rr_name, rr_system, rpt, rruk,
-           distance_km, bearing_deg, lat, lon, candidates, rssi_peak, calls, radio_alias)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           distance_km, bearing_deg, lat, lon, candidates, rssi_peak, calls, radio_alias, rx)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         r.startedAt, r.endedAt, r.frequencyHz, r.mode, r.signalType, r.name, r.system, r.scanlist,
         r.objectType, r.tgid, r.radioId, r.site, r.squelch, r.tone ?? '', r.licensee ?? '', r.source ?? '',
         r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '',
-        r.distanceKm ?? null, r.bearingDeg ?? null, r.lat ?? null, r.lon ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1, r.radioAlias ?? '',
+        r.distanceKm ?? null, r.bearingDeg ?? null, r.lat ?? null, r.lon ?? null, JSON.stringify(r.candidates ?? []), r.rssiPeak, r.calls ?? 1, r.radioAlias ?? '', r.rx ?? 0,
       );
     return this.get(Number(res.lastInsertRowid))!;
   }
@@ -1168,6 +1169,7 @@ function toRepeater(r: RawRepeater): Repeater {
 
 interface Raw {
   id: number;
+  rx?: number;
   started_at: number;
   ended_at: number | null;
   frequency_hz: number;
@@ -1328,6 +1330,7 @@ function toRow(r: Raw): ReceptionRow {
     lon: r.lon === null || r.lon === undefined ? null : Number(r.lon),
     candidates: parseCandidates(r.candidates),
     rssiPeak: Number(r.rssi_peak),
+    rx: Number(r.rx ?? 0),
     calls: Number(r.calls),
     hits: Number(r.hits),
     radioAlias: r.radio_alias ?? '',

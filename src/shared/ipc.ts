@@ -178,6 +178,8 @@ export interface ReceptionRow {
   calls: number;
   /** Number of receptions logged on this frequency, including this one. */
   hits: number;
+  /** Which scanner logged it: 0 = RX1, 1 = RX2. */
+  rx: number;
   /**
    * The alpha tag the scanner itself showed for the radio ID (the Radio ID list a user programs on a trunked
    * system), '' when it showed none. It is the scanner's own word, so it outranks the radioid.net lookup: the
@@ -491,10 +493,12 @@ export interface Settings {
   scanTimeoutS: number | null;
   /** Set the scanner's clock from this PC each time it connects (Data dialog "Scanner clock"). */
   clockSync: boolean;
-  /** Serial port of the last successful connection, reopened at launch. */
+  /** Serial port of the last successful connection (the first scanner, RX1), reopened at launch. */
   port: string | null;
   /** False after the user disconnects, so the app stops reconnecting on its own. */
   autoConnect: boolean;
+  /** A second scanner (RX2): its own port and auto-connect; null = one scanner, the window as it always was. */
+  rx2: ReceiverSettings | null;
   /** Last window placement, restored at launch when it is still on a screen. */
   window: WindowState | null;
   /** Which side of the main window the map window is docked to; null when it floats free. */
@@ -505,6 +509,21 @@ export interface Settings {
   programmingRecent: string[];
   /** The DSD+ link: its folder (DSDPlus.event, .radios and .groups are read there), null = off; the System window's placement. */
   dsd: DsdSettings;
+}
+
+/** One scanner's connection memory. RX1's lives in `port` / `autoConnect`; RX2's here. */
+export interface ReceiverSettings {
+  port: string | null;
+  autoConnect: boolean;
+}
+
+/** How many scanners the app drives at once, at most. */
+export const MAX_RECEIVERS = 2;
+
+/** A snapshot with the receiver it came from (0 = RX1, 1 = RX2); `scanner:snapshot` carries RX1's alone, as it always has. */
+export interface RxSnapshot {
+  rx: number;
+  snapshot: ScannerSnapshot;
 }
 
 export interface DsdSettings {
@@ -580,6 +599,7 @@ export const IPC = {
   clockSet: 'scanner:clock-set',
   getSnapshot: 'scanner:get-snapshot',
   snapshot: 'scanner:snapshot',
+  snapshotRx: 'scanner:snapshot-rx',
   ccdump: 'scanner:ccdump',
   logRecent: 'log:recent',
   logDay: 'log:day',

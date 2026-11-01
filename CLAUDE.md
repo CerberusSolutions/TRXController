@@ -701,6 +701,30 @@ captured on 14 Sep 2026.
   `prefers-color-scheme` in the renderer (how "system" resolves) and recolours the
   window background and title-bar overlay.
 
+## Two scanners (RX1 / RX2)
+
+- Built in stages from 1 Nov 2026 on the user's go-ahead, after a canvas of layouts (twin columns with the display and keys
+  in a pinned drawer was chosen). **Stage 1, the foundation**: main drives a list of `Receiver`s (`receivers[0]` RX1, always;
+  `receivers[1]` RX2 while `settings.rx2` is set), each with its own `ScannerSession`, `ReceptionLogger` (its own tracker, so
+  the two scanners' rows never merge into each other; every row carries `rx`, a new `receptions.rx` column, 0 = RX1), scan
+  timeout, `lastSquelch` / `onFrequency` state (the learner and `parkedControlChannel(r)` read the receiver's) and auto-connect
+  timer (`scheduleAutoConnect(r)`, `autoConnectAttempt(r)`, which also leaves a port the other receiver holds alone,
+  `portHeldByOther`). RX1's memory stays in `settings.port` / `autoConnect`; RX2's is `settings.rx2: ReceiverSettings | null`
+  (`rememberReceiver`, `receiverSettings`); `syncReceivers(next)` on every settings write adds or drops RX2 (`makeReceiver`;
+  a dropped receiver is disconnected and its last snapshot published). The scanner IPC calls (`connect`, `disconnect`,
+  `sendKey`, `tune`, `resumeScan`, `clockSet`, `getSnapshot`) take a trailing `rx` (0 by default, so every single-scanner
+  caller is unchanged; `receiver(rx)` throws when there is no such scanner); `scanner:snapshot` still carries RX1's snapshot
+  alone and `scanner:snapshot-rx` (`RxSnapshot {rx, snapshot}`) every receiver's; `broadcastSnapshots()` republishes all.
+  The renderer's scanner store keeps RX2 as `rx2: Rx2State` (snapshot, held, selectedPort, busy) with `setSnapshot2`,
+  `selectPort2`, `connect2`, `disconnect2`, `pressKey2`; `refreshPorts` gives RX2 its remembered port, else the first RX1 is
+  not on. `TopBar` is a `PortBlock` per receiver (compact with two: the pill, a narrower selector, no firmware) with **+**
+  (add a second scanner: `settings.rx2 = { port: null, autoConnect: true }`) and **×** on RX2's block (remove, only while it
+  is disconnected). **Colours**: `--t-rx1` (cyan) and `--t-rx2` (amber) in both themes, `bg-rx1` / `text-rx1` etc. via
+  `@theme inline`, `components/RxPill.tsx` the one pill, shown only once there are two scanners: a single-scanner window
+  never says RX1 and looks exactly as before. Still to come: the log's RX column, Show chips and CSV columns (stage 2); the
+  twin heroes with the display and keys in a per-receiver drawer, keys to the receiver last clicked, the map and Band tab's
+  RX chips, the System window's per-call RX pill (stage 3). The website FAQ (`#faq-two`), README and help screen say so.
+
 ## Connection memory
 
 - `settings.json` also keeps `port` (last successful connection) and `autoConnect`. Main retries
