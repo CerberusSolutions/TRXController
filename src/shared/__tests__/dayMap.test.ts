@@ -3,6 +3,7 @@ import type { ReceptionRow } from '../ipc';
 import { activeIn, dayKey, dayPins, dayRange, isDayKey, shiftDay } from '../dayMap';
 
 const row = (o: Partial<ReceptionRow>): ReceptionRow => ({
+  rx: 0,
   id: 1,
   startedAt: 1000,
   endedAt: 2000,

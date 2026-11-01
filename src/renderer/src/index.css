@@ -18,6 +18,9 @@
   --t-amber: #ffb020;
   --t-amber-2: #ffd27a;
   --t-cyan: #4fd1ff;
+  /* The two receivers, the same colours everywhere: RX1 cyan, RX2 amber. */
+  --t-rx1: #4fd1ff;
+  --t-rx2: #ffb020;
   --t-green: #3ddc84;
   --t-red: #ff5d5d;
   /* Repeater mode pills: analogue FM, DMR, D-STAR, Fusion. */
@@ -52,6 +55,8 @@
   --t-amber: #b8600a;
   --t-amber-2: #d9820f;
   --t-cyan: #0b7a9c;
+  --t-rx1: #0b7a9c;
+  --t-rx2: #b8600a;
   --t-green: #178a48;
   --t-red: #d92d20;
   --t-mode-fm: #178a48;
@@ -77,6 +82,8 @@
   --color-amber: var(--t-amber);
   --color-amber-2: var(--t-amber-2);
   --color-cyan: var(--t-cyan);
+  --color-rx1: var(--t-rx1);
+  --color-rx2: var(--t-rx2);
   --color-green: var(--t-green);
   --color-red: var(--t-red);
   --color-mode-fm: var(--t-mode-fm);

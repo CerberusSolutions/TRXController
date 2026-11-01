@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { Key, isKeyCode, parseScanScreen, parseSearchScreen } from '@trxcontroller/rcip';
-import { IPC, MAP_MIN_WINDOW, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
+import { IPC, MAP_MIN_WINDOW, MAX_RECEIVERS, type AppInfo, type DayLog, type WindowState, type ImportResult, type LogCursor, type MapDockSide, type MapTarget, type PortsResult, type ReceptionRow, type RepeaterMatch, type ScannerSnapshot, type Settings, type UpdateInfo, type WtrMatch } from '../shared/ipc';
 import { isDayKey } from '../shared/dayMap';
 import { locateCdat, readCdat, writeCdat } from './programming/locate';
 import type { ProgSaveResult, ProgSaveTarget, Programming } from '../shared/programming';
@@ -65,9 +65,22 @@ function saveChannels(): void {
   }, 2000);
 }
 /** The squelch as last seen, so each opening (or move while open) is one vote at most. */
-let lastSquelch: { rf: boolean; hz: number } = { rf: false, hz: 0 };
-/** The frequency the scanner is on and since when, for the learner (a stop is a fresh arrival) and the parked-control-channel fact. */
-let onFrequency: { hz: number; since: number; openSince: number | null; dmr: boolean } = { hz: 0, since: 0, openSince: null, dmr: false };
+/**
+ * One scanner: its serial session, its own reception logger (so RX1's and RX2's rows never merge into each other),
+ * scan timeout and the per-frequency state the learner and the parked-control-channel fact read. `receivers[0]` is
+ * RX1, always there; `receivers[1]` RX2, only while `settings.rx2` is set. Everything a receiver does is keyed by `rx`.
+ */
+interface Receiver {
+  rx: number;
+  session: ScannerSession;
+  logger: ReceptionLogger | null;
+  scanTimeout: ScanTimeout;
+  lastSquelch: { rf: boolean; hz: number };
+  /** The frequency the scanner is on and since when, for the learner (a stop is a fresh arrival) and the parked-control-channel fact. */
+  onFrequency: { hz: number; since: number; openSince: number | null; dmr: boolean };
+  autoTimer: ReturnType<typeof setTimeout> | null;
+}
+const receivers: Receiver[] = [];
 /**
  * A scanner whose squelch has stayed open this long on one frequency while DSD+ is decoding a site, the display showing
  * DMR details, is sat on that site's control channel (a Service Search parks on it; a voice channel drops between calls).
@@ -126,7 +139,6 @@ function broadcast(channel: string, payload: unknown): void {
 }
 
 let db: LogDb | null = null;
-let logger: ReceptionLogger | null = null;
 let rr: RrService | null = null;
 let rruk: RrukService | null = null;
 let settings: SettingsStore | null = null;
@@ -224,7 +236,8 @@ function learnDsdSystem(s: ScannerSnapshot): void {
  * and the History sites table can show it. A fact from the scanner's trunked header, when there is one, was written first
  * and stays (the upsert keeps the first frequency).
  */
-function parkedControlChannel(): void {
+function parkedControlChannel(r: Receiver): void {
+  const onFrequency = r.onFrequency;
   if (!dsd || !db || onFrequency.openSince === null || !onFrequency.dmr || onFrequency.hz <= 0) return;
   const now = Date.now();
   if (now - onFrequency.openSince < CC_PARK_MS) return;
@@ -307,56 +320,120 @@ function encryptSecret(plain: string): string {
   return safeStorage.encryptString(plain).toString('base64');
 }
 
-const scanTimeout = new ScanTimeout();
+/** The receiver an IPC call names (`rx` 0 = RX1, 1 = RX2; absent = RX1), or an error when there is no such scanner. */
+function receiver(rx: unknown): Receiver {
+  const i = typeof rx === 'number' && Number.isInteger(rx) ? rx : 0;
+  const r = receivers[i];
+  if (!r) throw new Error(i === 0 ? 'No scanner' : 'No second scanner: add one in the top bar first');
+  return r;
+}
 
-const session = new ScannerSession(serialTransportFactory, {
-  onSnapshot: (raw: ScannerSnapshot) => {
-    // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
-    if (rr && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRDB')) rr.request(raw.status.frequencyHz);
-    if (rruk && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRUK')) rruk.request(raw.status.frequencyHz);
-    const s = enrich(raw);
-    broadcast(IPC.snapshot, s);
-    logger?.onSnapshot(s);
-    // Where the scanner is and for how long: a change of frequency is an arrival, an opening on a frequency it has sat on is not a stop.
-    {
-      const now = Date.now();
-      const rf = !!s.status?.squelch.rf;
-      const hz = s.status?.frequencyHz ?? 0;
-      if (hz !== onFrequency.hz) onFrequency = { hz, since: now, openSince: null, dmr: false };
-      if (!rf) onFrequency.openSince = null;
-      else if (onFrequency.openSince === null) onFrequency.openSince = now;
-      if (rf && s.lcd) {
-        const screen = (s.status?.mode === 0x0a ? parseScanScreen(s.lcd) : null) ?? parseSearchScreen(s.lcd);
-        if (screen && (screen.colorCode !== null || screen.slot !== null)) onFrequency.dmr = true;
-      }
+/** A receiver's snapshot to every window: RX1's on the channel single-scanner windows have always read, every receiver's tagged. */
+function publishSnapshot(r: Receiver, s: ScannerSnapshot): void {
+  if (r.rx === 0) broadcast(IPC.snapshot, s);
+  broadcast(IPC.snapshotRx, { rx: r.rx, snapshot: s });
+}
+
+/** Every receiver's snapshot afresh (a lookup landed, a confirmation changed): the heroes read the new names at once. */
+function broadcastSnapshots(): void {
+  for (const r of receivers) publishSnapshot(r, enrich(r.session.getSnapshot()));
+}
+
+function makeReceiver(rx: number): Receiver {
+  const r: Receiver = {
+    rx,
+    session: null as unknown as ScannerSession,
+    logger: db ? new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row), {}, rx) : null,
+    scanTimeout: new ScanTimeout(),
+    lastSquelch: { rf: false, hz: 0 },
+    onFrequency: { hz: 0, since: 0, openSince: null, dmr: false },
+    autoTimer: null,
+  };
+  const tag = rx === 0 ? 'scanner' : `scanner rx${rx + 1}`;
+  r.session = new ScannerSession(serialTransportFactory, {
+    onSnapshot: (raw: ScannerSnapshot) => onReceiverSnapshot(r, raw),
+    onCcDump: (line) => broadcast(IPC.ccdump, rx === 0 ? line : `RX${rx + 1} ${line}`),
+    log: (msg) => console.log(`[${tag}] ${msg}`),
+    // The scanner's clock from this PC on every connect, unless the Data dialog's tick is off.
+    clockOnConnect: () => settings?.get().clockSync !== false,
+  });
+  return r;
+}
+
+function onReceiverSnapshot(r: Receiver, raw: ScannerSnapshot): void {
+  // Ask RadioReference about a frequency once the squelch has opened on it (never while sweeping).
+  if (rr && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRDB')) rr.request(raw.status.frequencyHz);
+  if (rruk && raw.status?.squelch.rf && lookupEnabled(lookups(), 'RRUK')) rruk.request(raw.status.frequencyHz);
+  const s = enrich(raw);
+  publishSnapshot(r, s);
+  r.logger?.onSnapshot(s);
+  // Where the scanner is and for how long: a change of frequency is an arrival, an opening on a frequency it has sat on is not a stop.
+  {
+    const now = Date.now();
+    const rf = !!s.status?.squelch.rf;
+    const hz = s.status?.frequencyHz ?? 0;
+    if (hz !== r.onFrequency.hz) r.onFrequency = { hz, since: now, openSince: null, dmr: false };
+    if (!rf) r.onFrequency.openSince = null;
+    else if (r.onFrequency.openSince === null) r.onFrequency.openSince = now;
+    if (rf && s.lcd) {
+      const screen = (s.status?.mode === 0x0a ? parseScanScreen(s.lcd) : null) ?? parseSearchScreen(s.lcd);
+      if (screen && (screen.colorCode !== null || screen.slot !== null)) r.onFrequency.dmr = true;
     }
-    parkedControlChannel();
-    // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant.
-    if (channels) {
-      const now = Date.now();
-      const rf = !!s.status?.squelch.rf;
-      const hz = s.status?.frequencyHz ?? 0;
-      if (rf && (!lastSquelch.rf || lastSquelch.hz !== hz)) channels.opening(now, hz, now - onFrequency.since);
-      lastSquelch = { rf, hz };
-      channels.tick(now);
-      if (channels.takeChanged()) {
-        saveChannels();
-        if (dsd) publishDsd(dsd.status());
-      }
+  }
+  parkedControlChannel(r);
+  // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant. Both
+  // receivers feed it: two scanners stopping on a site's channels are twice the votes.
+  if (channels) {
+    const now = Date.now();
+    const rf = !!s.status?.squelch.rf;
+    const hz = s.status?.frequencyHz ?? 0;
+    if (rf && (!r.lastSquelch.rf || r.lastSquelch.hz !== hz)) channels.opening(now, hz, now - r.onFrequency.since);
+    r.lastSquelch = { rf, hz };
+    channels.tick(now);
+    if (channels.takeChanged()) {
+      saveChannels();
+      if (dsd) publishDsd(dsd.status());
     }
-    learnDsdSystem(s);
-    // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
-    const limit = settings?.get().scanTimeoutS ?? null;
-    if (scanTimeout.update(s, limit === null ? null : limit * 1000)) {
-      console.log(`[scan] ${(s.status!.frequencyHz / 1e6).toFixed(4)} MHz held for ${limit} s: resuming`);
-      session.pressKey(Key.RIGHT).catch((e: unknown) => console.log(`[scan] resume key failed: ${(e as Error).message}`));
-    }
-  },
-  onCcDump: (line) => broadcast(IPC.ccdump, line),
-  log: (msg) => console.log(`[scanner] ${msg}`),
-  // The scanner's clock from this PC on every connect, unless the Data dialog's tick is off.
-  clockOnConnect: () => settings?.get().clockSync !== false,
-});
+  }
+  learnDsdSystem(s);
+  // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
+  const limit = settings?.get().scanTimeoutS ?? null;
+  if (r.scanTimeout.update(s, limit === null ? null : limit * 1000)) {
+    console.log(`[scan] RX${r.rx + 1} ${(s.status!.frequencyHz / 1e6).toFixed(4)} MHz held for ${limit} s: resuming`);
+    r.session.pressKey(Key.RIGHT).catch((e: unknown) => console.log(`[scan] resume key failed: ${(e as Error).message}`));
+  }
+}
+
+/** A receiver's remembered port and whether to reopen it: RX1's in `port` / `autoConnect`, RX2's in `rx2`. */
+function receiverSettings(rx: number): { port: string | null; autoConnect: boolean } | null {
+  const s = settings?.get();
+  if (!s) return null;
+  return rx === 0 ? { port: s.port, autoConnect: s.autoConnect } : s.rx2;
+}
+
+/** Remember a receiver's port (and that it should reopen) or that it was disconnected on purpose. */
+function rememberReceiver(rx: number, patch: { port?: string; autoConnect: boolean }): void {
+  if (!settings) return;
+  if (rx === 0) settings.set({ ...(patch.port ? { port: patch.port } : {}), autoConnect: patch.autoConnect });
+  else settings.set({ rx2: { port: patch.port ?? settings.get().rx2?.port ?? null, autoConnect: patch.autoConnect } });
+}
+
+/** Add or drop RX2 to match the settings (the top bar's + / × or a settings write). */
+function syncReceivers(s: Settings): void {
+  if (s.rx2 && receivers.length < MAX_RECEIVERS) {
+    const r = makeReceiver(receivers.length);
+    receivers.push(r);
+    console.log(`[scanner rx${r.rx + 1}] added`);
+    scheduleAutoConnect(r, 500);
+  } else if (!s.rx2 && receivers.length > 1) {
+    const r = receivers.pop()!;
+    if (r.autoTimer) clearTimeout(r.autoTimer);
+    r.autoTimer = null;
+    r.logger?.flush();
+    console.log(`[scanner rx${r.rx + 1}] removed`);
+    void r.session.disconnect(false).finally(() => publishSnapshot(r, enrich(r.session.getSnapshot())));
+  }
+}
 
 /** Release check: shortly after launch, then every six hours while the app runs. */
 const UPDATE_FIRST_CHECK_MS = 5000;
@@ -376,7 +453,6 @@ async function runUpdateCheck(): Promise<void> {
 }
 
 const AUTO_CONNECT_INTERVAL_MS = 5000;
-let autoConnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 /**
  * Reopen the remembered port whenever nothing is connected: at launch, after the
@@ -385,30 +461,36 @@ let autoConnectTimer: ReturnType<typeof setTimeout> | null = null;
  * shows an error, and a scanner that is present but silent shows the same message
  * a manual Connect would.
  */
-function scheduleAutoConnect(delayMs = AUTO_CONNECT_INTERVAL_MS): void {
-  if (autoConnectTimer) clearTimeout(autoConnectTimer);
-  autoConnectTimer = setTimeout(() => {
-    autoConnectTimer = null;
-    void autoConnectAttempt();
+function scheduleAutoConnect(r: Receiver, delayMs = AUTO_CONNECT_INTERVAL_MS): void {
+  if (r.autoTimer) clearTimeout(r.autoTimer);
+  r.autoTimer = setTimeout(() => {
+    r.autoTimer = null;
+    void autoConnectAttempt(r);
   }, delayMs);
 }
 
-async function autoConnectAttempt(): Promise<void> {
-  const s = settings?.get();
-  const link = session.getSnapshot().link.status;
+/** The port another receiver holds (or is opening), which this one must leave alone. */
+function portHeldByOther(r: Receiver, path: string): boolean {
+  return receivers.some((o) => o !== r && o.session.getSnapshot().link.port === path && o.session.getSnapshot().link.status !== 'disconnected');
+}
+
+async function autoConnectAttempt(r: Receiver): Promise<void> {
+  if (!receivers.includes(r)) return;
+  const s = receiverSettings(r.rx);
+  const link = r.session.getSnapshot().link.status;
   if (s?.port && s.autoConnect && (link === 'disconnected' || link === 'error')) {
     try {
       const want = preferredPath(s.port);
       const present = (await listPorts()).some((p) => p.path === want);
-      if (present) {
-        await session.connect(want);
-        console.log(`[scanner] auto-connected to ${want}`);
+      if (present && !portHeldByOther(r, want)) {
+        await r.session.connect(want);
+        console.log(`[scanner${r.rx ? ` rx${r.rx + 1}` : ''}] auto-connected to ${want}`);
       }
     } catch (err) {
-      console.log(`[scanner] auto-connect to ${s.port} failed: ${(err as Error).message}`);
+      console.log(`[scanner${r.rx ? ` rx${r.rx + 1}` : ''}] auto-connect to ${s.port} failed: ${(err as Error).message}`);
     }
   }
-  scheduleAutoConnect();
+  scheduleAutoConnect(r);
 }
 
 function isLogCursor(v: unknown): v is LogCursor {
@@ -522,30 +604,33 @@ function registerIpc(): void {
       return { ports: [], error: (e as Error).message };
     }
   });
-  ipcMain.handle(IPC.connect, async (_e, path: unknown) => {
+  ipcMain.handle(IPC.connect, async (_e, path: unknown, rx: unknown) => {
     if (typeof path !== 'string' || !path) throw new Error('Port path required');
+    const r = receiver(rx);
     const want = preferredPath(path);
-    await session.connect(want);
-    settings?.set({ port: want, autoConnect: true });
+    if (portHeldByOther(r, want)) throw new Error(`${want} is the other scanner's port`);
+    await r.session.connect(want);
+    rememberReceiver(r.rx, { port: want, autoConnect: true });
   });
-  ipcMain.handle(IPC.disconnect, () => {
+  ipcMain.handle(IPC.disconnect, (_e, rx: unknown) => {
+    const r = receiver(rx);
     // A deliberate disconnect must stick until the user connects again.
-    settings?.set({ autoConnect: false });
-    return session.disconnect();
+    rememberReceiver(r.rx, { autoConnect: false });
+    return r.session.disconnect();
   });
   ipcMain.handle(
     IPC.appInfo,
     (): AppInfo => ({ name: app.getName(), version: app.getVersion(), electron: process.versions.electron ?? '', dev: !app.isPackaged }),
   );
   ipcMain.handle(IPC.updateCheck, () => latestUpdate);
-  ipcMain.handle(IPC.sendKey, async (_e, code: unknown) => {
+  ipcMain.handle(IPC.sendKey, async (_e, code: unknown, rx: unknown) => {
     if (typeof code !== 'number' || !isKeyCode(code)) throw new Error(`Unknown key code ${String(code)}`);
-    await session.pressKey(code);
+    await receiver(rx).session.pressKey(code);
   });
-  ipcMain.handle(IPC.tune, async (_e, hz: unknown) => {
+  ipcMain.handle(IPC.tune, async (_e, hz: unknown, rx: unknown) => {
     if (typeof hz !== 'number' || !Number.isFinite(hz)) throw new Error('Frequency required');
     try {
-      const tuned = await session.tuneTo(hz);
+      const tuned = await receiver(rx).session.tuneTo(hz);
       console.log(`[scanner] tuned to ${(tuned / 1e6).toFixed(6)} MHz${tuned !== Math.round(hz) ? ` (asked for ${(hz / 1e6).toFixed(6)}: the scanner snapped it to its raster)` : ''}`);
       return tuned;
     } catch (err) {
@@ -554,9 +639,9 @@ function registerIpc(): void {
       throw err;
     }
   });
-  ipcMain.handle(IPC.resumeScan, () => session.resumeScan());
-  ipcMain.handle(IPC.clockSet, () => session.setClock());
-  ipcMain.handle(IPC.getSnapshot, () => enrich(session.getSnapshot()));
+  ipcMain.handle(IPC.resumeScan, (_e, rx: unknown) => receiver(rx).session.resumeScan());
+  ipcMain.handle(IPC.clockSet, (_e, rx: unknown) => receiver(rx).session.setClock());
+  ipcMain.handle(IPC.getSnapshot, (_e, rx: unknown) => enrich(receiver(rx).session.getSnapshot()));
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
   ipcMain.handle(IPC.logDay, (_e, from: unknown, to: unknown): DayLog => {
     if (!db || typeof from !== 'number' || typeof to !== 'number' || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) return { rows: [], total: 0, truncated: false };
@@ -582,7 +667,7 @@ function registerIpc(): void {
     const saved = db.confirm(conf);
     // The hero and the open reception follow the confirmation at once; every window's log reloads
     // (the map window's store otherwise only ever hears upserts).
-    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    broadcastSnapshots();
     broadcast(IPC.logChanged, null);
     return saved;
   });
@@ -641,13 +726,13 @@ function registerIpc(): void {
   ipcMain.handle(IPC.logUnconfirm, (_e, id: unknown) => {
     if (!db || typeof id !== 'number') throw new Error('Bad confirmation');
     db.unconfirm(id);
-    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    broadcastSnapshots();
     broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.logClear, () => {
-    logger?.flush();
+    for (const r of receivers) r.logger?.flush();
     db?.clear();
-    logger?.reset();
+    for (const r of receivers) r.logger?.reset();
     broadcast(IPC.logChanged, null);
   });
   ipcMain.handle(IPC.identityStats, () => db?.identityStats() ?? { dmrUsers: 0, importedAt: null, source: null });
@@ -702,15 +787,17 @@ function registerIpc(): void {
     if (p.rr) p.rr = { ...settings.get().rr, ...p.rr, password: settings.get().rr.password };
     if (p.rruk) p.rruk = { ...settings.get().rruk, ...p.rruk, apiKey: settings.get().rruk.apiKey, tested: settings.get().rruk.tested };
     if (p.dsd) p.dsd = { ...settings.get().dsd, folder: p.dsd.folder ?? null, writeBack: p.dsd.writeBack === true };
+    if (p.rx2 !== undefined && p.rx2 !== null) p.rx2 = { ...(settings.get().rx2 ?? { port: null, autoConnect: true }), ...p.rx2 };
     const next = settings.set(p);
     dsd?.setWriteBack(next.dsd.writeBack);
     dsd?.setFolder(next.dsd.folder);
+    syncReceivers(next);
     licenceCache = null;
     repeaterCache = null;
     // A new postcode or location changes what RRUK is asked; failed frequencies may be tried again.
     rruk?.resetFailures();
     // A new location or lookup order changes what the current frequency shows: republish it.
-    broadcast(IPC.snapshot, enrich(session.getSnapshot()));
+    broadcastSnapshots();
     return publicSettings(next);
   });
   ipcMain.handle(IPC.rrStatus, () => rr?.status() ?? null);
@@ -824,7 +911,8 @@ function openLog(): void {
   settings = new SettingsStore(join(app.getPath('userData'), 'settings.json'));
   const path = join(app.getPath('userData'), 'trx-log.sqlite');
   db = new LogDb(path);
-  logger = new ReceptionLogger(db, (row: ReceptionRow) => broadcast(IPC.logUpsert, row));
+  receivers.push(makeReceiver(0));
+  if (settings.get().rx2) receivers.push(makeReceiver(1));
   console.log(`[log] ${path} (${db.count()} log entries)`);
   const pruned = db.pruneDsdEvents(Date.now() - DSD_KEEP_DAYS * 86_400_000);
   if (pruned) console.log(`[dsd] pruned ${pruned} recorded events older than ${DSD_KEEP_DAYS} days`);
@@ -905,7 +993,7 @@ function openLog(): void {
     },
     fetchImpl: net.fetch as unknown as FetchLike,
     // A lookup landed: show it on the current frequency and let the log absorb the names.
-    onChange: () => broadcast(IPC.snapshot, enrich(session.getSnapshot())),
+    onChange: () => broadcastSnapshots(),
     log: (msg) => console.log(`[rr] ${msg}`),
   });
   console.log(`[rr] ${rr.status().appKey ? 'app key present' : 'no app key in this build'}; ${rr.enabled ? 'enabled' : 'not configured'}`);
@@ -923,7 +1011,7 @@ function openLog(): void {
       return { lat: s.lat, lon: s.lon, radiusKm: s.radiusKm };
     },
     fetchImpl: net.fetch as unknown as (input: string, init?: RequestInit) => Promise<Response>,
-    onChange: () => broadcast(IPC.snapshot, enrich(session.getSnapshot())),
+    onChange: () => broadcastSnapshots(),
     log: (msg) => console.log(`[rruk] ${msg}`),
   });
   console.log(`[rruk] ${rruk.status().hasKey ? 'key stored' : rruk.status().devKey ? 'development key from RRUK_KEY' : 'no key'}; ${rruk.enabled ? 'enabled' : 'not configured'}`);
@@ -1238,7 +1326,7 @@ app.whenReady().then(() => {
   openLog();
   registerIpc();
   createWindow();
-  scheduleAutoConnect(500);
+  for (const r of receivers) scheduleAutoConnect(r, 500);
   updateTimer = setTimeout(() => void runUpdateCheck(), UPDATE_FIRST_CHECK_MS);
   nativeTheme.on('updated', applyChrome);
   app.on('activate', () => {
@@ -1247,20 +1335,22 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
-  void session.disconnect(false).finally(() => app.quit());
+  void Promise.all(receivers.map((r) => r.session.disconnect(false))).finally(() => app.quit());
 });
 
 app.on('before-quit', () => {
   dsd?.stop();
-  if (autoConnectTimer) clearTimeout(autoConnectTimer);
-  autoConnectTimer = null;
+  for (const r of receivers) {
+    if (r.autoTimer) clearTimeout(r.autoTimer);
+    r.autoTimer = null;
+    void r.session.disconnect(false);
+    r.logger?.flush();
+    r.logger = null;
+  }
   if (updateTimer) clearTimeout(updateTimer);
   updateTimer = null;
-  void session.disconnect(false);
-  logger?.flush();
   db?.close();
   db = null;
-  logger = null;
   rr?.dispose();
   rr = null;
 });

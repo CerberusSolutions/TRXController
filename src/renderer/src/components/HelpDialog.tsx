@@ -152,6 +152,10 @@ export default function HelpDialog() {
                   unplugged and plugged back in. <b className="text-ink">Disconnect</b> switches that off until you connect again.
                 </li>
                 <li>
+                  Two scanners? <b className="text-ink">+</b> beside the port adds a second (RX2) with its own port and memory; the two are driven side by side
+                  and the log records which heard what. <b className="text-ink">×</b> beside its port takes it away again.
+                </li>
+                <li>
                   The scanner's clock is set from this PC each time it connects, so recordings and the log agree on the time. Untick that under Data ›{' '}
                   <b className="text-ink">Scanner clock</b> if you would rather it were left alone; <b className="text-ink">Set clock now</b> sends it on demand. The
                   next transmission confirms the scanner took it.

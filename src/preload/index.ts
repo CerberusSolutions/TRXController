@@ -7,6 +7,7 @@ import {
   type ImportResult,
   type PortInfo,
   type ReceptionRow,
+  type RxSnapshot,
   type ScannerSnapshot,
   type Settings,
   type ThemeMode,
@@ -49,20 +50,27 @@ const api = {
   },
   /** The ports the OS lists (the Mac's own built-in ones left out), or the reason it could not list them. */
   listPorts: (): Promise<PortsResult> => ipcRenderer.invoke(IPC.listPorts),
-  connect: (path: string): Promise<void> => ipcRenderer.invoke(IPC.connect, path),
-  disconnect: (): Promise<void> => ipcRenderer.invoke(IPC.disconnect),
-  sendKey: (code: number): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code),
+  /** `rx` on the scanner calls is the receiver: 0 = RX1 (the default, so a single-scanner caller is unchanged), 1 = RX2. */
+  connect: (path: string, rx = 0): Promise<void> => ipcRenderer.invoke(IPC.connect, path, rx),
+  disconnect: (rx = 0): Promise<void> => ipcRenderer.invoke(IPC.disconnect, rx),
+  sendKey: (code: number, rx = 0): Promise<void> => ipcRenderer.invoke(IPC.sendKey, code, rx),
   /** Tune Mode via the menus, then the frequency as keystrokes; rejects with the reason if the display disagrees. */
   /** Tune to `hz` through the menus; resolves to the frequency the scanner settled on (its raster may snap the entry). */
-  tune: (hz: number): Promise<number> => ipcRenderer.invoke(IPC.tune, hz),
-  resumeScan: (): Promise<void> => ipcRenderer.invoke(IPC.resumeScan),
+  tune: (hz: number, rx = 0): Promise<number> => ipcRenderer.invoke(IPC.tune, hz, rx),
+  resumeScan: (rx = 0): Promise<void> => ipcRenderer.invoke(IPC.resumeScan, rx),
   /** Send the PC's time to the scanner now; the next transmission confirms it (snapshot.clock). */
-  clockSet: (): Promise<ClockStatus> => ipcRenderer.invoke(IPC.clockSet),
-  getSnapshot: (): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot),
+  clockSet: (rx = 0): Promise<ClockStatus> => ipcRenderer.invoke(IPC.clockSet, rx),
+  getSnapshot: (rx = 0): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot, rx),
   onSnapshot: (cb: (s: ScannerSnapshot) => void): (() => void) => {
     const listener = (_e: unknown, s: ScannerSnapshot): void => cb(s);
     ipcRenderer.on(IPC.snapshot, listener);
     return () => ipcRenderer.removeListener(IPC.snapshot, listener);
+  },
+  /** Every receiver's snapshots, each tagged with its index. */
+  onSnapshotRx: (cb: (s: RxSnapshot) => void): (() => void) => {
+    const listener = (_e: unknown, s: RxSnapshot): void => cb(s);
+    ipcRenderer.on(IPC.snapshotRx, listener);
+    return () => ipcRenderer.removeListener(IPC.snapshotRx, listener);
   },
   onCcDump: (cb: (line: string) => void): (() => void) => {
     const listener = (_e: unknown, line: string): void => cb(line);

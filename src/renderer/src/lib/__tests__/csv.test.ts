@@ -3,6 +3,7 @@ import type { ReceptionRow } from '../../../../shared/ipc';
 import { ALPHA_TAG_MAX, ENTRY_CSV_HEADER, EZSCAN_HEADER, LOG_CSV_HEADER, alphaTag, candidatesText, csvCell, entriesToCsv, ezModeOf, ezObjects, ezToneOf, frequencyTag, logToCsv, objectCode, toCsv } from '../csv';
 
 const base: ReceptionRow = {
+  rx: 0,
   id: 1, startedAt: Date.UTC(2026, 8, 17, 8, 12, 1), endedAt: Date.UTC(2026, 8, 17, 8, 12, 17), frequencyHz: 453_062_500, mode: 'FM', signalType: 'DMR',
   name: 'University of Buckingham', system: '', scanlist: 'Tune Mode', objectType: 'Search', tgid: 1, radioId: 206, site: '', squelch: 'No Tone',
   tone: 'CC 13', rssiPeak: 275, hits: 28, calls: 2, radioAlias: '', radioLabel: '', tgLabel: '', radioCallsign: null, radioName: null, licensee: 'University of Buckingham', source: 'RRDB', scannerName: '', wtr: 'University of Buckingham', rrName: 'University of Buckingham', rrSystem: '', rpt: '', rruk: 'UNIVERSITY OF BUCKINGHAM',

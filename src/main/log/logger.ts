@@ -15,6 +15,8 @@ export class ReceptionLogger {
     private readonly db: LogDb,
     private readonly onRow: (row: ReceptionRow) => void,
     opts: TrackerOptions = {},
+    /** Which scanner this logger logs for (0 = RX1, 1 = RX2); every row it writes carries it. */
+    private readonly rx = 0,
   ) {
     this.tracker = new ReceptionTracker(opts);
   }
@@ -63,7 +65,7 @@ export class ReceptionLogger {
   }
 
   private apply(ev: TrackerEvent): void {
-    const e = ev.type === 'discard' ? ev : { ...ev, reception: this.confirm(this.remember(ev.reception)) };
+    const e = ev.type === 'discard' ? ev : { ...ev, reception: { ...this.confirm(this.remember(ev.reception)), rx: this.rx } };
     switch (e.type) {
       case 'open': {
         if (e.merged && this.lastClosedId !== null) {
