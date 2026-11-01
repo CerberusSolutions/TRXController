@@ -12,6 +12,8 @@ export const MAX_ROWS = 5000;
 interface LogState {
   rows: ReceptionRow[];
   filter: string;
+  /** Which scanners' entries the table shows, by receiver index (the RX1 / RX2 chips); at least one stays on. */
+  rxShown: readonly boolean[];
   loaded: boolean;
   /** No more pages: the log has been read to its end, or `MAX_ROWS` are loaded (`capped`). */
   exhausted: boolean;
@@ -26,6 +28,7 @@ interface LogState {
   /** Bumped when the log changed wholesale (cleared, renamed by a confirmation): what reads the log by other routes refetches. */
   generation: number;
   setFilter: (f: string) => void;
+  toggleRx: (rx: number) => void;
   load: () => Promise<void>;
   /** Fetch the page after the oldest row loaded. A no-op while one is in flight or nothing is left. */
   loadMore: () => Promise<void>;
@@ -45,6 +48,7 @@ interface LogState {
 export const useLog = create<LogState>((set, get) => ({
   rows: [],
   filter: '',
+  rxShown: [true, true],
   loaded: false,
   exhausted: false,
   capped: false,
@@ -56,6 +60,14 @@ export const useLog = create<LogState>((set, get) => ({
   generation: 0,
 
   setFilter: (filter) => set({ filter }),
+
+  // Hiding the last scanner shown would empty the table for no reason, so that click does nothing.
+  toggleRx: (rx) => {
+    const next = get().rxShown.slice();
+    while (next.length <= rx) next.push(true);
+    next[rx] = !next[rx];
+    if (next.some(Boolean)) set({ rxShown: next });
+  },
 
   // Reloads as many rows as are already shown (at least a page), so a reload after a confirmation
   // does not throw away the pages the user has scrolled through.
@@ -184,7 +196,12 @@ export function attachLogEvents(): () => void {
   };
 }
 
-export function rowMatches(r: ReceptionRow, filter: string): boolean {
+/**
+ * The log's filter: every word of the text somewhere in the row, and, with `rxShown` given (a window with two
+ * scanners), the row's receiver among the ones shown.
+ */
+export function rowMatches(r: ReceptionRow, filter: string, rxShown?: readonly boolean[]): boolean {
+  if (rxShown && rxShown[r.rx] === false) return false;
   const f = filter.trim().toLowerCase();
   if (!f) return true;
   const hay = [r.name, r.system, r.scanlist, r.objectType, r.mode, r.site, r.squelch, r.tone, (r.frequencyHz / 1e6).toFixed(6), r.tgid ?? '', r.radioId ?? '', r.radioCallsign ?? '', r.radioName ?? '', r.source ?? '', r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '', ...(r.candidates ?? []).map((c) => c.name)]

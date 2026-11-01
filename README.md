@@ -32,8 +32,10 @@ npm run build && npm start    # run the built app
 **Two scanners.** Press **+** beside the port selector to add a second scanner (RX2): it gets its own port,
 Connect button, link state and memory, and the two are driven side by side on separate serial links. The window
 keeps its single-scanner look until you add one; **×** beside the second scanner's port removes it. The log records
-which scanner heard each entry. Coming next: the log's RX column, a second hero with its display and keys in a
-drawer, and RX1 / RX2 chips on the map and the Band tab.
+which scanner heard each entry: with two scanners it gains an **RX** column (RX1 cyan, RX2 amber) and **RX1** / **RX2**
+chips beside the filter box that show or hide each scanner's entries, and both CSV exports carry the receiver (`receiver`
+in the Entries file; `trx_receivers` in the EZ Scan file, naming every scanner that heard the object). Coming next: a
+second hero with its display and keys in a drawer, and RX1 / RX2 chips on the map and the Band tab.
 
 ## Optional data
 

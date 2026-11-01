@@ -10,6 +10,7 @@ import { useIdentities } from "../store/identities";
 import { useScanner } from "../store/scanner";
 import { entriesToCsv, logToCsv } from "../lib/csv";
 import { SOURCE_NAME, SOURCE_PILL, rowSource } from "../lib/sources";
+import RxPill, { RX_PILL } from "./RxPill";
 
 function fmtTime(ms: number): string {
   const d = new Date(ms);
@@ -97,6 +98,16 @@ const moreCell: Column = {
       </button>
     );
   },
+};
+
+/** Which scanner logged the row; in the table only once the window has two. */
+const rxCell: Column = {
+  key: "rx",
+  label: "RX",
+  title: "The scanner that heard the entry",
+  track: "2.25rem",
+  minPx: 2.25 * REM,
+  render: (r) => <RxPill rx={r.rx} title={`Heard by ${(RX_PILL[r.rx] ?? RX_PILL[0]!).label}`} />,
 };
 
 const distCell: Column = {
@@ -374,6 +385,9 @@ const sysCell: Column = {
 
 const SIMPLE: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, nameCell, sysListCell, srcCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
 const DETAIL: Column[] = [moreCell, timeCell, durCell, freqCell, modeCell, scannerCell, listCell, wtrCell, rrukCell, rrdbCell, ukrCell, sysCell, distCell, typeCell, idsCell, rssiCell, hitsCell];
+/** The same views with the RX column after the +, for a window with two scanners. */
+const SIMPLE_RX: Column[] = [moreCell, rxCell, ...SIMPLE.slice(1)];
+const DETAIL_RX: Column[] = [moreCell, rxCell, ...DETAIL.slice(1)];
 
 function fmtStamp(ms: number): string {
   return `${fmtDate(ms) ? fmtDate(ms) + " " : ""}${fmtTime(ms)}`;
@@ -781,6 +795,10 @@ export default function LogTable() {
   const rows = useLog((s) => s.rows);
   const filter = useLog((s) => s.filter);
   const setFilter = useLog((s) => s.setFilter);
+  const rxShown = useLog((s) => s.rxShown);
+  const toggleRx = useLog((s) => s.toggleRx);
+  // Two scanners: the RX column and the RX1 / RX2 chips appear; a single-scanner window never mentions a receiver.
+  const twin = useIdentities((s) => s.settings.rx2 !== null);
   const clear = useLog((s) => s.clear);
   const [now, setNow] = useState(Date.now());
   const hasOpen = rows.some((r) => r.endedAt === null);
@@ -810,7 +828,7 @@ export default function LogTable() {
   const [view, setView] = useState<View>(() => (loadJson<string>(VIEW_KEY, "simple") === "detail" ? "detail" : "simple"));
   // Column widths the user has dragged, px, keyed by column, kept per view. Untouched columns keep their default track.
   const [widths, setWidths] = useState<Record<View, Widths>>(() => loadJson(WIDTHS_KEY, { simple: {}, detail: {} }));
-  const columns = view === "detail" ? DETAIL : SIMPLE;
+  const columns = view === "detail" ? (twin ? DETAIL_RX : DETAIL) : twin ? SIMPLE_RX : SIMPLE;
   const headerRef = useRef<HTMLDivElement>(null);
 
   const chooseView = (v: View): void => {
@@ -862,8 +880,8 @@ export default function LogTable() {
   }, [hasOpen]);
 
   const visible = useMemo(
-    () => rows.filter((r) => rowMatches(r, filter)),
-    [rows, filter],
+    () => rows.filter((r) => rowMatches(r, filter, twin ? rxShown : undefined)),
+    [rows, filter, twin, rxShown],
   );
 
   // Only the rows in view (plus a margin) are in the page, however many are loaded; the rest is
@@ -907,6 +925,25 @@ export default function LogTable() {
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
         />
+        {twin && (
+          <div className="flex gap-1" role="group" aria-label="Scanners shown">
+            {RX_PILL.map((p, rx) => {
+              const on = rxShown[rx] !== false;
+              return (
+                <button
+                  key={p.label}
+                  type="button"
+                  aria-pressed={on}
+                  className={`rounded px-1.5 py-px font-sans text-[10px] font-bold tracking-wider ${on ? `${p.bg} text-bg` : `border border-edge ${p.text} opacity-60 hover:opacity-100`}`}
+                  title={on ? `Hide ${p.label}'s entries` : `Show ${p.label}'s entries`}
+                  onClick={() => toggleRx(rx)}
+                >
+                  {p.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
         <span className="text-[11px] text-ink-3">
           {visible.length === rows.length
             ? `${rows.length} log ${rows.length === 1 ? "entry" : "entries"}`

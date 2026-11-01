@@ -60,7 +60,8 @@ const api = {
   resumeScan: (rx = 0): Promise<void> => ipcRenderer.invoke(IPC.resumeScan, rx),
   /** Send the PC's time to the scanner now; the next transmission confirms it (snapshot.clock). */
   clockSet: (rx = 0): Promise<ClockStatus> => ipcRenderer.invoke(IPC.clockSet, rx),
-  getSnapshot: (rx = 0): Promise<ScannerSnapshot> => ipcRenderer.invoke(IPC.getSnapshot, rx),
+  /** The receiver's snapshot now; null when the window has no such scanner (RX2 before one is added). */
+  getSnapshot: (rx = 0): Promise<ScannerSnapshot | null> => ipcRenderer.invoke(IPC.getSnapshot, rx),
   onSnapshot: (cb: (s: ScannerSnapshot) => void): (() => void) => {
     const listener = (_e: unknown, s: ScannerSnapshot): void => cb(s);
     ipcRenderer.on(IPC.snapshot, listener);

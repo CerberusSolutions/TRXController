@@ -721,9 +721,18 @@ captured on 14 Sep 2026.
   (add a second scanner: `settings.rx2 = { port: null, autoConnect: true }`) and **×** on RX2's block (remove, only while it
   is disconnected). **Colours**: `--t-rx1` (cyan) and `--t-rx2` (amber) in both themes, `bg-rx1` / `text-rx1` etc. via
   `@theme inline`, `components/RxPill.tsx` the one pill, shown only once there are two scanners: a single-scanner window
-  never says RX1 and looks exactly as before. Still to come: the log's RX column, Show chips and CSV columns (stage 2); the
-  twin heroes with the display and keys in a per-receiver drawer, keys to the receiver last clicked, the map and Band tab's
-  RX chips, the System window's per-call RX pill (stage 3). The website FAQ (`#faq-two`), README and help screen say so.
+  never says RX1 and looks exactly as before. **Stage 2, the log** (1 Nov 2026): with two scanners `LogTable` uses the
+  `SIMPLE_RX` / `DETAIL_RX` column sets (`rxCell`, an `RxPill`, after the +) and shows **RX1** / **RX2** chips beside the
+  filter box; `useLog.rxShown` (`boolean[]`, `toggleRx`, at least one stays on, never persisted) is the third argument of
+  `rowMatches(row, filter, rxShown?)`, passed only by a twin window (the map's day view and the programming import pass
+  none, so they see every row until stage 3). The Entries CSV has a `receiver` column first (`rxLabel`: RX1 / RX2) and the
+  EZ Scan file `trx_receivers` after `trx_rssi_peak` (`EzObject.receivers`, every scanner that logged the frequency and
+  code, "RX1 RX2"); both always present, so a single-scanner export says RX1. `scanner:get-snapshot` answers **null** for
+  a receiver the window has not got (every window asks for RX2's on start; it used to throw into main's console), and the
+  scanner store's `connect` / `disconnect` / `connect2` / `disconnect2` catch a refusal ("COM9 is the other scanner's port")
+  into `error` / `rx2.error`, which the port block shows in red in place of a link error. Still to come: the twin heroes
+  with the display and keys in a per-receiver drawer, keys to the receiver last clicked, the map and Band tab's RX chips,
+  the System window's per-call RX pill (stage 3). The website FAQ (`#faq-two`), README and help screen say so.
 
 ## Connection memory
 
