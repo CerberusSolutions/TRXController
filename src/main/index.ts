@@ -641,7 +641,12 @@ function registerIpc(): void {
   });
   ipcMain.handle(IPC.resumeScan, (_e, rx: unknown) => receiver(rx).session.resumeScan());
   ipcMain.handle(IPC.clockSet, (_e, rx: unknown) => receiver(rx).session.setClock());
-  ipcMain.handle(IPC.getSnapshot, (_e, rx: unknown) => enrich(receiver(rx).session.getSnapshot()));
+  // A window asks for RX2's snapshot on start whether or not there is a second scanner: null when there is not, not an error.
+  ipcMain.handle(IPC.getSnapshot, (_e, rx: unknown): ScannerSnapshot | null => {
+    const i = typeof rx === 'number' && Number.isInteger(rx) ? rx : 0;
+    const r = receivers[i];
+    return r ? enrich(r.session.getSnapshot()) : null;
+  });
   ipcMain.handle(IPC.logRecent, (_e, limit: unknown, before: unknown) => db?.recent(typeof limit === 'number' ? limit : 500, isLogCursor(before) ? before : undefined) ?? []);
   ipcMain.handle(IPC.logDay, (_e, from: unknown, to: unknown): DayLog => {
     if (!db || typeof from !== 'number' || typeof to !== 'number' || !Number.isFinite(from) || !Number.isFinite(to) || to <= from) return { rows: [], total: 0, truncated: false };

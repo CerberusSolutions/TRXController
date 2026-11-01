@@ -36,6 +36,7 @@ function PortBlock({ rx, compact, onRemove }: { rx: 0 | 1; compact: boolean; onR
   const snapshot = rx === 0 ? store.snapshot : store.rx2.snapshot;
   const selectedPort = rx === 0 ? store.selectedPort : store.rx2.selectedPort;
   const busy = rx === 0 ? store.busy : store.rx2.busy;
+  const refused = rx === 0 ? store.error : store.rx2.error;
   const selectPort = rx === 0 ? store.selectPort : store.selectPort2;
   const connect = rx === 0 ? store.connect : store.connect2;
   const disconnect = rx === 0 ? store.disconnect : store.disconnect2;
@@ -127,7 +128,12 @@ function PortBlock({ rx, compact, onRemove }: { rx: 0 | 1; compact: boolean; onR
           </span>
         )}
         {link.error && <span className="ml-2 text-xs text-red">{link.error}</span>}
-        {rx === 0 && !link.error && portsError && (
+        {!link.error && refused && (
+          <span className="ml-2 text-xs text-red" title={refused}>
+            {refused}
+          </span>
+        )}
+        {rx === 0 && !link.error && !refused && portsError && (
           <span className="ml-2 text-xs text-red" title={portsError}>
             Cannot list ports: {portsError}
           </span>

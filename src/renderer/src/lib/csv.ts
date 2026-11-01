@@ -40,7 +40,7 @@ export const EZSCAN_HEADER = [
  * Scanlists, Tone Type and Talkgroup ID fields.
  */
 export const LOG_EXTRA_HEADER = [
-  'first_heard', 'last_heard', 'entries', 'calls', 'rssi_peak', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'tone',
+  'first_heard', 'last_heard', 'entries', 'calls', 'rssi_peak', 'receivers', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'tone',
   'squelch', 'site', 'licensee', 'source', 'scanner_name', 'wtr', 'rr_name', 'rr_system', 'repeater', 'rruk', 'distance_km',
   'bearing_deg', 'candidates',
 ].map((c) => `trx_${c}`);
@@ -49,7 +49,7 @@ export const LOG_CSV_HEADER = [...EZSCAN_HEADER, ...LOG_EXTRA_HEADER];
 
 /** One line per log entry, as the table shows them, for a spreadsheet rather than the scanner. */
 export const ENTRY_CSV_HEADER = [
-  'first_heard', 'last_heard', 'duration_s', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'radio_id', 'radio',
+  'receiver', 'first_heard', 'last_heard', 'duration_s', 'frequency_mhz', 'mode', 'signal', 'name', 'system', 'scanlist', 'type', 'tgid', 'radio_id', 'radio',
   'radio_alias', 'tone', 'squelch', 'site', 'licensee', 'source', 'scanner_name', 'wtr', 'rruk', 'rr_name', 'rr_system', 'repeater', 'distance_km',
   'bearing_deg', 'lat', 'lon', 'rssi_peak', 'calls', 'hits', 'candidates',
 ];
@@ -59,6 +59,7 @@ export function entriesToCsv(rows: readonly ReceptionRow[], now = Date.now()): s
   return toCsv(
     ENTRY_CSV_HEADER,
     rows.map((r) => [
+      rxLabel(r.rx),
       localStamp(r.startedAt),
       r.endedAt === null ? '' : localStamp(r.endedAt),
       Math.max(0, Math.round(((r.endedAt ?? now) - r.startedAt) / 1000)),
@@ -94,6 +95,11 @@ export function entriesToCsv(rows: readonly ReceptionRow[], now = Date.now()): s
       candidatesText(r),
     ]),
   );
+}
+
+/** The scanner that logged a row, as the pills name it: receiver 0 is RX1. */
+export function rxLabel(rx: number): string {
+  return `RX${rx + 1}`;
 }
 
 /** EZ Scan's alpha tag is 16 characters. */
@@ -151,6 +157,8 @@ export interface EzObject {
   receptions: number;
   calls: number;
   rssiPeak: number;
+  /** The scanners that heard it, receiver indexes ascending: both when the two logged the frequency. */
+  receivers: number[];
 }
 
 /**
@@ -165,9 +173,10 @@ export function ezObjects(rows: readonly ReceptionRow[]): EzObject[] {
     const key = `${r.frequencyHz}|${code}`;
     const o = map.get(key);
     if (!o) {
-      map.set(key, { frequencyHz: r.frequencyHz, code, row: r, firstHeard: r.startedAt, lastHeard: r.endedAt, receptions: 1, calls: r.calls, rssiPeak: r.rssiPeak });
+      map.set(key, { frequencyHz: r.frequencyHz, code, row: r, firstHeard: r.startedAt, lastHeard: r.endedAt, receptions: 1, calls: r.calls, rssiPeak: r.rssiPeak, receivers: [r.rx] });
       continue;
     }
+    if (!o.receivers.includes(r.rx)) o.receivers = [...o.receivers, r.rx].sort((a, b) => a - b);
     if (!o.row.name && r.name) o.row = r;
     o.firstHeard = Math.min(o.firstHeard, r.startedAt);
     o.lastHeard = o.lastHeard === null || r.endedAt === null ? null : Math.max(o.lastHeard, r.endedAt);
@@ -205,7 +214,7 @@ export function ezLine(o: EzObject): string {
     '0', quoted(''), // TGSkip, Scanlists: empty = EZ Scan's default import scanlist (normally 1)
   ];
   const ours = [
-    localStamp(o.firstHeard), o.lastHeard === null ? '' : localStamp(o.lastHeard), o.receptions, o.calls, o.rssiPeak, r.signalType, r.name, r.system, r.scanlist, r.objectType,
+    localStamp(o.firstHeard), o.lastHeard === null ? '' : localStamp(o.lastHeard), o.receptions, o.calls, o.rssiPeak, o.receivers.map(rxLabel).join(' '), r.signalType, r.name, r.system, r.scanlist, r.objectType,
     r.tgid, o.code, r.squelch, r.site, r.licensee ?? '', r.source ?? '', r.scannerName ?? '', r.wtr ?? '', r.rrName ?? '', r.rrSystem ?? '', r.rpt ?? '', r.rruk ?? '',
     r.distanceKm === null || r.distanceKm === undefined ? '' : r.distanceKm.toFixed(1), r.bearingDeg ?? '', candidatesText(r),
   ].map(csvCell);

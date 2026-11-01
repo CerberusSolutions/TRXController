@@ -72,19 +72,30 @@ describe('csv', () => {
       [453_062_500, 'CC 3', 3, 1, 2, 275, base.endedAt],
     ]);
     expect(objs[1]!.firstHeard).toBe(base.startedAt);
+    expect(objs.map((o) => o.receivers)).toEqual([[0], [0], [0]]);
+  });
+
+  it('names every scanner that heard an object, in order', () => {
+    const objs = ezObjects([{ ...base, id: 3, rx: 1 }, { ...base, id: 2, rx: 0 }, { ...base, id: 1, rx: 1 }]);
+    expect(objs).toHaveLength(1);
+    expect(objs[0]!.receivers).toEqual([0, 1]);
+    expect(logToCsv([{ ...base, rx: 1 }, base]).split('\r\n')[1]).toContain(',2,4,275,RX1 RX2,DMR,');
+    expect(logToCsv([{ ...base, rx: 1 }]).split('\r\n')[1]).toContain(',1,2,275,RX2,DMR,');
   });
 
   it('writes one line per entry with every column, an open entry timed to now', () => {
     const open: ReceptionRow = { ...base, id: 2, endedAt: null, radioCallsign: 'G0XYZ', tone: '', candidates: [], distanceKm: null, bearingDeg: null, lat: null, lon: null };
     const lines = entriesToCsv([open, base], base.startedAt + 90_000).split('\r\n');
     expect(lines[0]).toBe(ENTRY_CSV_HEADER.join(','));
-    expect(ENTRY_CSV_HEADER).toHaveLength(33);
+    expect(ENTRY_CSV_HEADER).toHaveLength(34);
     const first = lines[1]!.split(',');
-    expect(first[1]).toBe('');
-    expect(first[2]).toBe('90');
-    expect(first[3]).toBe('453.062500');
-    expect(first[12]).toBe('G0XYZ');
-    expect(first.slice(25, 29)).toEqual(['', '', '', '']);
+    expect(first[0]).toBe('RX1');
+    expect(first[2]).toBe('');
+    expect(first[3]).toBe('90');
+    expect(first[4]).toBe('453.062500');
+    expect(first[13]).toBe('G0XYZ');
+    expect(first.slice(26, 30)).toEqual(['', '', '', '']);
+    expect(entriesToCsv([{ ...base, rx: 1 }]).split('\r\n')[1]!.startsWith('RX2,2026-')).toBe(true);
     expect(lines[2]).toContain('16,453.062500,FM,DMR,University of Buckingham,,Tune Mode,Search,1,206,,,CC 13,No Tone,,University of Buckingham,RRDB,');
     expect(lines[2]).toContain(',3.2,47,51.99,-0.99,275,2,28,RRDB University of Buckingham · Bucks · CC 13 ✓ (3.2 km 047°) | WTR ');
     expect(lines[3]).toBe('');
@@ -103,7 +114,7 @@ describe('csv', () => {
     expect(l1).toContain('"GB3AA",145.500000,"CTCSS","94.8","Yes",2.0,"No","No","Yes","No","Leave","No","No","NFM","Auto","Off","No","55555555",,,,,"None",500,500,"No",,,,,0,"",');
     // DMR with a colour code: Search for the tone, the code in Color Code, talkgroup and slot wildcards.
     expect(l2).toContain('"University of Bu",453.062500,"Search","","Yes",2.0,"No","No","Yes","No","Leave","No","No","DMR","Digital","Off","No","55555555",,,,,"None",500,500,"No",*,13,*,,0,"",');
-    expect(l2).toContain(',2,275,DMR,University of Buckingham,,Tune Mode,Search,1,CC 13,No Tone,,University of Buckingham,RRDB,,University of Buckingham,University of Buckingham,,,UNIVERSITY OF BUCKINGHAM,3.2,47,');
+    expect(l2).toContain(',2,275,RX1,DMR,University of Buckingham,,Tune Mode,Search,1,CC 13,No Tone,,University of Buckingham,RRDB,,University of Buckingham,University of Buckingham,,,UNIVERSITY OF BUCKINGHAM,3.2,47,');
     expect(candidatesText(base)).toBe('RRDB University of Buckingham · Bucks · CC 13 ✓ (3.2 km 047°) | WTR University of Buckingham · DIG · base (3.2 km 047°) | WTR Kwik Fit (GB) Limited · DIG');
     expect(l2!.endsWith(candidatesText(base))).toBe(true);
     expect(rest).toBe('');

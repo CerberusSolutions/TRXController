@@ -35,6 +35,8 @@ export interface Rx2State {
   held: HeldDetails | null;
   selectedPort: string | null;
   busy: boolean;
+  /** Why the last Connect / Disconnect was refused, until the next try. */
+  error: string | null;
 }
 
 interface ScannerState {
@@ -53,6 +55,8 @@ interface ScannerState {
   portsError: string | null;
   selectedPort: string | null;
   busy: boolean;
+  /** Why the last Connect / Disconnect was refused (the port is the other scanner's, no such scanner), until the next try. */
+  error: string | null;
   ccdump: string[];
   /** Key code most recently pressed, for a brief highlight. */
   lastKey: number | null;
@@ -81,7 +85,7 @@ const api = (): Window['trx'] => {
 
 export const useScanner = create<ScannerState>((set, get) => ({
   snapshot: emptySnapshot(),
-  rx2: { snapshot: emptySnapshot(), held: null, selectedPort: null, busy: false },
+  rx2: { snapshot: emptySnapshot(), held: null, selectedPort: null, busy: false, error: null },
   setSnapshot2: (snapshot) => {
     const { rx2 } = get();
     const port = snapshot.link.port;
@@ -93,17 +97,21 @@ export const useScanner = create<ScannerState>((set, get) => ({
   connect2: async () => {
     const port = get().rx2.selectedPort;
     if (!port) return;
-    set((s) => ({ rx2: { ...s.rx2, busy: true } }));
+    set((s) => ({ rx2: { ...s.rx2, busy: true, error: null } }));
     try {
       await api().connect(port, 1);
+    } catch (e) {
+      set((s) => ({ rx2: { ...s.rx2, error: ipcMessage(e) } }));
     } finally {
       set((s) => ({ rx2: { ...s.rx2, busy: false } }));
     }
   },
   disconnect2: async () => {
-    set((s) => ({ rx2: { ...s.rx2, busy: true } }));
+    set((s) => ({ rx2: { ...s.rx2, busy: true, error: null } }));
     try {
       await api().disconnect(1);
+    } catch (e) {
+      set((s) => ({ rx2: { ...s.rx2, error: ipcMessage(e) } }));
     } finally {
       set((s) => ({ rx2: { ...s.rx2, busy: false } }));
     }
@@ -116,6 +124,7 @@ export const useScanner = create<ScannerState>((set, get) => ({
   portsError: null,
   selectedPort: null,
   busy: false,
+  error: null,
   ccdump: [],
   lastKey: null,
   tuneState: null,
@@ -185,18 +194,22 @@ export const useScanner = create<ScannerState>((set, get) => ({
   connect: async () => {
     const port = get().selectedPort;
     if (!port) return;
-    set({ busy: true });
+    set({ busy: true, error: null });
     try {
       await api().connect(port);
+    } catch (e) {
+      set({ error: ipcMessage(e) });
     } finally {
       set({ busy: false });
     }
   },
 
   disconnect: async () => {
-    set({ busy: true });
+    set({ busy: true, error: null });
     try {
       await api().disconnect();
+    } catch (e) {
+      set({ error: ipcMessage(e) });
     } finally {
       set({ busy: false });
     }
@@ -221,10 +234,18 @@ export function attachScannerEvents(): () => void {
     if (s.rx === 1) useScanner.getState().setSnapshot2(s.snapshot);
   });
   const offCc = window.trx.onCcDump((l) => useScanner.getState().pushCcDump(l));
-  void window.trx.getSnapshot().then((s) => useScanner.getState().setSnapshot(s));
+  void window.trx
+    .getSnapshot()
+    .then((s) => {
+      if (s) useScanner.getState().setSnapshot(s);
+    })
+    .catch(() => undefined);
+  // Null until a second scanner is added (an older main throws instead; either way there is nothing to show yet).
   void window.trx
     .getSnapshot(1)
-    .then((s) => useScanner.getState().setSnapshot2(s))
+    .then((s) => {
+      if (s) useScanner.getState().setSnapshot2(s);
+    })
     .catch(() => undefined);
   void useScanner.getState().refreshPorts();
   return () => {

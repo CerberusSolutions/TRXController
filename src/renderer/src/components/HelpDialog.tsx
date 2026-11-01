@@ -153,7 +153,7 @@ export default function HelpDialog() {
                 </li>
                 <li>
                   Two scanners? <b className="text-ink">+</b> beside the port adds a second (RX2) with its own port and memory; the two are driven side by side
-                  and the log records which heard what. <b className="text-ink">×</b> beside its port takes it away again.
+                  and the log gains an RX column and RX1 / RX2 chips to show one scanner's entries. <b className="text-ink">×</b> beside its port takes it away again.
                 </li>
                 <li>
                   The scanner's clock is set from this PC each time it connects, so recordings and the log agree on the time. Untick that under Data ›{' '}
