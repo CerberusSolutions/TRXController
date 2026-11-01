@@ -17,6 +17,10 @@ import { isFirstRun, useUi } from './store/ui';
 export default function App() {
   // Two scanners: a column per receiver over the shared log; one: the hero and the keypad column, as always.
   const twin = useIdentities((s) => s.settings.rx2 !== null);
+  // Back to one scanner: the keyboard goes to RX1 again, whichever column had it.
+  useEffect(() => {
+    if (!twin) useUi.getState().setActiveRx(0);
+  }, [twin]);
   useEffect(() => {
     const offTheme = initTheme();
     const offScanner = attachScannerEvents();
