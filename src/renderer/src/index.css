@@ -127,11 +127,21 @@ body {
 .key-knob { @apply text-ink-2 text-lg; }
 .key-power { @apply text-red; }
 .key .sub { @apply text-[10px] text-ink-3 leading-none mt-0.5 tracking-wide uppercase; }
+/* The keys six wide in a receiver block's drawer (two scanners): short, no sub-labels, so the drawer is no taller than the hero. */
+.key-drawer .key { min-height: 1.45rem; border-radius: 0.375rem; }
+.key-drawer .key-nav { @apply text-base; }
+.key-drawer .key-sel { @apply text-sm; }
+.key-drawer .key-fn { @apply text-[11px]; }
+.key-drawer .key-digit { @apply text-sm; }
+.key-drawer .key-knob { @apply text-sm; }
+.key-drawer .key .sub { display: none; }
 
 .lcd-line { white-space: pre; }
 /* The screen in the radio panel: a fixed 13px so the column fits a 780px window. */
 .lcd-screen { padding: 0.5em 0.7em 0.55em; }
 .lcd-radio { font-size: 14px; font-weight: 700; line-height: 1.28; }
+/* The same screen in a receiver block's drawer (two scanners): smaller, so the drawer stays as short as the hero. */
+.lcd-drawer { font-size: 11px; line-height: 1.22; }
 .lcd-icons { display: flex; flex-wrap: nowrap; gap: 0.55em; overflow: hidden; font-size: 0.72em; letter-spacing: 0.06em; line-height: 1.5; margin-bottom: 0.15em; font-weight: 700; }
 .lcd-icons span { white-space: nowrap; }
 .lcd-cursor { background: rgba(28, 20, 7, 0.16); }

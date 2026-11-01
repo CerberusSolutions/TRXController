@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { describeIcons, LCD_COLUMNS, LCD_ROWS, toHex, type Lcd } from '@trxcontroller/rcip';
-import { useScanner } from '../store/scanner';
+import { rxView, useScanner } from '../store/scanner';
+import { useRx } from '../lib/rx';
 
 /** The icon strip along the top of the scanner's display, as short legends in the order the TRX draws them. */
 function iconStrip(lcd: Lcd | null): string[] {
@@ -41,9 +42,13 @@ const ICON_TITLES: Record<string, string> = {
  * connected or it is switched off.
  */
 export function LcdScreen({ className = '' }: { className?: string }) {
-  const lcd = useScanner((s) => s.snapshot.lcd);
-  const online = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
-  const off = useScanner((s) => s.snapshot.power?.on === false);
+  const rx = useRx();
+  const lcd = useScanner((s) => rxView(s, rx).snapshot.lcd);
+  const online = useScanner((s) => {
+    const link = rxView(s, rx).snapshot.link;
+    return link.status === 'connected' || link.status === 'unresponsive';
+  });
+  const off = useScanner((s) => rxView(s, rx).snapshot.power?.on === false);
   const lit = online && !off && lcd !== null;
   const lines = lcd?.lines ?? Array.from({ length: LCD_ROWS }, () => ' '.repeat(LCD_COLUMNS));
   const icons = lit ? iconStrip(lcd) : [];

@@ -2,7 +2,13 @@ import type React from 'react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { modeName } from '@trxcontroller/rcip';
 import { useBand, type Bin } from '../store/band';
-import { useScanner } from '../store/scanner';
+import { rxView, useScanner } from '../store/scanner';
+import { useIdentities } from '../store/identities';
+import { useUi } from '../store/ui';
+import { RX_PILL } from './RxPill';
+
+/** The receivers' colours for the chart (the foot of a bar, the current-frequency marker), by index. */
+const RX_FILL = ['var(--color-rx1)', 'var(--color-rx2)'];
 
 const PAD = { top: 12, right: 12, bottom: 26, left: 40 };
 /** A bin this many steps from any neighbour, with few samples, is a stray visit and does not set the axis. */
@@ -32,8 +38,23 @@ export default function BandChart() {
   const [size, setSize] = useState({ w: 600, h: 200 });
   const [hover, setHover] = useState<Bin | null>(null);
   const tune = useScanner((s) => s.tune);
-  const tuneState = useScanner((s) => s.tuneState);
-  const online = useScanner((s) => s.snapshot.link.status === 'connected' || s.snapshot.link.status === 'unresponsive');
+  // With two scanners a click tunes the one the keyboard drives (the block last clicked); the chips pick whose bins are drawn.
+  const twin = useIdentities((s) => s.settings.rx2 !== null);
+  const activeRx = useUi((s) => s.activeRx);
+  const tuneRx = twin ? activeRx : 0;
+  const tuneState = useScanner((s) => rxView(s, tuneRx).tuneState);
+  const online = useScanner((s) => {
+    const link = rxView(s, tuneRx).snapshot.link;
+    return link.status === 'connected' || link.status === 'unresponsive';
+  });
+  const [rxShown, setRxShown] = useState<boolean[]>([true, true]);
+  const toggleRx = (rx: number): void =>
+    setRxShown((cur) => {
+      const next = cur.slice();
+      next[rx] = !next[rx];
+      return next.some(Boolean) ? next : cur;
+    });
+  const shownMask = twin ? rxShown.reduce((m, on, i) => (on ? m | (1 << i) : m), 0) : ~0;
   const [now, setNow] = useState(Date.now());
   // 'frequency': linear axis (right for a Search sweep). 'channels': every visited
   // frequency gets an equal-width bar (right for Scan lists spanning several bands).
@@ -69,7 +90,7 @@ export default function BandChart() {
   }, []);
 
   const model = useMemo(() => {
-    const all = [...bins.values()].sort((a, b) => a.hz - b.hz);
+    const all = [...bins.values()].filter((b) => (b.rxMask & shownMask) !== 0).sort((a, b) => a.hz - b.hz);
     if (all.length === 0) return null;
     // Step: the median gap between neighbours (robust to one odd gap).
     const gaps = all.slice(1).map((b, i) => b.hz - all[i]!.hz).filter((g) => g > 0).sort((a, b) => a - b);
@@ -93,15 +114,35 @@ export default function BandChart() {
     return { list, minHz, maxHz, step, rangeHz, maxRssi };
     // version is the real dependency: the Map is mutated in place.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [version, bins]);
+  }, [version, bins, shownMask]);
 
   const plotW = size.w - PAD.left - PAD.right;
   const plotH = size.h - PAD.top - PAD.bottom;
 
+  const rxChips = twin && (
+    <span className="flex gap-1" role="group" aria-label="Scanners charted">
+      {RX_PILL.map((p, rx) => {
+        const on = rxShown[rx] !== false;
+        return (
+          <button
+            key={p.label}
+            type="button"
+            aria-pressed={on}
+            className={`rounded px-1.5 py-px font-sans text-[10px] font-bold tracking-wider ${on ? `${p.bg} text-bg` : `border border-edge ${p.text} opacity-60 hover:opacity-100`}`}
+            title={on ? `Hide the frequencies ${p.label} visited` : `Show the frequencies ${p.label} visited`}
+            onClick={() => toggleRx(rx)}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </span>
+  );
+
   if (!model) {
     return (
       <div className="flex h-full flex-col">
-        <Header caption="Peak RSSI · amber = squelch opened · fades with age" />
+        <Header caption="Peak RSSI · amber = squelch opened · fades with age">{rxChips}</Header>
         <div ref={ref} className="flex flex-1 items-center justify-center text-sm text-ink-3">
           Nothing charted yet. Start a Search or Sweeper on the scanner, or let it scan.
         </div>
@@ -112,7 +153,7 @@ export default function BandChart() {
   const { minHz, step, rangeHz, maxRssi } = model;
   const channels = layout === 'channels';
   // In channel layout every bin is drawn, outliers included, since the axis is ordinal.
-  const list = channels ? [...bins.values()].sort((a, b) => a.hz - b.hz) : model.list;
+  const list = channels ? [...bins.values()].filter((b) => (b.rxMask & shownMask) !== 0).sort((a, b) => a.hz - b.hz) : model.list;
   const slotW = channels ? plotW / list.length : (step / rangeHz) * plotW;
   const index = new Map(list.map((b, i) => [b.hz, i]));
   const x = (hz: number): number =>
@@ -155,10 +196,13 @@ export default function BandChart() {
               : tuneState.phase === 'done'
                 ? `Tuned to ${(tuneState.hz / 1e6).toFixed(4)} MHz`
                 : `Tune failed: ${tuneState.message ?? ''}`
-            : 'Peak RSSI · amber = squelch opened · click a bar to tune'
+            : twin
+              ? `Peak RSSI · amber = squelch opened · foot = scanner · click a bar to tune ${RX_PILL[tuneRx]?.label ?? 'RX1'}`
+              : 'Peak RSSI · amber = squelch opened · click a bar to tune'
         }
         captionClass={tuneState ? (tuneState.phase === 'error' ? 'text-red' : tuneState.phase === 'done' ? 'text-green' : 'text-amber') : ''}
       >
+        {rxChips}
         <span>{mode !== null ? modeName(mode) : ''}</span>
         <span>{list.length} bins</span>
         <span>
@@ -188,7 +232,7 @@ export default function BandChart() {
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
         onClick={() => {
-          if (hover && online && tuneState?.phase !== 'tuning') void tune(hover.hz);
+          if (hover && online && tuneState?.phase !== 'tuning') void tune(hover.hz, tuneRx);
         }}
       >
         {/* y grid: recessive */}
@@ -207,22 +251,22 @@ export default function BandChart() {
           const active = b.opens > 0;
           const top = y(b.peakRssi);
           const h = Math.max(2, PAD.top + plotH - top);
+          // With two scanners the bar's foot says which visited it: one colour, or both side by side.
+          const feet = twin ? RX_FILL.filter((_, rx) => (b.rxMask & (1 << rx)) !== 0) : [];
           return (
-            <rect
-              key={b.hz}
-              x={x(b.hz) - barW / 2}
-              y={top}
-              width={barW}
-              height={h}
-              rx={Math.min(2, barW / 2)}
-              fill={active ? 'var(--color-amber)' : 'var(--color-cyan)'}
-              opacity={hover?.hz === b.hz ? 1 : fade}
-            />
+            <g key={b.hz} opacity={hover?.hz === b.hz ? 1 : fade}>
+              <rect x={x(b.hz) - barW / 2} y={top} width={barW} height={h} rx={Math.min(2, barW / 2)} fill={active ? 'var(--color-amber)' : 'var(--color-cyan)'} />
+              {feet.map((fill, i) => (
+                <rect key={fill} x={x(b.hz) - barW / 2 + (barW / feet.length) * i} y={PAD.top + plotH - 3} width={barW / feet.length} height={3} fill={fill} />
+              ))}
+            </g>
           );
         })}
-        {/* current frequency marker */}
-        {currentHz !== null && (channels ? index.has(currentHz) : currentHz >= minHz - step && currentHz <= minHz + rangeHz) && (
-          <line x1={x(currentHz)} x2={x(currentHz)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-ink)" strokeWidth={1} strokeDasharray="2 3" opacity={0.8} />
+        {/* current frequency marker, one per scanner (ink for a single scanner, the receiver's colour with two) */}
+        {currentHz.map((cur, rx) =>
+          cur !== null && (!twin || rxShown[rx] !== false) && (channels ? index.has(cur) : cur >= minHz - step && cur <= minHz + rangeHz) ? (
+            <line key={rx} x1={x(cur)} x2={x(cur)} y1={PAD.top} y2={PAD.top + plotH} stroke={twin ? RX_FILL[rx] : 'var(--color-ink)'} strokeWidth={1} strokeDasharray="2 3" opacity={0.8} />
+          ) : null,
         )}
         {/* baseline + x axis */}
         <line x1={PAD.left} x2={size.w - PAD.right} y1={PAD.top + plotH} y2={PAD.top + plotH} stroke="var(--color-edge)" />
@@ -248,7 +292,8 @@ export default function BandChart() {
           <div>
             {hover.opens > 0 ? `${hover.opens} squelch open · ` : ''}
             seen {Math.round((now - hover.lastSeenAt) / 1000)}s ago
-            {online ? ' · click to tune' : ''}
+            {twin ? ` · ${RX_PILL.filter((_, rx) => (hover.rxMask & (1 << rx)) !== 0).map((p) => p.label).join(' + ')}` : ''}
+            {online ? ` · click to tune${twin ? ` ${RX_PILL[tuneRx]?.label ?? ''}` : ''}` : ''}
           </div>
         </div>
       )}
