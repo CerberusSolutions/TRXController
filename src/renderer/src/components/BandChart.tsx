@@ -47,6 +47,8 @@ export default function BandChart() {
     const link = rxView(s, tuneRx).snapshot.link;
     return link.status === 'connected' || link.status === 'unresponsive';
   });
+  // RX2's marker only while there is a second scanner and it is on: its last frequency would otherwise stay drawn for good.
+  const rx2Online = useScanner((s) => s.rx2.snapshot.link.status === 'connected' || s.rx2.snapshot.link.status === 'unresponsive');
   const [rxShown, setRxShown] = useState<boolean[]>([true, true]);
   const toggleRx = (rx: number): void =>
     setRxShown((cur) => {
@@ -264,7 +266,7 @@ export default function BandChart() {
         })}
         {/* current frequency marker, one per scanner (ink for a single scanner, the receiver's colour with two) */}
         {currentHz.map((cur, rx) =>
-          cur !== null && (!twin || rxShown[rx] !== false) && (channels ? index.has(cur) : cur >= minHz - step && cur <= minHz + rangeHz) ? (
+          cur !== null && (rx === 0 ? !twin || rxShown[0] !== false : twin && rx2Online && rxShown[rx] !== false) && (channels ? index.has(cur) : cur >= minHz - step && cur <= minHz + rangeHz) ? (
             <line key={rx} x1={x(cur)} x2={x(cur)} y1={PAD.top} y2={PAD.top + plotH} stroke={twin ? RX_FILL[rx] : 'var(--color-ink)'} strokeWidth={1} strokeDasharray="2 3" opacity={0.8} />
           ) : null,
         )}

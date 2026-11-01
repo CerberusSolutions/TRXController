@@ -67,7 +67,7 @@ const api = {
     ipcRenderer.on(IPC.snapshot, listener);
     return () => ipcRenderer.removeListener(IPC.snapshot, listener);
   },
-  /** Every receiver's snapshots, each tagged with its index. */
+  /** The second scanner's snapshots (and any later receiver's), each tagged with its index; RX1's stay on `onSnapshot`. */
   onSnapshotRx: (cb: (s: RxSnapshot) => void): (() => void) => {
     const listener = (_e: unknown, s: RxSnapshot): void => cb(s);
     ipcRenderer.on(IPC.snapshotRx, listener);
