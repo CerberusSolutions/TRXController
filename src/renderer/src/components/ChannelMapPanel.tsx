@@ -132,7 +132,11 @@ export default function ChannelMapPanel({ status, scannerHz }: { status: DsdStat
             <span className="text-ink-3"> MHz, {kHz(map.stepHz)} per pair</span>
           </span>
         ) : (
-          <span className="text-[11px] text-ink-3">No anchor yet: type one LSN and its frequency below, or wait for a neighbour list and a control channel the scanner has sat on.</span>
+          <span className="text-[11px] text-ink-3">
+            No anchor yet. Type one LSN and its frequency below (the control channel's LSN with the Scanner button, when DSD+ shows it), or let the scanner trunk-track
+            the system: each stop on a voice channel within a moment of a grant is a vote, two votes an anchor. A Service Search parked on the control channel teaches it
+            nothing.
+          </span>
         )}
         {misfits > 0 && (
           <span className="text-[11px] text-red" title="An anchor off the line: a wrong anchor, a coincidence the scanner learned, or a plan with more than one frequency range">
