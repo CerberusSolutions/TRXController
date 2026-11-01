@@ -1,16 +1,26 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Key } from '@trxcontroller/rcip';
-import { KEYPAD_ROWS, keyDefForKeyboard, type KeyDef } from '../lib/keypad';
+import { KEYPAD_ROWS, type KeyDef } from '../lib/keypad';
 import { rxView, useScanner } from '../store/scanner';
 import { useUi } from '../store/ui';
 import { useRx } from '../lib/rx';
+import { useScannerKeys } from '../lib/useScannerKeys';
 import { LcdScreen } from './LcdPanel';
 import RxPill from './RxPill';
 
-const POWER_CONFIRM_MS = 2500;
-
-/** The keys six wide for the drawer: each function row beside a digit row, the knob keys along the bottom. */
-const SIX_WIDE: KeyDef[] = [0, 1, 2, 3].flatMap((i) => [...(KEYPAD_ROWS[i] ?? []), ...(KEYPAD_ROWS[i + 4] ?? [])]).concat((KEYPAD_ROWS[8] ?? []).map((d) => ({ ...d, span: 3 })));
+/**
+ * The keys six wide for the drawer, derived from the table rather than by row number: each function row beside a
+ * digit row (the rows with a digit key, the knob push among them), the knob-only row along the bottom at span 3.
+ */
+const SIX_WIDE: KeyDef[] = (() => {
+  const knobRows = KEYPAD_ROWS.filter((row) => row.every((d) => d.variant === 'knob'));
+  const digitRows = KEYPAD_ROWS.filter((row) => row.some((d) => d.variant === 'digit'));
+  const fnRows = KEYPAD_ROWS.filter((row) => !knobRows.includes(row) && !digitRows.includes(row));
+  const pairs = Math.max(fnRows.length, digitRows.length);
+  return Array.from({ length: pairs }, (_, i) => [...(fnRows[i] ?? []), ...(digitRows[i] ?? [])])
+    .flat()
+    .concat(knobRows.flat().map((d) => ({ ...d, span: 3 })));
+})();
 
 /** How the keypad is shown in a twin-scanner column: in the receiver block's drawer, pinned (in the flow) or not (over the hero). */
 export interface DrawerProps {
@@ -21,20 +31,15 @@ export interface DrawerProps {
 
 export default function Keypad({ drawer }: { drawer?: DrawerProps }) {
   const rx = useRx();
-  const pressKey = useScanner((s) => s.pressKey);
   const lastKey = useScanner((s) => rxView(s, rx).lastKey);
   const stalled = useScanner((s) => rxView(s, rx).snapshot.link.stall !== null);
   const off = useScanner((s) => rxView(s, rx).snapshot.power?.on === false);
-  // Held while the scanner is not answering: it queues every key and fires them all when it wakes.
-  const enabled = useScanner((s) => {
-    const { link, power } = rxView(s, rx).snapshot;
-    return (link.status === 'connected' || link.status === 'unresponsive') && link.stall === null && power?.on !== false;
-  });
   const tune = useScanner((s) => s.tune);
   const resumeScan = useScanner((s) => s.resumeScan);
   const tuneState = useScanner((s) => rxView(s, rx).tuneState);
   // With two scanners the keyboard drives the block last clicked; a single-scanner window has only RX1.
   const keyboard = useUi((s) => s.activeRx) === rx;
+  const { enabled, armPower, press } = useScannerKeys(rx, keyboard);
   const [freqText, setFreqText] = useState('');
   const freqHz = Math.round(parseFloat(freqText) * 1e6);
   const freqOk = Number.isFinite(freqHz) && freqHz >= 25e6 && freqHz <= 1300e6;
@@ -42,38 +47,6 @@ export default function Keypad({ drawer }: { drawer?: DrawerProps }) {
   const submitTune = (): void => {
     if (enabled && freqOk && !tuning) void tune(freqHz, rx);
   };
-  const [armPower, setArmPower] = useState(false);
-  const armTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const press = (def: KeyDef): void => {
-    if (!enabled) return;
-    if (def.code === Key.POWER) {
-      if (!armPower) {
-        setArmPower(true);
-        armTimer.current = setTimeout(() => setArmPower(false), POWER_CONFIRM_MS);
-        return;
-      }
-      if (armTimer.current) clearTimeout(armTimer.current);
-      setArmPower(false);
-    }
-    void pressKey(def.code, rx);
-  };
-
-  useEffect(() => {
-    if (!keyboard) return;
-    const onKey = (e: KeyboardEvent): void => {
-      const ui = useUi.getState();
-      if (ui.helpOpen || ui.dataOpen) return;
-      const def = keyDefForKeyboard(e);
-      if (!def || e.repeat) return;
-      e.preventDefault();
-      press(def);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, armPower, keyboard]);
-
   const keys = drawer ? SIX_WIDE : KEYPAD_ROWS.flat();
   // The radio: the scanner's own display over its keys, as on the front panel, then the Tune box.
   return (

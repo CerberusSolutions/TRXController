@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import FrequencyHero from './FrequencyHero';
 import Keypad from './Keypad';
 import { RxContext } from '../lib/rx';
+import { useScannerKeys } from '../lib/useScannerKeys';
 import { useUi } from '../store/ui';
+
+/** The keyboard shortcuts for a receiver whose drawer is closed: the listener alone, nothing rendered. */
+function KeyboardOnly({ rx }: { rx: number }) {
+  useScannerKeys(rx, useUi((s) => s.activeRx) === rx);
+  return null;
+}
 
 /**
  * How a receiver's display and keys are shown in its column: `closed` (an edge tab and the hero's Keys button open
@@ -78,10 +85,8 @@ export default function ReceiverBlock({ rx }: { rx: number }) {
             >
               ‹
             </button>
-            {/* Mounted but hidden so the keyboard shortcuts still reach this scanner while its block is the active one. */}
-            <div className="hidden">
-              <Keypad />
-            </div>
+            {/* The keyboard shortcuts still reach this scanner while its block is the active one. */}
+            <KeyboardOnly rx={rx} />
           </>
         )}
       </section>

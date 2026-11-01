@@ -79,8 +79,16 @@ interface Receiver {
   /** The frequency the scanner is on and since when, for the learner (a stop is a fresh arrival) and the parked-control-channel fact. */
   onFrequency: { hz: number; since: number; openSince: number | null; dmr: boolean };
   autoTimer: ReturnType<typeof setTimeout> | null;
+  /** The port this receiver is opening right now, so the other cannot start on it before `link` says connecting. */
+  connectingTo: string | null;
 }
 const receivers: Receiver[] = [];
+/**
+ * The receiver whose squelch openings feed the channel learner: RX1 until a scanner's trunked header matches a DSD+ call
+ * (`learnDsdSystem`), then that one. The learner discards a grant window holding openings on two frequencies, so a second
+ * scanner working unrelated channels would otherwise make every window ambiguous.
+ */
+let learnerRx = 0;
 /**
  * A scanner whose squelch has stayed open this long on one frequency while DSD+ is decoding a site, the display showing
  * DMR details, is sat on that site's control channel (a Service Search parks on it; a voice channel drops between calls).
@@ -194,7 +202,7 @@ function enrich(s: ScannerSnapshot): ScannerSnapshot {
  * at the same moment. Once known, DSD+'s talkgroup aliases are re-keyed to the tag, so the log's rows on that system
  * pick them up.
  */
-function learnDsdSystem(s: ScannerSnapshot): void {
+function learnDsdSystem(r: Receiver, s: ScannerSnapshot): void {
   const h = s.active?.header;
   if (!dsd || !db || !h || h.recordingType !== 1 || !h.systemTag || !s.status?.squelch.rf) return;
   const status = dsd.status();
@@ -206,6 +214,8 @@ function learnDsdSystem(s: ScannerSnapshot): void {
   const now = Date.now();
   const tgid = h.talkgroupId1;
   if (!status.feed.calls.some((c) => c.tg === tgid && c.type === 'Group' && (c.open || now - c.lastAt < SAME_CALL_MS))) return;
+  // This scanner is on DSD+'s system: its openings are the ones the channel learner pairs with DSD+'s grants.
+  learnerRx = r.rx;
   // The same call on both: the site DSD+ is parked on is the scanner's, so its control channel (which DSD+ prints
   // only as a channel number) and code go on the site's row of the map, once per session.
   const site = status.feed.site;
@@ -328,10 +338,10 @@ function receiver(rx: unknown): Receiver {
   return r;
 }
 
-/** A receiver's snapshot to every window: RX1's on the channel single-scanner windows have always read, every receiver's tagged. */
+/** A receiver's snapshot to every window: RX1's on the channel every window has always read, a later receiver's tagged with its index. */
 function publishSnapshot(r: Receiver, s: ScannerSnapshot): void {
   if (r.rx === 0) broadcast(IPC.snapshot, s);
-  broadcast(IPC.snapshotRx, { rx: r.rx, snapshot: s });
+  else broadcast(IPC.snapshotRx, { rx: r.rx, snapshot: s });
 }
 
 /** Every receiver's snapshot afresh (a lookup landed, a confirmation changed): the heroes read the new names at once. */
@@ -348,6 +358,7 @@ function makeReceiver(rx: number): Receiver {
     lastSquelch: { rf: false, hz: 0 },
     onFrequency: { hz: 0, since: 0, openSince: null, dmr: false },
     autoTimer: null,
+    connectingTo: null,
   };
   const tag = rx === 0 ? 'scanner' : `scanner rx${rx + 1}`;
   r.session = new ScannerSession(serialTransportFactory, {
@@ -381,13 +392,13 @@ function onReceiverSnapshot(r: Receiver, raw: ScannerSnapshot): void {
     }
   }
   parkedControlChannel(r);
-  // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant. Both
-  // receivers feed it: two scanners stopping on a site's channels are twice the votes.
+  // The channel learner: an opening (or a move while open) is one half of a vote, the other half DSD+'s grant. Only the
+  // scanner on DSD+'s system feeds it (`learnerRx`): the other's openings would make every grant window ambiguous.
   if (channels) {
     const now = Date.now();
     const rf = !!s.status?.squelch.rf;
     const hz = s.status?.frequencyHz ?? 0;
-    if (rf && (!r.lastSquelch.rf || r.lastSquelch.hz !== hz)) channels.opening(now, hz, now - r.onFrequency.since);
+    if (r.rx === learnerRx && rf && (!r.lastSquelch.rf || r.lastSquelch.hz !== hz)) channels.opening(now, hz, now - r.onFrequency.since);
     r.lastSquelch = { rf, hz };
     channels.tick(now);
     if (channels.takeChanged()) {
@@ -395,7 +406,7 @@ function onReceiverSnapshot(r: Receiver, raw: ScannerSnapshot): void {
       if (dsd) publishDsd(dsd.status());
     }
   }
-  learnDsdSystem(s);
+  learnDsdSystem(r, s);
   // Parked on one carrier for longer than the user allows (Data menu): press ► so scanning resumes.
   const limit = settings?.get().scanTimeoutS ?? null;
   if (r.scanTimeout.update(s, limit === null ? null : limit * 1000)) {
@@ -469,9 +480,24 @@ function scheduleAutoConnect(r: Receiver, delayMs = AUTO_CONNECT_INTERVAL_MS): v
   }, delayMs);
 }
 
-/** The port another receiver holds (or is opening), which this one must leave alone. */
+/** The port another receiver holds (or is opening), which this one must leave alone. A failed open (`error`) holds nothing. */
 function portHeldByOther(r: Receiver, path: string): boolean {
-  return receivers.some((o) => o !== r && o.session.getSnapshot().link.port === path && o.session.getSnapshot().link.status !== 'disconnected');
+  return receivers.some((o) => {
+    if (o === r) return false;
+    if (o.connectingTo === path) return true;
+    const link = o.session.getSnapshot().link;
+    return link.port === path && link.status !== 'disconnected' && link.status !== 'error';
+  });
+}
+
+/** Open a receiver's port, marking it as taken from the first moment so the other receiver's attempt cannot race it. */
+async function connectReceiver(r: Receiver, path: string): Promise<void> {
+  r.connectingTo = path;
+  try {
+    await r.session.connect(path);
+  } finally {
+    r.connectingTo = null;
+  }
 }
 
 async function autoConnectAttempt(r: Receiver): Promise<void> {
@@ -483,7 +509,7 @@ async function autoConnectAttempt(r: Receiver): Promise<void> {
       const want = preferredPath(s.port);
       const present = (await listPorts()).some((p) => p.path === want);
       if (present && !portHeldByOther(r, want)) {
-        await r.session.connect(want);
+        await connectReceiver(r, want);
         console.log(`[scanner${r.rx ? ` rx${r.rx + 1}` : ''}] auto-connected to ${want}`);
       }
     } catch (err) {
@@ -609,7 +635,7 @@ function registerIpc(): void {
     const r = receiver(rx);
     const want = preferredPath(path);
     if (portHeldByOther(r, want)) throw new Error(`${want} is the other scanner's port`);
-    await r.session.connect(want);
+    await connectReceiver(r, want);
     rememberReceiver(r.rx, { port: want, autoConnect: true });
   });
   ipcMain.handle(IPC.disconnect, (_e, rx: unknown) => {

@@ -713,8 +713,13 @@ captured on 14 Sep 2026.
   (`rememberReceiver`, `receiverSettings`); `syncReceivers(next)` on every settings write adds or drops RX2 (`makeReceiver`;
   a dropped receiver is disconnected and its last snapshot published). The scanner IPC calls (`connect`, `disconnect`,
   `sendKey`, `tune`, `resumeScan`, `clockSet`, `getSnapshot`) take a trailing `rx` (0 by default, so every single-scanner
-  caller is unchanged; `receiver(rx)` throws when there is no such scanner); `scanner:snapshot` still carries RX1's snapshot
-  alone and `scanner:snapshot-rx` (`RxSnapshot {rx, snapshot}`) every receiver's; `broadcastSnapshots()` republishes all.
+  caller is unchanged; `receiver(rx)` throws when there is no such scanner); `scanner:snapshot` carries RX1's snapshot, as it
+  always has, and `scanner:snapshot-rx` (`RxSnapshot {rx, snapshot}`) RX2's only (sending RX1's on both doubled the IPC
+  traffic for nothing); `broadcastSnapshots()` republishes all. `portHeldByOther` counts a port as held while the other
+  receiver is connecting, connected or unresponsive on it, or has it as `connectingTo` (set by `connectReceiver` before
+  `session.connect` marks the link, so two auto-connects cannot race for one port); a failed open (`error`) holds
+  nothing. The channel learner takes squelch openings from `learnerRx` only: RX1 until a scanner's trunked header
+  matches a DSD+ call in `learnDsdSystem`, then that scanner (openings from both made every grant window ambiguous).
   The renderer's scanner store keeps RX2 as `rx2: Rx2State` (snapshot, held, selectedPort, busy, error, tuneState, lastKey)
   with `setSnapshot2`, `selectPort2`, `connect2`, `disconnect2`; `tune(hz, rx)`, `resumeScan(rx)` and `pressKey(code, rx)`
   take the receiver last (0 by default); `rxView(state, rx)` is one receiver's fields for a component; `refreshPorts` gives
@@ -740,14 +745,16 @@ captured on 14 Sep 2026.
   frame of its own). `ReceiverBlock` is the frame: the hero plus the drawer (`closed` with an edge tab, `open` as a
   300px overlay over the hero, `pinned` in the flow beside it; pinned is remembered per receiver in localStorage
   `trx.drawer.rxN`, an unpinned drawer starts closed), a `ring-1` in the receiver's colour when it is `useUi.activeRx`
-  (set by a mousedown anywhere in the block: the keyboard shortcuts go there, `Keypad` registers its keydown listener
-  only when `activeRx === rx`, and a closed drawer keeps a hidden `Keypad` mounted for that). `Keypad({ drawer })` in
-  the drawer is six keys wide (`SIX_WIDE`: each function row beside a digit row, the knob keys along the bottom at
+  (set by a mousedown anywhere in the block: the keyboard shortcuts go there; `lib/useScannerKeys.ts` is the hook that
+  presses keys, arms POWER and registers the keydown listener while `activeRx === rx`, used by `Keypad` and by a closed
+  drawer's `KeyboardOnly`, which renders nothing). `Keypad({ drawer })` in the drawer is six keys wide (`SIX_WIDE`,
+  derived from the table's variants: each function row beside a digit row, the knob-only row along the bottom at
   span 3), with the `.key-drawer` sizes and the `.lcd-drawer` 11px display in `index.css` (unlayered, since `.key` is),
   and a one-line Tune box, so a pinned block is no taller than the hero. `StatusBar` shows a segment per receiver with
   its pill. The Band tab: `Bin.rxMask` (bit per receiver), `useBand.ingest(snapshot, rx)` from both `setSnapshot`s,
-  `currentHz` an array (a dashed marker per receiver in its colour), RX chips that filter the bins, a foot in the
-  receiver's colour on each bar, a click tunes `activeRx`. The map: `followRx` (an RX1 / RX2 radio in the bar in follow
+  `currentHz` an array (a dashed marker per receiver in its colour; RX2's only while there are two scanners and it is
+  on), RX chips that filter the bins, a foot in the receiver's colour on each bar, a click tunes `activeRx`. `rxView`
+  caches RX1's view per store state in a WeakMap, since a dozen selectors call it on every update. The map: `followRx` (an RX1 / RX2 radio in the bar in follow
   mode, reading `rxView(s, followRx).snapshot` and preferring that receiver's own log row on the frequency) and
   `rxShown` chips in the day view (`rowMatches`'s third argument). The System window computes the on-air call per
   receiver (`radios`, `onAirIds`) and the marker column shows an `RxPill` per receiver on the call in place of the TRX

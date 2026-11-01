@@ -103,10 +103,18 @@ const api = (): Window['trx'] => {
   return window.trx;
 };
 
+/** RX1's view, built once per store state: selectors call `rxView` a dozen times per update, so it must not allocate each time. */
+const rx1Views = new WeakMap<ScannerState, RxView>();
+
 /** The receiver's state for the components (the hero, display, keypad, status bar each live under one `RxContext`). */
 export function rxView(s: ScannerState, rx: number): RxView {
   if (rx === 1) return s.rx2;
-  return { snapshot: s.snapshot, held: s.held, selectedPort: s.selectedPort, busy: s.busy, error: s.error, tuneState: s.tuneState, lastKey: s.lastKey };
+  let v = rx1Views.get(s);
+  if (!v) {
+    v = { snapshot: s.snapshot, held: s.held, selectedPort: s.selectedPort, busy: s.busy, error: s.error, tuneState: s.tuneState, lastKey: s.lastKey };
+    rx1Views.set(s, v);
+  }
+  return v;
 }
 
 export const useScanner = create<ScannerState>((set, get) => ({

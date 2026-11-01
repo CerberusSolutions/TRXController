@@ -520,7 +520,7 @@ export interface ReceiverSettings {
 /** How many scanners the app drives at once, at most. */
 export const MAX_RECEIVERS = 2;
 
-/** A snapshot with the receiver it came from (0 = RX1, 1 = RX2); `scanner:snapshot` carries RX1's alone, as it always has. */
+/** A snapshot with the receiver it came from (1 = RX2; RX1's go on `scanner:snapshot` alone, as they always have). */
 export interface RxSnapshot {
   rx: number;
   snapshot: ScannerSnapshot;

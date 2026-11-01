@@ -105,7 +105,8 @@ export default function SystemApp() {
     const onRid = h && h.radioId1 !== NO_ID ? h.radioId1 : shown.current[rx]!.rid;
     return { h, onHz, rfOpen, onTg, onRid };
   });
-  const h = radios.find((r) => r.h)?.h ?? null;
+  // The header that names a trunked system first: a conventional object's header has no tag to key radio names by.
+  const h = radios.find((r) => r.h?.systemTag)?.h ?? radios.find((r) => r.h)?.h ?? null;
   // The scanner's system tag keys the user's own radio names; DSD+'s imported names apply on any system.
   const system = h?.systemTag ?? '';
   // One string for the dependency list below: the memo must rerun when any scanner moves.

@@ -52,6 +52,8 @@ interface RenderCtx {
   canTune: boolean;
   tuning: boolean;
   tune: (hz: number) => void;
+  /** What a click on a frequency tunes, for the tooltip: '' with one scanner, the receiver last clicked with two. */
+  tuneHint: string;
   units: Units;
   /** Rows whose candidate list is unfolded beneath them. */
   /** Whether this row's candidate list is unfolded beneath it. */
@@ -158,12 +160,12 @@ const freqCell: Column = {
   label: "Frequency",
   track: "5.5rem",
   minPx: 5 * REM,
-  render: (r, { canTune, tuning, tune }) => (
+  render: (r, { canTune, tuning, tune, tuneHint }) => (
     <button
       type="button"
       className={`text-left text-amber-2 ${canTune && !tuning ? "cursor-pointer hover:underline hover:decoration-amber-2/60 hover:underline-offset-2" : "cursor-default"}`}
       disabled={!canTune || tuning}
-      title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode, on the scanner last clicked)` : undefined}
+      title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode${tuneHint})` : undefined}
       onClick={() => {
         if (canTune && !tuning) tune(r.frequencyHz);
       }}
@@ -766,15 +768,16 @@ interface RowProps {
   canTune: boolean;
   tuning: boolean;
   tune: (hz: number) => void;
+  tuneHint: string;
   units: Units;
   unfolded: boolean;
   toggle: (id: number) => void;
 }
 
 /** One log row (and its unfolded candidates). Memoised: only rows whose props change re-render. */
-const Row = memo(function Row({ r, columns, template, now, canTune, tuning, tune, units, unfolded, toggle }: RowProps) {
+const Row = memo(function Row({ r, columns, template, now, canTune, tuning, tune, tuneHint, units, unfolded, toggle }: RowProps) {
   const open = r.endedAt === null;
-  const ctx: RenderCtx = { now, canTune, tuning, tune, units, unfolded, toggle };
+  const ctx: RenderCtx = { now, canTune, tuning, tune, tuneHint, units, unfolded, toggle };
   return (
     <>
       <div
@@ -1067,6 +1070,7 @@ export default function LogTable() {
                     canTune={canTune}
                     tuning={tuning}
                     tune={tuneCb}
+                    tuneHint={twin ? `, on ${RX_PILL[tuneRx]?.label ?? "the scanner"} (the column last clicked)` : ""}
                     units={units}
                     unfolded={expanded.has(r.id)}
                     toggle={toggle}
