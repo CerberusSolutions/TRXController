@@ -37,6 +37,26 @@ export interface Rx2State {
   busy: boolean;
   /** Why the last Connect / Disconnect was refused, until the next try. */
   error: string | null;
+  tuneState: TuneState | null;
+  lastKey: number | null;
+}
+
+/** Progress of a click-to-tune / typed tune, shown until it clears. */
+export interface TuneState {
+  hz: number;
+  phase: 'tuning' | 'done' | 'error';
+  message?: string;
+}
+
+/** One receiver's live state as the components read it: RX1's from the store's own fields, RX2's from `rx2`. */
+export interface RxView {
+  snapshot: ScannerSnapshot;
+  held: HeldDetails | null;
+  selectedPort: string | null;
+  busy: boolean;
+  error: string | null;
+  tuneState: TuneState | null;
+  lastKey: number | null;
 }
 
 interface ScannerState {
@@ -47,7 +67,6 @@ interface ScannerState {
   selectPort2: (path: string) => void;
   connect2: () => Promise<void>;
   disconnect2: () => Promise<void>;
-  pressKey2: (code: number) => Promise<void>;
   /** TGID / radio ID / slot seen so far on the current reception; null once the signal has dropped. */
   held: HeldDetails | null;
   ports: PortInfo[];
@@ -60,16 +79,17 @@ interface ScannerState {
   ccdump: string[];
   /** Key code most recently pressed, for a brief highlight. */
   lastKey: number | null;
-  /** Progress of a click-to-tune / typed tune, shown until it clears. */
-  tuneState: { hz: number; phase: 'tuning' | 'done' | 'error'; message?: string } | null;
-  tune: (hz: number) => Promise<void>;
-  resumeScan: () => Promise<void>;
+  /** Progress of a click-to-tune / typed tune on RX1, shown until it clears (RX2's is `rx2.tuneState`). */
+  tuneState: TuneState | null;
+  /** The receiver's index is the last argument: 0 (RX1) when left out, so every single-scanner caller is unchanged. */
+  tune: (hz: number, rx?: number) => Promise<void>;
+  resumeScan: (rx?: number) => Promise<void>;
   setSnapshot: (s: ScannerSnapshot) => void;
   refreshPorts: () => Promise<void>;
   selectPort: (path: string) => void;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  pressKey: (code: number) => Promise<void>;
+  pressKey: (code: number, rx?: number) => Promise<void>;
   pushCcDump: (line: string) => void;
 }
 
@@ -83,15 +103,22 @@ const api = (): Window['trx'] => {
   return window.trx;
 };
 
+/** The receiver's state for the components (the hero, display, keypad, status bar each live under one `RxContext`). */
+export function rxView(s: ScannerState, rx: number): RxView {
+  if (rx === 1) return s.rx2;
+  return { snapshot: s.snapshot, held: s.held, selectedPort: s.selectedPort, busy: s.busy, error: s.error, tuneState: s.tuneState, lastKey: s.lastKey };
+}
+
 export const useScanner = create<ScannerState>((set, get) => ({
   snapshot: emptySnapshot(),
-  rx2: { snapshot: emptySnapshot(), held: null, selectedPort: null, busy: false, error: null },
+  rx2: { snapshot: emptySnapshot(), held: null, selectedPort: null, busy: false, error: null, tuneState: null, lastKey: null },
   setSnapshot2: (snapshot) => {
     const { rx2 } = get();
     const port = snapshot.link.port;
     const held = holdDetails(rx2.held, snapshot);
     const selectedPort = port && snapshot.link.status !== 'disconnected' && port !== rx2.selectedPort ? port : rx2.selectedPort;
     set({ rx2: { ...rx2, snapshot, held, selectedPort } });
+    useBand.getState().ingest(snapshot, 1);
   },
   selectPort2: (path) => set((s) => ({ rx2: { ...s.rx2, selectedPort: path } })),
   connect2: async () => {
@@ -116,9 +143,6 @@ export const useScanner = create<ScannerState>((set, get) => ({
       set((s) => ({ rx2: { ...s.rx2, busy: false } }));
     }
   },
-  pressKey2: async (code) => {
-    await api().sendKey(code, 1);
-  },
   held: null,
   ports: [],
   portsError: null,
@@ -129,33 +153,36 @@ export const useScanner = create<ScannerState>((set, get) => ({
   lastKey: null,
   tuneState: null,
 
-  tune: async (hz) => {
-    set({ tuneState: { hz, phase: 'tuning' } });
+  tune: async (hz, rx = 0) => {
+    const setTune = (t: TuneState | null): void => (rx === 1 ? set((s) => ({ rx2: { ...s.rx2, tuneState: t } })) : set({ tuneState: t }));
+    const current = (): TuneState | null => rxView(get(), rx).tuneState;
+    setTune({ hz, phase: 'tuning' });
     try {
-      const tuned = await api().tune(hz);
+      const tuned = await api().tune(hz, rx);
       // "Tuned to" names the frequency the scanner settled on: an airband channel name snaps to its carrier.
-      set({ tuneState: { hz: typeof tuned === 'number' ? tuned : hz, phase: 'done' } });
+      setTune({ hz: typeof tuned === 'number' ? tuned : hz, phase: 'done' });
       setTimeout(() => {
-        if (get().tuneState?.phase === 'done') set({ tuneState: null });
+        if (current()?.phase === 'done') setTune(null);
       }, 2500);
     } catch (e) {
       const tuneState = { hz, phase: 'error' as const, message: ipcMessage(e) };
-      set({ tuneState });
+      setTune(tuneState);
       setTimeout(() => {
-        if (get().tuneState === tuneState) set({ tuneState: null });
+        if (current() === tuneState) setTune(null);
       }, ERROR_SHOWN_MS);
     }
   },
 
-  resumeScan: async () => {
-    set({ tuneState: null });
+  resumeScan: async (rx = 0) => {
+    const setTune = (t: TuneState | null): void => (rx === 1 ? set((s) => ({ rx2: { ...s.rx2, tuneState: t } })) : set({ tuneState: t }));
+    setTune(null);
     try {
-      await api().resumeScan();
+      await api().resumeScan(rx);
     } catch (e) {
       const tuneState = { hz: 0, phase: 'error' as const, message: ipcMessage(e) };
-      set({ tuneState });
+      setTune(tuneState);
       setTimeout(() => {
-        if (get().tuneState === tuneState) set({ tuneState: null });
+        if (rxView(get(), rx).tuneState === tuneState) setTune(null);
       }, ERROR_SHOWN_MS);
     }
   },
@@ -171,7 +198,7 @@ export const useScanner = create<ScannerState>((set, get) => ({
     } else {
       set({ snapshot, held });
     }
-    useBand.getState().ingest(snapshot);
+    useBand.getState().ingest(snapshot, 0);
   },
 
   refreshPorts: async () => {
@@ -215,12 +242,13 @@ export const useScanner = create<ScannerState>((set, get) => ({
     }
   },
 
-  pressKey: async (code) => {
-    set({ lastKey: code });
+  pressKey: async (code, rx = 0) => {
+    const setLast = (k: number | null): void => (rx === 1 ? set((s) => ({ rx2: { ...s.rx2, lastKey: k } })) : set({ lastKey: k }));
+    setLast(code);
     setTimeout(() => {
-      if (get().lastKey === code) set({ lastKey: null });
+      if (rxView(get(), rx).lastKey === code) setLast(null);
     }, 180);
-    await api().sendKey(code);
+    await api().sendKey(code, rx);
   },
 
   pushCcDump: (line) => set((s) => ({ ccdump: [...s.ccdump.slice(-(MAX_CCDUMP_LINES - 1)), line] })),

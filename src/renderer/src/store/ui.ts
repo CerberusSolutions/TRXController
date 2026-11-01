@@ -22,6 +22,9 @@ interface UiState {
   /** Latest release check from main; null until one has completed. */
   update: UpdateInfo | null;
   setUpdate: (u: UpdateInfo | null) => void;
+  /** With two scanners, the receiver the keyboard shortcuts go to: the block last clicked (RX1 to start). */
+  activeRx: number;
+  setActiveRx: (rx: number) => void;
   openHelp: () => void;
   closeHelp: () => void;
   openData: () => void;
@@ -38,6 +41,8 @@ export const useUi = create<UiState>((set) => ({
   diagnostics: loadDiagnostics(),
   update: null,
   setUpdate: (update) => set({ update }),
+  activeRx: 0,
+  setActiveRx: (activeRx) => set({ activeRx }),
   openHelp: () => set({ helpOpen: true }),
   openData: () => set({ dataOpen: true }),
   closeData: () => set({ dataOpen: false }),

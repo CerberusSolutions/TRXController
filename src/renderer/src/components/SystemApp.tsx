@@ -8,7 +8,9 @@ import { pickRadioName } from '../../../shared/radioNames';
 import { pickTgName } from '../../../shared/tgNames';
 import { attachDsdEvents, useDsd } from '../store/dsd';
 import { attachLogEvents, useLog } from '../store/log';
-import { attachScannerEvents, useScanner } from '../store/scanner';
+import { attachScannerEvents, rxView, useScanner } from '../store/scanner';
+import { useIdentities } from '../store/identities';
+import RxPill from './RxPill';
 import { initTheme } from '../store/theme';
 import SystemHistory from './SystemHistory';
 
@@ -24,6 +26,8 @@ const PILL = 'shrink-0 rounded px-1 py-px font-sans text-[9px] font-bold upperca
 export default function SystemApp() {
   const status = useDsd((s) => s.status);
   const snapshot = useScanner((s) => s.snapshot);
+  const snapshot2 = useScanner((s) => s.rx2.snapshot);
+  const twin = useIdentities((s) => s.settings.rx2 !== null);
   const radioNames = useLog((s) => s.radioNames);
   const tgNames = useLog((s) => s.tgNames);
   const [, setTick] = useState(0);
@@ -78,22 +82,34 @@ export default function SystemApp() {
     if (historyOpen) void loadNetworks();
   }, [historyOpen, loadNetworks]);
   const feed = status?.feed;
-  const h = snapshot.active?.header ?? null;
-  const onHz = snapshot.status?.frequencyHz ?? null;
-  const rfOpen = !!snapshot.status?.squelch.rf;
-  // The IDs the scanner shows: the header's on a trunked object; in a search or on a conventional object the display's,
-  // which alternates its TGID and RadioID lines, so each is kept from the last line that showed it while the squelch is open.
-  const screen = snapshot.lcd ? (snapshot.status?.mode === 0x0a ? parseScanScreen(snapshot.lcd) : null) ?? parseSearchScreen(snapshot.lcd) : null;
-  const shown = useRef<{ tg: number | null; rid: number | null }>({ tg: null, rid: null });
-  if (!rfOpen) shown.current = { tg: null, rid: null };
-  else {
-    if (screen?.tgid !== null && screen?.tgid !== undefined) shown.current.tg = screen.tgid;
-    if (screen?.radioId !== null && screen?.radioId !== undefined) shown.current.rid = screen.radioId;
-  }
-  const onTg = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : shown.current.tg;
-  const onRid = h && h.radioId1 !== NO_ID ? h.radioId1 : shown.current.rid;
+  // What each scanner is on (RX1, and RX2 once there is one): the frequency, whether the squelch is open, and the IDs it
+  // shows: the header's on a trunked object; in a search or on a conventional object the display's, which alternates its
+  // TGID and RadioID lines, so each is kept from the last line that showed it while the squelch is open.
+  const shown = useRef<{ tg: number | null; rid: number | null }[]>([
+    { tg: null, rid: null },
+    { tg: null, rid: null },
+  ]);
+  const snapshots = twin ? [snapshot, snapshot2] : [snapshot];
+  const radios = snapshots.map((snap, rx) => {
+    const h = snap.active?.header ?? null;
+    const onHz = snap.status?.frequencyHz ?? null;
+    const rfOpen = !!snap.status?.squelch.rf;
+    const screen = snap.lcd ? (snap.status?.mode === 0x0a ? parseScanScreen(snap.lcd) : null) ?? parseSearchScreen(snap.lcd) : null;
+    const kept = shown.current[rx]!;
+    if (!rfOpen) shown.current[rx] = { tg: null, rid: null };
+    else {
+      if (screen?.tgid !== null && screen?.tgid !== undefined) kept.tg = screen.tgid;
+      if (screen?.radioId !== null && screen?.radioId !== undefined) kept.rid = screen.radioId;
+    }
+    const onTg = h && h.talkgroupId1 !== NO_ID ? h.talkgroupId1 : shown.current[rx]!.tg;
+    const onRid = h && h.radioId1 !== NO_ID ? h.radioId1 : shown.current[rx]!.rid;
+    return { h, onHz, rfOpen, onTg, onRid };
+  });
+  const h = radios.find((r) => r.h)?.h ?? null;
   // The scanner's system tag keys the user's own radio names; DSD+'s imported names apply on any system.
   const system = h?.systemTag ?? '';
+  // One string for the dependency list below: the memo must rerun when any scanner moves.
+  const radiosKey = radios.map((r) => `${r.onHz}|${r.rfOpen}|${r.onTg}|${r.onRid}`).join(';');
   const now = Date.now();
   const quietS = feed?.lastEventAt ? Math.max(0, Math.round((now - feed.lastEventAt) / 1000)) : null;
   const linkState: { dot: string; text: string } = !status?.folder
@@ -128,19 +144,24 @@ export default function SystemApp() {
   // The call the scanner is on: the newest one on its talkgroup (or, on a private call, its radio) and voice frequency, and
   // only while that call is open or just ended. With no IDs at all (a conventional object that happens to be a site's voice
   // channel) the frequency alone decides, so a known or learned channel still gets the marker.
-  const onAirId = useMemo(() => {
-    if (onHz === null || !rfOpen) return null;
-    const c = calls.find((x) => {
-      const hz = hzOf(x);
-      const onHzToo = hz === null || Math.abs(hz - onHz) < 1000;
-      if (onTg !== null && x.tg === onTg) return onHzToo;
-      if (onRid !== null && (x.rid === onRid || x.target === onRid)) return onHzToo;
-      return onTg === null && onRid === null && hz !== null && Math.abs(hz - onHz) < 1000;
-    });
-    return c && (c.open || now - c.lastAt < 15_000) ? c.id : null;
+  const onAirIds = useMemo(
+    () =>
+      radios.map(({ onHz, rfOpen, onTg, onRid }) => {
+        if (onHz === null || !rfOpen) return null;
+        const c = calls.find((x) => {
+          const hz = hzOf(x);
+          const onHzToo = hz === null || Math.abs(hz - onHz) < 1000;
+          if (onTg !== null && x.tg === onTg) return onHzToo;
+          if (onRid !== null && (x.rid === onRid || x.target === onRid)) return onHzToo;
+          return onTg === null && onRid === null && hz !== null && Math.abs(hz - onHz) < 1000;
+        });
+        return c && (c.open || now - c.lastAt < 15_000) ? c.id : null;
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calls, onTg, onRid, onHz, now, learned, map, rfOpen]);
-  const isOnAir = (c: DsdCall): boolean => c.id === onAirId;
+    [calls, radiosKey, now, learned, map],
+  );
+  /** The receivers on this call (empty when none): the TRX pill, or with two scanners one pill per receiver. */
+  const onAirRx = (c: DsdCall): number[] => onAirIds.flatMap((id, rx) => (id === c.id ? [rx] : []));
   // DSD+'s "follow this": the talkgroup's priority / override in its groups file, cycled normal → follow → lockout.
   const follows = status?.tgFollow ?? {};
   const writeBackOn = status?.writeBack.enabled ?? false;
@@ -210,7 +231,8 @@ export default function SystemApp() {
         </button>
       </header>
 
-      {channelsOpen && status && <ChannelMapPanel status={status} scannerHz={onHz} />}
+      {/* The channel map's Scanner button takes RX1's frequency (the scanner parked on the system DSD+ is on). */}
+      {channelsOpen && status && <ChannelMapPanel status={status} scannerHz={radios[0]?.onHz ?? null} />}
 
       {historyOpen ? (
         <SystemHistory network={historyNetwork} networks={networks.map((n) => n.network)} tgName={(tg) => tgName(tg)} radioName={radioName} />
@@ -233,7 +255,8 @@ export default function SystemApp() {
             <tbody>
               {calls.map((c) => {
                 const r = radioLabel(c);
-                const onAir = isOnAir(c);
+                const onAirList = onAirRx(c);
+                const onAir = onAirList.length > 0;
                 const length = c.durationS !== null ? `${c.durationS} s` : c.open ? `${Math.max(1, Math.round((now - c.startedAt) / 1000))} s` : '';
                 return (
                   <tr key={c.id} className={`border-t border-edge/50 ${onAir ? 'bg-green/10' : c.open ? 'bg-panel' : ''}`} title={onAir ? 'The call the scanner is on' : undefined}>
@@ -301,7 +324,16 @@ export default function SystemApp() {
                       )}
                     </td>
                     <td className="whitespace-nowrap px-2 py-1 text-right text-ink-2">{length}</td>
-                    <td className="px-3 py-1">{onAir && <span className={`${PILL} bg-green text-bg`}>TRX</span>}</td>
+                    <td className="px-3 py-1">
+                      {onAir && !twin && <span className={`${PILL} bg-green text-bg`}>TRX</span>}
+                      {onAir && twin && (
+                        <span className="flex gap-1">
+                          {onAirList.map((rx) => (
+                            <RxPill key={rx} rx={rx} title={`${rx === 0 ? 'RX1' : 'RX2'} is on this call`} />
+                          ))}
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}

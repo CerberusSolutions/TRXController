@@ -6,7 +6,9 @@ import { candidatesFor } from '../../../shared/listed';
 import { detectedCode } from '../../../shared/rr';
 import { useIdentities } from '../store/identities';
 import { useLog } from '../store/log';
-import { useScanner } from '../store/scanner';
+import { rxView, useScanner } from '../store/scanner';
+import { useRx } from '../lib/rx';
+import RxPill from './RxPill';
 import { pickRadioName } from '../../../shared/radioNames';
 import { pickTgName } from '../../../shared/tgNames';
 import { useDsd } from '../store/dsd';
@@ -15,6 +17,8 @@ import SignalMeter from './SignalMeter';
 
 /** One size for every hero badge (RX state, mode, object type): fixed minimum width so AM / NFM or Scan / Search do not shift the row. */
 const BADGE = 'inline-flex min-w-[4.25rem] justify-center rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-widest';
+/** The same badges in a twin-scanner column, where the hero has half the width. */
+const BADGE_SMALL = 'inline-flex min-w-[3.25rem] justify-center rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-widest';
 
 /** Colour-coded capability pills for a repeater: FM, DMR, D-STAR, Fusion. */
 const MODE_PILL: Readonly<Record<string, string>> = {
@@ -193,14 +197,20 @@ function TgParam({ tgid, system, named }: { tgid: number; system: string; named:
   );
 }
 
-export default function FrequencyHero() {
-  const { status, lcd, active, link, licences, repeaters, rr, rruk, lookups, confirmed } = useScanner((s) => s.snapshot);
+/**
+ * The frequency, signal, name and details of one receiver. `compact` is the form for a twin-scanner column: smaller
+ * digits that wrap, the RX pill over the badges, a **Keys** button (`onKeys`) that opens the display-and-keys drawer,
+ * one Listed row, no frame of its own (the receiver block draws it).
+ */
+export default function FrequencyHero({ compact = false, onKeys }: { compact?: boolean; onKeys?: () => void }) {
+  const rx = useRx();
+  const { status, lcd, active, link, licences, repeaters, rr, rruk, lookups, confirmed } = useScanner((s) => rxView(s, rx).snapshot);
   const tgNames = useLog((s) => s.tgNames);
   // The DSD+ network DSD+ is parked on: its talkgroup aliases are keyed to it until main has matched it to the scanner's system tag.
   const dsdNetwork = useDsd((s) => s.status?.feed.network?.id ?? null);
-  const held = useScanner((s) => s.held);
+  const held = useScanner((s) => rxView(s, rx).held);
   const units = useIdentities((s) => s.settings.units);
-  const snapshotUser = useScanner((s) => s.snapshot.radioUser);
+  const snapshotUser = useScanner((s) => rxView(s, rx).snapshot.radioUser);
 
   const online = (link.status === 'connected' || link.status === 'unresponsive') && status !== null;
   const receiving = !!status?.squelch.rf;
@@ -262,33 +272,50 @@ export default function FrequencyHero() {
     </>
   );
 
+  const digits = compact ? 'text-[44px]' : 'text-[64px]';
+  const badge = compact ? BADGE_SMALL : BADGE;
   return (
-    <section className={`rounded-xl border border-edge bg-panel p-5 ${receiving ? 'shadow-[inset_0_0_0_1px_rgba(61,220,132,0.35)]' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-baseline font-mono">
-          <span className={`freq-digits text-[64px] leading-none ${online ? 'text-amber' : 'text-ink-3'}`}>
+    <section className={`${compact ? 'min-w-0 p-4' : 'rounded-xl border border-edge p-5'} bg-panel ${receiving ? 'shadow-[inset_0_0_0_1px_rgba(61,220,132,0.35)]' : ''}`}>
+      <div className={`flex items-start justify-between ${compact ? 'flex-wrap gap-x-3 gap-y-1' : ''}`}>
+        <div className="flex min-w-0 items-baseline font-mono">
+          <span className={`freq-digits ${digits} leading-none ${online ? 'text-amber' : 'text-ink-3'}`}>
             {online ? `${mhz}.` : '---.'}
           </span>
-          <span className={`freq-digits text-[64px] leading-none ${online ? 'text-amber-2' : 'text-ink-3'}`}>
+          <span className={`freq-digits ${digits} leading-none ${online ? 'text-amber-2' : 'text-ink-3'}`}>
             {online ? frac : '------'}
           </span>
-          <span className="ml-3 text-lg text-ink-3">MHz</span>
+          <span className={`${compact ? 'ml-2 text-sm' : 'ml-3 text-lg'} text-ink-3`}>MHz</span>
         </div>
-        <div className="flex min-h-[5.5rem] flex-col items-end gap-1.5 pt-1">
+        <div className={`flex flex-col items-end ${compact ? 'gap-1' : 'min-h-[5.5rem] gap-1.5 pt-1'}`}>
+          {compact && (
+            <div className="flex items-center gap-1.5">
+              {onKeys && (
+                <button
+                  type="button"
+                  className="rounded border border-edge px-1.5 py-px font-sans text-[10px] font-bold tracking-wider text-ink-2 hover:text-ink"
+                  title="Open this scanner's display and keys"
+                  onClick={onKeys}
+                >
+                  Keys
+                </button>
+              )}
+              <RxPill rx={rx} title={rx === 0 ? 'The first scanner' : 'The second scanner'} />
+            </div>
+          )}
           <div className="flex gap-1.5">
             <span
-              className={`${BADGE} ${
+              className={`${badge} ${
                 rxState === 'rx' ? 'bg-green text-bg' : rxState === 'hold' ? 'bg-amber text-bg' : 'border border-edge text-ink-3'
               }`}
             >
               {rxState === 'rx' ? 'RX' : rxState === 'hold' ? 'HOLD' : 'IDLE'}
             </span>
-            {modeText && <span className={`${BADGE} border border-edge text-cyan`}>{modeText}</span>}
+            {modeText && <span className={`${badge} border border-edge text-cyan`}>{modeText}</span>}
             {icons?.signalType && icons.signalTypeName !== modeText ? (
-              <span className={`${BADGE} border border-edge text-ink-2`}>{icons.signalTypeName}</span>
+              <span className={`${badge} border border-edge text-ink-2`}>{icons.signalTypeName}</span>
             ) : null}
-            {objectLine?.type && <span className={`${BADGE} border border-edge text-ink-2`}>{objectLine.type}</span>}
-            {status && !objectLine && <span className={`${BADGE} border border-edge text-ink-3`}>{status.modeName}</span>}
+            {objectLine?.type && <span className={`${badge} border border-edge text-ink-2`}>{objectLine.type}</span>}
+            {status && !objectLine && <span className={`${badge} border border-edge text-ink-3`}>{status.modeName}</span>}
           </div>
           <div className="flex h-5 gap-1 font-mono text-[10px] tracking-wider" title={objectLine?.flags ? `Object attributes: ${objectLine.flags.raw}` : undefined}>
             {objectLine?.flags &&
@@ -308,11 +335,11 @@ export default function FrequencyHero() {
         </div>
       </div>
 
-      <div className="mt-4">
+      <div className={compact ? 'mt-2' : 'mt-4'}>
         <SignalMeter bars={icons?.rssiBars ?? 0} rssi={status?.rssi ?? null} active={online} />
       </div>
 
-      <div className="mt-5 h-[4.25rem]">
+      <div className={compact ? 'mt-2 h-[3.4rem] [&_p:first-child]:text-2xl' : 'mt-5 h-[4.25rem]'}>
         {id.source === 'none' && !conf ? (
           <p className="text-xl text-ink-3">{online ? status.modeName : link.status === 'disconnected' ? 'Not connected' : 'Waiting for scanner'}</p>
         ) : conf && id.source !== 'scanning' ? (
@@ -365,7 +392,7 @@ export default function FrequencyHero() {
         )}
       </div>
 
-      <div className="mt-3 h-[4.6rem] overflow-hidden border-t border-edge pt-2">
+      <div className={`overflow-hidden border-t border-edge ${compact ? 'mt-1.5 h-[1.9rem] pt-1' : 'mt-3 h-[4.6rem] pt-2'}`}>
         {listed.length > 0 ? (
           <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3">
             <span className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest text-ink-2" title="RadioReference UK, RadioReference, the Ofcom WTR and the ETCC repeater list, in the lookup order set in the Data menu">
@@ -380,7 +407,7 @@ export default function FrequencyHero() {
               </button>
             </span>
             <ul className="min-w-0 space-y-0.5 font-mono text-[13.5px] leading-tight">
-              {listed.slice(0, 3).map((row, i) => (
+              {listed.slice(0, compact ? 1 : 3).map((row, i) => (
                 <li key={row.key} className="flex min-w-0 items-center gap-2" title={row.title}>
                   <span className={`shrink-0 rounded px-1 py-px font-sans text-[10px] font-bold uppercase tracking-wider ${SOURCE_PILL[row.source]}`} title={SOURCE_NAME[row.source]}>
                     {row.source}
@@ -396,7 +423,7 @@ export default function FrequencyHero() {
             </ul>
           </div>
         ) : (
-          <p className="pt-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3/70">
+          <p className={`pt-0.5 text-[10px] font-bold uppercase tracking-widest text-ink-3/70 ${compact ? 'truncate' : ''}`}>
             {!online
               ? ''
               : rruk?.pending
@@ -411,7 +438,7 @@ export default function FrequencyHero() {
           </p>
         )}
       </div>
-      <div className="mt-2 flex h-12 gap-x-7 overflow-hidden border-t border-edge pt-3">
+      <div className={`flex h-12 overflow-hidden border-t border-edge ${compact ? 'mt-1.5 gap-x-5 pt-2' : 'mt-2 gap-x-7 pt-3'}`}>
         {h ? (
           <>
             <Param label="Type" value={h.recordingType === 1 ? `${h.recordingTypeName} · ${h.tsysTypeName}` : h.recordingTypeName} />

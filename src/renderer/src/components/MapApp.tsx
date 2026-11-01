@@ -4,7 +4,8 @@ import { candidatesFor, type Candidate } from '../../../shared/listed';
 import { normaliseUnits, point } from '../../../shared/geo';
 import { activeIn, dayKey, dayPins, dayRange, shiftDay } from '../../../shared/dayMap';
 import { attachLogEvents, rowMatches, useLog } from '../store/log';
-import { attachScannerEvents, useScanner } from '../store/scanner';
+import { attachScannerEvents, rxView, useScanner } from '../store/scanner';
+import { RX_PILL } from './RxPill';
 import { useIdentities } from '../store/identities';
 import { initTheme } from '../store/theme';
 import MapView, { type MapPoint } from './MapView';
@@ -43,11 +44,15 @@ export default function MapApp() {
   const [command, setCommand] = useState<{ n: number; what: 'fit' | 'home' } | null>(null);
   const [docked, setDocked] = useState<'left' | 'right' | null>(null);
   const [helpOpen, setHelpOpen] = useState(false);
-  const snapshot = useScanner((s) => s.snapshot);
-  const rows = useLog((s) => s.rows);
-  const generation = useLog((s) => s.generation);
   const settings = useIdentities((s) => s.settings);
   const units = normaliseUnits(settings.units);
+  // Two scanners: follow mode follows one of them (the bar's RX1 / RX2 radio) and the day view's chips pick whose entries are pinned.
+  const twin = settings.rx2 !== null;
+  const [followRx, setFollowRx] = useState(0);
+  const [rxShown, setRxShown] = useState<boolean[]>([true, true]);
+  const snapshot = useScanner((s) => rxView(s, twin ? followRx : 0).snapshot);
+  const rows = useLog((s) => s.rows);
+  const generation = useLog((s) => s.generation);
 
   useEffect(() => {
     const offTheme = initTheme();
@@ -202,8 +207,9 @@ export default function MapApp() {
     if (target.kind === 'day') return null;
     if (target.kind === 'row') return rows.find((r) => r.id === target.row.id) ?? target.row;
     if (hz === null) return null;
-    return rows.find((r) => r.frequencyHz === hz) ?? null;
-  }, [target, rows, hz]);
+    // The followed scanner's own entry on the frequency first: the other may have logged it under another name.
+    return rows.find((r) => r.frequencyHz === hz && r.rx === followRx) ?? rows.find((r) => r.frequencyHz === hz) ?? null;
+  }, [target, rows, hz, followRx]);
   if (!dayView) rowRef.current = row;
 
   // The day's entries: what the database returned, with the log's live rows laid over it (a new entry
@@ -216,7 +222,7 @@ export default function MapApp() {
     for (const r of rows) if (activeIn(r, from, to, now)) byId.set(r.id, r);
     return [...byId.values()];
   }, [dayView, day, dayLog, rows]);
-  const dayShown = useMemo(() => dayRows.filter((r) => rowMatches(r, dayFilter)), [dayRows, dayFilter]);
+  const dayShown = useMemo(() => dayRows.filter((r) => rowMatches(r, dayFilter, twin ? rxShown : undefined)), [dayRows, dayFilter, twin, rxShown]);
   const dayPlaced = useMemo(() => dayShown.filter((r) => point(r.lat, r.lon) !== null).length, [dayShown]);
 
   // Pins: the row's candidates (they carry their own position), else, before anything is logged on the
@@ -309,6 +315,38 @@ export default function MapApp() {
   const when = target.kind === 'row' ? new Date(target.row.startedAt).toLocaleString() : hold ? 'Held' : null;
   /** Held (an entry, or the frequency and pins as they stood): the bar shows just the buttons. */
   const holding = target.kind === 'row' || hold !== null;
+  /** The receivers' chips: in the day view a filter (both on by default), in follow mode a radio naming the scanner followed. */
+  const rxChips = twin && (
+    <span className="no-drag flex gap-1" role={dayView ? 'group' : 'radiogroup'} aria-label={dayView ? 'Scanners shown' : 'Scanner followed'}>
+      {RX_PILL.map((p, rx) => {
+        const on = dayView ? rxShown[rx] !== false : followRx === rx;
+        return (
+          <button
+            key={p.label}
+            type="button"
+            aria-pressed={on}
+            className={`rounded px-1.5 py-px font-sans text-[10px] font-bold tracking-wider ${on ? `${p.bg} text-bg` : `border border-edge ${p.text} opacity-60 hover:opacity-100`}`}
+            title={dayView ? (on ? `Hide ${p.label}'s entries` : `Show ${p.label}'s entries`) : on ? `Following ${p.label}` : `Follow ${p.label} instead`}
+            onClick={() => {
+              if (dayView) {
+                setRxShown((cur) => {
+                  const next = cur.slice();
+                  next[rx] = !next[rx];
+                  return next.some(Boolean) ? next : cur;
+                });
+              } else {
+                setFollowRx(rx);
+                setHold(null);
+              }
+              setPicked(null);
+            }}
+          >
+            {p.label}
+          </button>
+        );
+      })}
+    </span>
+  );
 
   return (
     <div className="flex h-full flex-col">
@@ -323,6 +361,7 @@ export default function MapApp() {
         }
       >
         <span className="text-[10px] font-bold uppercase tracking-widest text-ink-2">Map</span>
+        {rxChips}
         {dayView ? (
           <>
             <span className="text-[10px] font-bold uppercase tracking-widest text-cyan">Log</span>

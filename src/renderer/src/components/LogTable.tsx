@@ -7,7 +7,8 @@ import { pickRadioName, radioNameSystem } from "../../../shared/radioNames";
 import { pickTgName, tgNameSystem } from "../../../shared/tgNames";
 import { MAX_ROWS, rowMatches, useLog } from "../store/log";
 import { useIdentities } from "../store/identities";
-import { useScanner } from "../store/scanner";
+import { rxView, useScanner } from "../store/scanner";
+import { useUi } from "../store/ui";
 import { entriesToCsv, logToCsv } from "../lib/csv";
 import { SOURCE_NAME, SOURCE_PILL, rowSource } from "../lib/sources";
 import RxPill, { RX_PILL } from "./RxPill";
@@ -162,7 +163,7 @@ const freqCell: Column = {
       type="button"
       className={`text-left text-amber-2 ${canTune && !tuning ? "cursor-pointer hover:underline hover:decoration-amber-2/60 hover:underline-offset-2" : "cursor-default"}`}
       disabled={!canTune || tuning}
-      title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode)` : undefined}
+      title={canTune ? `Tune to ${(r.frequencyHz / 1e6).toFixed(4)} MHz (Searches › Tune Mode, on the scanner last clicked)` : undefined}
       onClick={() => {
         if (canTune && !tuning) tune(r.frequencyHz);
       }}
@@ -802,14 +803,18 @@ export default function LogTable() {
   const clear = useLog((s) => s.clear);
   const [now, setNow] = useState(Date.now());
   const hasOpen = rows.some((r) => r.endedAt === null);
-  // Click a frequency to tune to it, the same Searches › Tune Mode macro as the Band tab.
+  // Click a frequency to tune to it, the same Searches › Tune Mode macro as the Band tab; with two scanners, the one the
+  // keyboard drives (the column last clicked).
   const tune = useScanner((s) => s.tune);
-  const tuneState = useScanner((s) => s.tuneState);
-  const canTune = useScanner(
-    (s) => (s.snapshot.link.status === "connected" || s.snapshot.link.status === "unresponsive") && !s.snapshot.link.stall,
-  );
+  const activeRx = useUi((s) => s.activeRx);
+  const tuneRx = twin ? activeRx : 0;
+  const tuneState = useScanner((s) => rxView(s, tuneRx).tuneState);
+  const canTune = useScanner((s) => {
+    const link = rxView(s, tuneRx).snapshot.link;
+    return (link.status === "connected" || link.status === "unresponsive") && !link.stall;
+  });
   const tuning = tuneState?.phase === "tuning";
-  const tuneCb = useCallback((hz: number) => void tune(hz), [tune]);
+  const tuneCb = useCallback((hz: number) => void tune(hz, tuneRx), [tune, tuneRx]);
   const loadMore = useLog((s) => s.loadMore);
   const exhausted = useLog((s) => s.exhausted);
   const loadingMore = useLog((s) => s.loadingMore);

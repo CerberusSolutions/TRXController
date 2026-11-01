@@ -31,11 +31,17 @@ npm run build && npm start    # run the built app
 
 **Two scanners.** Press **+** beside the port selector to add a second scanner (RX2): it gets its own port,
 Connect button, link state and memory, and the two are driven side by side on separate serial links. The window
-keeps its single-scanner look until you add one; **×** beside the second scanner's port removes it. The log records
-which scanner heard each entry: with two scanners it gains an **RX** column (RX1 cyan, RX2 amber) and **RX1** / **RX2**
-chips beside the filter box that show or hide each scanner's entries, and both CSV exports carry the receiver (`receiver`
-in the Entries file; `trx_receivers` in the EZ Scan file, naming every scanner that heard the object). Coming next: a
-second hero with its display and keys in a drawer, and RX1 / RX2 chips on the map and the Band tab.
+keeps its single-scanner look until you add one; **×** beside the second scanner's port removes it. With two, the
+window becomes a column per scanner over the shared log: each column is that scanner's frequency, signal, name and
+details, with its display and keypad in a drawer that slides in from the column's right edge (the **Keys** button or
+the edge tab opens it; the pin keeps it open beside the hero, remembered per scanner). Keyboard shortcuts go to the
+column last clicked, outlined in its colour (RX1 cyan, RX2 amber). The log gains an **RX** column and **RX1** / **RX2**
+chips beside the filter box that show or hide each scanner's entries; both CSV exports carry the receiver (`receiver`
+in the Entries file; `trx_receivers` in the EZ Scan file, naming every scanner that heard the object). The Band tab's
+chips pick whose frequencies are charted, each bar's foot says which scanner visited it and a click tunes the column
+last clicked; the map's chips choose which scanner to follow (or, in its Log view, whose entries to pin); the System
+window marks the call each scanner is on with its pill; the Data dialog's clock line shows both and "Set clock now"
+sets both.
 
 ## Optional data
 

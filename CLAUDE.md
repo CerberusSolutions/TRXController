@@ -715,9 +715,10 @@ captured on 14 Sep 2026.
   `sendKey`, `tune`, `resumeScan`, `clockSet`, `getSnapshot`) take a trailing `rx` (0 by default, so every single-scanner
   caller is unchanged; `receiver(rx)` throws when there is no such scanner); `scanner:snapshot` still carries RX1's snapshot
   alone and `scanner:snapshot-rx` (`RxSnapshot {rx, snapshot}`) every receiver's; `broadcastSnapshots()` republishes all.
-  The renderer's scanner store keeps RX2 as `rx2: Rx2State` (snapshot, held, selectedPort, busy) with `setSnapshot2`,
-  `selectPort2`, `connect2`, `disconnect2`, `pressKey2`; `refreshPorts` gives RX2 its remembered port, else the first RX1 is
-  not on. `TopBar` is a `PortBlock` per receiver (compact with two: the pill, a narrower selector, no firmware) with **+**
+  The renderer's scanner store keeps RX2 as `rx2: Rx2State` (snapshot, held, selectedPort, busy, error, tuneState, lastKey)
+  with `setSnapshot2`, `selectPort2`, `connect2`, `disconnect2`; `tune(hz, rx)`, `resumeScan(rx)` and `pressKey(code, rx)`
+  take the receiver last (0 by default); `rxView(state, rx)` is one receiver's fields for a component; `refreshPorts` gives
+  RX2 its remembered port, else the first RX1 is not on. `TopBar` is a `PortBlock` per receiver (compact with two: the pill, a narrower selector, no firmware) with **+**
   (add a second scanner: `settings.rx2 = { port: null, autoConnect: true }`) and **×** on RX2's block (remove, only while it
   is disconnected). **Colours**: `--t-rx1` (cyan) and `--t-rx2` (amber) in both themes, `bg-rx1` / `text-rx1` etc. via
   `@theme inline`, `components/RxPill.tsx` the one pill, shown only once there are two scanners: a single-scanner window
@@ -730,9 +731,28 @@ captured on 14 Sep 2026.
   code, "RX1 RX2"); both always present, so a single-scanner export says RX1. `scanner:get-snapshot` answers **null** for
   a receiver the window has not got (every window asks for RX2's on start; it used to throw into main's console), and the
   scanner store's `connect` / `disconnect` / `connect2` / `disconnect2` catch a refusal ("COM9 is the other scanner's port")
-  into `error` / `rx2.error`, which the port block shows in red in place of a link error. Still to come: the twin heroes
-  with the display and keys in a per-receiver drawer, keys to the receiver last clicked, the map and Band tab's RX chips,
-  the System window's per-call RX pill (stage 3). The website FAQ (`#faq-two`), README and help screen say so.
+  into `error` / `rx2.error`, which the port block shows in red in place of a link error. **Stage 3, the twin window**
+  (1 Nov 2026, layout A2 from the canvas): `App` renders, when `settings.rx2` is set, a `grid-cols-2` of
+  `components/ReceiverBlock.tsx` over `MainPanel` instead of the hero-plus-keypad-column grid. `lib/rx.tsx` is `RxContext`
+  (default 0, so the single-scanner tree needs no provider) and `useRx()`; `FrequencyHero`, `LcdScreen`, `Keypad` and the
+  Data dialog's `ClockLine` read `rxView(s, useRx())`. `FrequencyHero({ compact, onKeys })`: compact is the column form
+  (44px digits that wrap, `BADGE_SMALL`, the RX pill and a **Keys** button over the badges, one Listed row, `p-4` with no
+  frame of its own). `ReceiverBlock` is the frame: the hero plus the drawer (`closed` with an edge tab, `open` as a
+  300px overlay over the hero, `pinned` in the flow beside it; pinned is remembered per receiver in localStorage
+  `trx.drawer.rxN`, an unpinned drawer starts closed), a `ring-1` in the receiver's colour when it is `useUi.activeRx`
+  (set by a mousedown anywhere in the block: the keyboard shortcuts go there, `Keypad` registers its keydown listener
+  only when `activeRx === rx`, and a closed drawer keeps a hidden `Keypad` mounted for that). `Keypad({ drawer })` in
+  the drawer is six keys wide (`SIX_WIDE`: each function row beside a digit row, the knob keys along the bottom at
+  span 3), with the `.key-drawer` sizes and the `.lcd-drawer` 11px display in `index.css` (unlayered, since `.key` is),
+  and a one-line Tune box, so a pinned block is no taller than the hero. `StatusBar` shows a segment per receiver with
+  its pill. The Band tab: `Bin.rxMask` (bit per receiver), `useBand.ingest(snapshot, rx)` from both `setSnapshot`s,
+  `currentHz` an array (a dashed marker per receiver in its colour), RX chips that filter the bins, a foot in the
+  receiver's colour on each bar, a click tunes `activeRx`. The map: `followRx` (an RX1 / RX2 radio in the bar in follow
+  mode, reading `rxView(s, followRx).snapshot` and preferring that receiver's own log row on the frequency) and
+  `rxShown` chips in the day view (`rowMatches`'s third argument). The System window computes the on-air call per
+  receiver (`radios`, `onAirIds`) and the marker column shows an `RxPill` per receiver on the call in place of the TRX
+  pill. The Data dialog's "Set clock now" sends to every connected receiver. The website FAQ (`#faq-two`, with
+  `docs/img/twin.png` shot from the mock's `scene=twin` with RX2's drawer pinned), README and help screen say so.
 
 ## Connection memory
 

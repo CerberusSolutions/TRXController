@@ -152,8 +152,10 @@ export default function HelpDialog() {
                   unplugged and plugged back in. <b className="text-ink">Disconnect</b> switches that off until you connect again.
                 </li>
                 <li>
-                  Two scanners? <b className="text-ink">+</b> beside the port adds a second (RX2) with its own port and memory; the two are driven side by side
-                  and the log gains an RX column and RX1 / RX2 chips to show one scanner's entries. <b className="text-ink">×</b> beside its port takes it away again.
+                  Two scanners? <b className="text-ink">+</b> beside the port adds a second (RX2) with its own port and memory. The window becomes a column per
+                  scanner, each with its display and keys in a drawer (<b className="text-ink">Keys</b>, or the tab at the column's edge; the pin keeps it open),
+                  keyboard shortcuts go to the column last clicked, and the log, Band tab, map and System window gain RX1 / RX2 chips and pills.{' '}
+                  <b className="text-ink">×</b> beside its port takes it away again.
                 </li>
                 <li>
                   The scanner's clock is set from this PC each time it connects, so recordings and the log agree on the time. Untick that under Data ›{' '}

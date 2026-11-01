@@ -3,7 +3,8 @@ import type { RrRegion } from '../../../shared/ipc';
 import { useIdentities } from '../store/identities';
 import { useLog } from '../store/log';
 import { useDsd } from '../store/dsd';
-import { useScanner } from '../store/scanner';
+import { rxView, useScanner } from '../store/scanner';
+import RxPill from './RxPill';
 import { useUi } from '../store/ui';
 import { SOURCE_NAME, SOURCE_PILL } from '../lib/sources';
 import { normaliseLookups, type LookupPref } from '../../../shared/sources';
@@ -125,46 +126,66 @@ function LookupOrder() {
 const hms = (t: number | string): string => new Date(t).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const whenIso = (iso: string): string => new Date(iso).toLocaleString(undefined, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-/** The scanner's clock from this PC: on every connect (the tick) or now (the button); the next transmission confirms it. */
-function ClockForm() {
-  const { settings, saveSettings } = useIdentities();
-  const snapshot = useScanner((s) => s.snapshot);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+/** One scanner's clock state in words (with its pill once there are two scanners). */
+function ClockLine({ rx, twin }: { rx: number; twin: boolean }) {
+  const snapshot = useScanner((s) => rxView(s, rx).snapshot);
   const connected = snapshot.link.status === 'connected' || snapshot.link.status === 'unresponsive';
   const clock = snapshot.clock ?? { sentAt: null, order: 'le', verified: null, scannerTime: null, offsetS: null };
+  const order = clock.order === 'be' ? 'big-endian' : 'little-endian';
+  return (
+    <span className="flex items-start gap-1.5">
+      {twin && <RxPill rx={rx} className="mt-px" />}
+      <span>
+        {!connected
+          ? 'Connect the scanner to set its clock.'
+          : clock.sentAt === null
+            ? 'Not set yet this connection.'
+            : clock.verified === null
+              ? `Sent at ${hms(clock.sentAt)} (${order}). The next transmission's time stamp will confirm it.`
+              : clock.verified
+                ? `Set at ${hms(clock.sentAt)}; a transmission at ${clock.scannerTime ? hms(clock.scannerTime) : '?'} confirmed the scanner's clock (${Math.abs(Math.round(clock.offsetS ?? 0))} s from this PC).`
+                : `Sent at ${hms(clock.sentAt)}, but the scanner's clock read ${clock.scannerTime ? whenIso(clock.scannerTime) : '?'}, ${Math.round(Math.abs(clock.offsetS ?? 0) / 60)} min out, with both byte orders tried. Please report it.`}
+      </span>
+    </span>
+  );
+}
+
+/** The scanner's clock from this PC: on every connect (the tick) or now (the button, every connected scanner); the next transmission confirms it. */
+function ClockForm() {
+  const { settings, saveSettings } = useIdentities();
+  const twin = settings.rx2 !== null;
+  const connected = useScanner((s) =>
+    [0, ...(twin ? [1] : [])].filter((rx) => {
+      const link = rxView(s, rx).snapshot.link;
+      return link.status === 'connected' || link.status === 'unresponsive';
+    }),
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const setNow = async (): Promise<void> => {
     setBusy(true);
     setError(null);
     try {
-      await window.trx?.clockSet?.();
+      for (const rx of connected) await window.trx?.clockSet?.(rx);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const order = clock.order === 'be' ? 'big-endian' : 'little-endian';
   return (
     <div className="mt-1 space-y-1.5 text-[11px] text-ink-3">
       <label className="flex items-center gap-2 text-[12px] text-ink-2">
         <input type="checkbox" className="h-3.5 w-3.5 accent-cyan" checked={settings.clockSync !== false} onChange={(e) => void saveSettings({ clockSync: e.target.checked })} />
         Set the scanner's clock from this PC when it connects
       </label>
-      <div className="flex flex-wrap items-center gap-2">
-        <button className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-2 hover:text-ink disabled:opacity-40" disabled={!connected || busy} onClick={() => void setNow()} title="Send the PC's date and time to the scanner now">
+      <div className="flex flex-wrap items-start gap-2">
+        <button className="rounded-md border border-edge px-2 py-1 text-[11px] text-ink-2 hover:text-ink disabled:opacity-40" disabled={connected.length === 0 || busy} onClick={() => void setNow()} title={twin ? "Send the PC's date and time to every connected scanner now" : "Send the PC's date and time to the scanner now"}>
           Set clock now
         </button>
-        <span>
-          {!connected
-            ? 'Connect the scanner to set its clock.'
-            : clock.sentAt === null
-              ? 'Not set yet this connection.'
-              : clock.verified === null
-                ? `Sent at ${hms(clock.sentAt)} (${order}). The next transmission's time stamp will confirm it.`
-                : clock.verified
-                  ? `Set at ${hms(clock.sentAt)}; a transmission at ${clock.scannerTime ? hms(clock.scannerTime) : '?'} confirmed the scanner's clock (${Math.abs(Math.round(clock.offsetS ?? 0))} s from this PC).`
-                  : `Sent at ${hms(clock.sentAt)}, but the scanner's clock read ${clock.scannerTime ? whenIso(clock.scannerTime) : '?'}, ${Math.round(Math.abs(clock.offsetS ?? 0) / 60)} min out, with both byte orders tried. Please report it.`}
+        <span className="flex flex-col gap-0.5">
+          <ClockLine rx={0} twin={twin} />
+          {twin && <ClockLine rx={1} twin />}
         </span>
       </div>
       {error && <p className="text-red">{error}</p>}
