@@ -154,12 +154,11 @@ function ClockLine({ rx, twin }: { rx: number; twin: boolean }) {
 function ClockForm() {
   const { settings, saveSettings } = useIdentities();
   const twin = settings.rx2 !== null;
-  const connected = useScanner((s) =>
-    [0, ...(twin ? [1] : [])].filter((rx) => {
-      const link = rxView(s, rx).snapshot.link;
-      return link.status === 'connected' || link.status === 'unresponsive';
-    }),
-  );
+  // Primitives only from the store: a selector that builds a new array each time never settles and crashes the window.
+  const up = (status: string): boolean => status === 'connected' || status === 'unresponsive';
+  const connected1 = useScanner((s) => up(s.snapshot.link.status));
+  const connected2 = useScanner((s) => up(s.rx2.snapshot.link.status));
+  const connected = [...(connected1 ? [0] : []), ...(twin && connected2 ? [1] : [])];
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setNow = async (): Promise<void> => {
